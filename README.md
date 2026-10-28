@@ -21,3 +21,8 @@ Consulte `docs/GUIA_FICHA_BM_V8.md` para fluxo, cálculos e limitações; modelo
 Na página **Fichas e Curva S**, o botão **Inserir fontes** está na faixa superior, ao lado dos filtros de companhia e empreendimento. Um clique abre o painel com quatro tipos de entrada: processo SEI ZIP/PDF (identificação de candidatos a BMs), CSV de BMs, Balanço XLSX/CSV e cronograma físico acumulado CSV. Na página **Docas**, o botão **Inserir fontes (SEI · BMs · Balanço)** leva ao módulo de fichas preservando o empreendimento selecionado.
 
 A área inferior fica reservada à conferência dos boletins, validação dos dados do Balanço e geração da curva S e da ficha. A extração identifica candidatos por texto/nome (PDF digitalizado pode exigir transcrição). Nenhuma medição entra na curva sem confirmação explícita; os dados são locais e não são publicados no repositório.
+
+
+## V9 — Minuta/documentação por ETAPA
+
+Menu **Minutas / E-mail**, com 54 requisitos da aba MATRIZ DOCUMENTAL, seleção e confirmação de ETAPA, checklist de aplicabilidade, classificação jurídica e FONTE/URL, consulta aos achados verificados SIOP × SEI/BMs × Balanço × Docas e geração local de rascunho editável (TXT / .EML). Sem envio automático, sem exposição de documentos SEI no GitHub. Guia: `docs/GUIA_MINUTAS_MATRIZ_V9.md`.
