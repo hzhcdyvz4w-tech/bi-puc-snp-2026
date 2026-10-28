@@ -1,39 +1,23 @@
-# BI Executivo PUC — V7 · Relatório crítico por empreendimento
+# BI Executivo PUC — V8.1 · Fichas de Obras / BMs / Curva S
 
-**SNP/MPOR — 28 de outubro de 2026**
+Implementação incremental sobre a versão V7 do BI PUC: mantém filtros SIOP, carteira PUC, confronto auditável, Docas, Relatório Crítico e importações documentais.
 
-## Módulos
+**Novo módulo:** `Fichas e Curva S` — identificação de candidatos a BMs dentro de ZIP/PDF SEI, revisão obrigatória por linha, cruzamento com Balanço, histórico e Curva S física acumulada (prevista somente com cronograma importado), ficha imprimível e exportação de sessão.
 
-1. **Visão Geral** — execução da União segundo a Consulta SIOP 2, identificada por ação e plano orçamentário.
-2. **Base SIOP** — filtros encadeados, pesquisa, exportação e importação posterior de consulta XLSX no mesmo leiaute.
-3. **Projetos PUC** — carteira referencial, com vínculos SIOP classificados como preliminares.
-4. **Confronto das fontes** — comparação DE/PARA estrita de indicadores equivalentes; formulário de evidências conferidas, cronograma com início/fim, salvamento/restauração JSON.
-5. **Docas** — filtros encadeados Companhia → Empreendimento, busca, origem dos registros, documentos e atalho para relatório.
-6. **Relatório Crítico** — execução física, execução financeira, datas, valores do empreendimento, achados e conclusão *preliminar*. Impressão e exportação CSV.
-7. **Documentos** — anexação e inventário de arquivos locais, CSV de evidências normalizadas e CSV/ZIP contendo `cronograma_puc.csv`.
+## Abrir
 
-## Fluxo de uso
+Abra `index.html` diretamente ou pelo site GitHub Pages. Os arquivos `assets/ficha-bm.js` e `assets/ficha-bm.css` devem ficar na pasta `assets/` relativa ao HTML.
 
-1. Abra `index.html` no navegador ou GitHub Pages.
-2. Em **Docas**, escolha a Companhia e o Empreendimento; use **Relatório** para abrir a ficha crítica.
-3. Em **Confronto das fontes**, informe as execuções físicas (%) observadas nos BMs/SEI, Balanço ou declaração da Docas; informe valores medidos/pagos pelos BMs, execução financeira do Balanço e valor global do empreendimento com referência documental e data de corte.
-4. Em **Confronto das fontes → Registrar datas e cronograma**, informe início, término previsto e término efetivo; ou importe o modelo CSV no menu **Documentos**. Cronogramas no SEI ZIP somente são convertidos automaticamente quando o ZIP contém um arquivo `cronograma_puc.csv` com as colunas esperadas.
-5. Acesse **Relatório Crítico** → Companhia → Empreendimento → **Gerar relatório**. Use **Exportar achados CSV** ou **Imprimir / salvar PDF** do navegador. A conclusão permanece não homologada pela SNP.
-6. Para preservar dados informados na sessão, clique em **Confronto das fontes → Salvar sessão auditável (JSON)** e armazene o arquivo de forma autorizada e protegida. Não carregue esse JSON em repositório público.
+**PDFs:** o módulo tenta carregar PDF.js 3.11.174 via CDN. Internet/rede institucional pode bloquear a CDN; se isso ocorrer, importe CSV ou use o extrator local de `tools/extrair_bms_sei.py` (depende de PyMuPDF). PDFs digitalizados sem texto extraível exigem conferência manual.
 
-## Distinções necessárias
+**Importante:** não foram importados os processos SEI nem o Balanço com informações da obra: não há nesta conversa um ZIP contendo os BMs de um empreendimento específico para alimentá-lo. Valores da imagem de referência não são tratados como execução comprovada.
 
-- **SIOP**: a planilha `Consulta SIOP 2(1).xlsx` incorpora dotação, empenho, liquidação e pagamento, mas **não execução física**. Data de corte original não informada.
-- **BMs no SEI**: valores medidos e pagamentos contratuais são distintos de execução orçamentária e financeira da União.
-- **Balanço**: percentual físico, execução financeira, valor global, datas de início/término são campos a comprovar; a base referencial não equivale a recursos PUC efetivamente recebidos.
-- **Docas**: declaração de valores recebidos/aplicados deve ser registrada por projeto, competência, natureza e documento.
-- **DE/PARA**: números divergentes só geram classificação de diferença quando indicadores, unidades, escopos, cortes, competências, contratos e etapas coincidem e os documentos foram conferidos.
-- **Cronograma**: a comparação de datas exige comprovação documental e o mesmo contrato/objeto. Divergência de datas pode decorrer de aditivos ou versões distintas.
+**Segurança:** GitHub Pages é público. Nenhum documento confidencial nem sessão privada deve ser versionado. Valores de BMs/Balanço só vivem em memória enquanto a página fica aberta e podem ser salvos em JSON local; restauração é ação manual. Bibliotecas externas executadas no navegador devem ser avaliadas antes de uso com documentos institucionais.
 
-## Segurança e limites
+Consulte `docs/GUIA_FICHA_BM_V8.md` para fluxo, cálculos e limitações; modelos em `data/`.
 
-O repositório e o GitHub Pages são **públicos**. Não publique planilhas do Balanço interno, relatórios SEI, formulários preenchidos das Docas, anexos ou backups de sessões sem avaliação e autorização institucional. O `index.html` processa informações do operador **apenas em memória**, não tem login, banco de dados, backend, extração certificada de PDF, nem conexão automática às APIs SIOP ou SEI. O upload de PDF, DOCX e ZIP bruto (fora do CSV padronizado) apenas inventaria arquivos e não gera automaticamente dados comprovados.
+## Atualização V8.1 — Inserir fontes junto aos filtros
 
-**Homologação técnica, financeira e jurídica da SNP: pendente.**
+Na página **Fichas e Curva S**, o botão **Inserir fontes** está na faixa superior, ao lado dos filtros de companhia e empreendimento. Um clique abre o painel com quatro tipos de entrada: processo SEI ZIP/PDF (identificação de candidatos a BMs), CSV de BMs, Balanço XLSX/CSV e cronograma físico acumulado CSV. Na página **Docas**, o botão **Inserir fontes (SEI · BMs · Balanço)** leva ao módulo de fichas preservando o empreendimento selecionado.
 
-Consulte `docs/GUIA_RELATORIO_CRITICO_V7.md` para campos, fontes e mapeamento dos indicadores.
+A área inferior fica reservada à conferência dos boletins, validação dos dados do Balanço e geração da curva S e da ficha. A extração identifica candidatos por texto/nome (PDF digitalizado pode exigir transcrição). Nenhuma medição entra na curva sem confirmação explícita; os dados são locais e não são publicados no repositório.
