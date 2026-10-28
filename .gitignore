@@ -1,0 +1,13 @@
+*.xlsx
+*.xlsm
+*.csv
+*.json
+*.pdf
+*.zip
+.env
+.env.*
+originais/
+processos_sei/
+bases_internas/
+*.bak
+*.log
