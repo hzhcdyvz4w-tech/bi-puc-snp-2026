@@ -6,11 +6,20 @@ const ext=s=>(s.split('.').pop()||'').toLowerCase();
 const category=n=>/boletim|medi[cç][aã]o|(^|[^\w])bm[\s_-]?\d/i.test(n)?'BM / medição':/aditivo/i.test(n)?'Aditivo':/apostil/i.test(n)?'Apostilamento':/pagamento|nota.?fiscal/i.test(n)?'Pagamento':'Documento';
 const stored=[];let selected=null;
 async function digest(blob){const raw=await blob.arrayBuffer();const h=await crypto.subtle.digest('SHA-256',raw);return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('')}
-function bmNumber(x){const m=String(x.name+' '+x.text.slice(0,1200)).match(/(?:boletim\s*(?:de\s*)?medi[cç][aã]o|\bBM)\s*(?:n[ºo.]?\s*)?([0-9]{1,3}(?:[\/-][0-9]{2,4})?)/i);return m?m[1]:''}
-function bmCompetence(x){const m=String(x.text.slice(0,6000)+' '+x.name).match(/(?:compet[eê]ncia|refer[eê]ncia|per[ií]odo)\s*[:\-]?\s*(0?[1-9]|1[0-2])[\/-](20\d\d)/i);return m?m[2]+'-'+m[1].padStart(2,'0'):''}
+const engine=()=>window.PUCDocEngine;
+function bmNumber(x){return engine()?.bmNumber(x.name,x.text)||''}
+function bmCompetence(x){return engine()?.bmPeriod(x.name,x.text)||''}
+function classification(x){return engine()?.bmClass(x.name,x.text)||'SEM INDICAÇÃO DE BM'}
+function updateEntry(x){x.text=String(x.text||'');x.candidates=engine()?.indicators(x.text)||[];
+ x.bmStatus=classification(x);
+ if(x.bmStatus==='BM IDENTIFICADO'||x.bmStatus==='BM PROVÁVEL'){
+  x.category='BM / medição';x.bm={number:bmNumber(x),period:bmCompetence(x),candidates:x.candidates,status:'PENDENTE DE CONFERÊNCIA'}
+ }else{x.category=x.bmStatus==='BM MENCIONADO'?'Documento com referência a BM':(category(x.name)==='BM / medição'?'Documento':category(x.name));x.bm=null}
+ return x
+}
 function openDB(){return new Promise((resolve,reject)=>{let r=indexedDB.open('BI_PUC_DOCUMENTOS_LOCAL',2);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('files'))r.result.createObjectStore('files',{keyPath:'id'})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 function transact(mode,fn){return new Promise((resolve,reject)=>{let tx=db.transaction('files',mode),store=tx.objectStore('files');let request=fn(store);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
-async function reload(){stored.splice(0);stored.push(...(await transact('readonly',s=>s.getAll())).sort((a,b)=>b.time-a.time).map(x=>{x.text=cleanDocumentText(x.text,ext(x.name));x.candidates=candidates(x.text);if(isBM(x)){x.category='BM / medição';x.bm=x.bm||{number:bmNumber(x),period:bmCompetence(x),status:'PENDENTE DE CONFERÊNCIA'};x.bm.candidates=x.candidates}return x}));paint()}
+async function reload(){stored.splice(0);stored.push(...(await transact('readonly',s=>s.getAll())).sort((a,b)=>b.time-a.time).map(updateEntry));paint()}
 function status(msg){let p=E('puc-library-status');if(p)p.textContent=msg}
 function normalizeName(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}
 function cleanDocumentText(source,type){
@@ -33,21 +42,20 @@ function candidates(source){
  for(const item of patterns){let match;while((match=item.regex.exec(text))&&result.length<30){result.push({type:item.type,excerpt:text.slice(Math.max(0,match.index-70),Math.min(text.length,match.index+match[0].length+80)).replace(/\s+/g,' ').slice(0,260),values:[match[1]],line:text.slice(0,match.index).split('\n').length,status:'CANDIDATO – NÃO CONFERIDO'})}}
  return result
 }
-async function extract(f){
- if(ext(f.name)==='zip'){if(!window.JSZip)throw Error('Biblioteca ZIP indisponível');let z=await JSZip.loadAsync(await f.arrayBuffer());let out=[];let entries=Object.values(z.files).filter(x=>!x.dir);if(entries.length>300)throw Error('ZIP com mais de 300 itens');
- let size=0;for(let it of entries){if(it.name.includes('..')||it.name.startsWith('/'))continue;const b=await it.async('blob');size+=b.size;if(size>90*1024*1024)throw Error('ZIP excedeu 90 MB descompactados');out.push({name:it.name,blob:b,container:f.name})}return out
- }return [{name:f.name,blob:f,container:''}]
-}
-async function fileText(item){
- const f=item.blob,n=item.name,t=ext(n);
- if(['txt','csv','json','md','xml','html','htm'].includes(t))return cleanDocumentText(await f.text(),t);
- if(t==='pdf'&&window.pdfjsLib){try{const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;const ss=[];for(let i=1;i<=Math.min(pdf.numPages,45);i++){const p=await pdf.getPage(i),words=await p.getTextContent();ss.push('PÁGINA '+i+'\n'+words.items.map(x=>x.str||'').join(' '))}return ss.join('\n').slice(0,250000)}catch(e){return '[PDF não extraído: '+e.message+']'}}
- if(['xls','xlsx','doc','docx'].includes(t))return '[Arquivo registrado; extração estruturada deste formato ainda não homologada.]';
- return '[Arquivo registrado; texto indisponível. Pode exigir OCR autorizado.]'
+async function extract(f){return engine().unpack(f)}
+async function fileText(item){return engine().read(item)}
+async function reanalyse(){
+ let changed=0,problems=[];const button=E('puc-reanalyse');if(button)button.disabled=true;
+ try{for(const d of stored){if(!d.blob)continue;
+  try{const result=await fileText({name:d.name,blob:d.blob});d.text=result.text;d.quality=result.quality;updateEntry(d);await transact('readwrite',s=>s.put(d));changed++;
+   if(changed%10===0)status('Reanalisando documentos: '+changed+'/'+stored.length);
+  }catch(err){problems.push(d.name+': '+err.message)}
+ }await reload();status('Reanálise concluída: '+changed+' arquivos; '+stored.filter(isBM).length+' BMs identificados. '+(problems.length?'Falhas: '+problems.slice(0,3).join('; '):''))}
+ finally{if(button)button.disabled=false}
 }
 async function ingest(files,origin,project,ref){let count=0;let errors=[];
  for(const file of files){try{if(file.size>90*1024*1024)throw Error('arquivo acima de 90 MB');let sub=await extract(file);
- for(let item of sub){const hash=await digest(item.blob);const duplicate=stored.find(x=>x.hash===hash&&x.project===project&&x.ref===ref);if(duplicate){errors.push(item.name+': duplicado no mesmo processo e PUC');continue}const text=cleanDocumentText(await fileText(item),ext(item.name));const entry={id:crypto.randomUUID(),hash,name:item.name,container:item.container,blob:item.blob,origin,project,ref,time:Date.now(),category:category(item.name),text,candidates:candidates(text)};entry.bm=isBM(entry)?{number:bmNumber(entry),period:bmCompetence(entry),candidates:entry.candidates,status:'PENDENTE DE CONFERÊNCIA'}:null;
+ for(let item of sub){const hash=await digest(item.blob);const duplicate=stored.find(x=>x.hash===hash&&x.project===project&&x.ref===ref);if(duplicate){errors.push(item.name+': duplicado no mesmo processo e PUC');continue}const parsed=await fileText(item);const entry=updateEntry({id:crypto.randomUUID(),hash,name:item.name,container:item.container,blob:item.blob,origin,project,ref,time:Date.now(),category:category(item.name),text:parsed.text,quality:parsed.quality});
  await transact('readwrite',s=>s.put(entry));stored.push(entry);count++}
  }catch(e){errors.push(file.name+': '+e.message)}}
  await reload();status(count+' documento(s) arquivado(s) neste navegador. '+(errors.length?'Pendências: '+errors.join('; '):'Os outros módulos podem consultar a biblioteca.'));return count
@@ -63,9 +71,9 @@ async function deleteBatch(mode){
  if(selected&&targets.some(x=>x.id===selected.id)){selected=null;E('puc-library-detail').innerHTML=''}
  await reload();status(targets.length+' documento(s) excluído(s) da biblioteca local. Registros já lançados no DE/PARA não foram apagados.')
 }
-function bmRows(){const el=E('puc-bm-list');if(!el)return;const arr=stored.filter(isBM);el.innerHTML=arr.length?arr.map(x=>'<tr><td>'+escape(x.ref||'Processo não identificado')+'</td><td>'+escape(x.project||'Sem PUC vinculada')+'</td><td>'+escape(x.bm?.number||'Nº não identificado')+'</td><td>'+escape(x.bm?.period||'Competência não identificada')+'</td><td>'+escape(x.name)+'</td><td>'+escape(String(x.candidates.length))+' candidato(s), não conferido(s)</td><td><button type="button" class="btn secondary" data-bm-open="'+escape(x.id)+'">Conferir</button></td></tr>').join(''):'<tr><td colspan="7">Nenhum boletim de medição identificado nos arquivos anexados.</td></tr>';el.querySelectorAll('[data-bm-open]').forEach(b=>b.onclick=()=>{view(b.dataset.bmOpen);E('puc-library-detail')?.scrollIntoView({behavior:'smooth'})})}
+function bmRows(){const el=E('puc-bm-list');if(!el)return;const arr=stored.filter(isBM);el.innerHTML=arr.length?arr.map(x=>'<tr><td>'+escape(x.ref||'Processo não identificado')+'</td><td>'+escape(x.project||'Sem PUC vinculada')+'</td><td>'+escape(x.bm?.number||'Nº não identificado')+'</td><td>'+escape(x.bm?.period||'Competência não identificada')+'</td><td>'+escape(x.name)+'</td><td>'+escape(String(x.candidates.length))+' candidato(s), não conferido(s)</td><td><button type="button" class="btn secondary" data-bm-open="'+escape(x.id)+'">Conferir</button></td></tr>').join(''):'<tr><td colspan="7">Nenhum BM identificado. Confirme se o ZIP foi importado na Biblioteca e use Reanalisar anexos; PDFs digitalizados ou XLS antigos podem precisar de tratamento externo.</td></tr>';el.querySelectorAll('[data-bm-open]').forEach(b=>b.onclick=()=>{view(b.dataset.bmOpen);E('puc-library-detail')?.scrollIntoView({behavior:'smooth'})})}
 
-function isBM(x){return x.category==='BM / medição'||/boletim\s*(de\s*)?medi[cç][aã]o|\bBM[\s_-]?\d/i.test(x.name+' '+(x.text||'').slice(0,20000))}
+function isBM(x){return x.bmStatus==='BM IDENTIFICADO'||x.bmStatus==='BM PROVÁVEL'||classification(x)==='BM IDENTIFICADO'||classification(x)==='BM PROVÁVEL'}
 function bmFiltered(){
  const project=E('cmp-project')?.value||'',process=E('puc-bm-filter-process')?.value.trim().toLowerCase()||'';
  return stored.filter(x=>isBM(x)&&(!project||!x.project||x.project===project)&&(!process||((x.ref||'')+' '+(x.container||'')).toLowerCase().includes(process)));
@@ -88,10 +96,10 @@ function setupBMConfront(){
 }
 
 function fileRows(){const p=E('puc-library-list');if(!p)return;
- p.innerHTML=stored.map(x=>'<tr><td><button class="btn secondary" data-view="'+escape(x.id)+'">'+escape(x.name)+'</button><br><small>'+escape(x.container||'individual')+'</small></td><td>'+escape(x.origin)+'</td><td>'+escape(x.project||'não vinculado')+'</td><td>'+escape(x.category)+'</td><td>'+x.candidates.length+' candidato(s)</td><td><button class="btn secondary" data-remove="'+escape(x.id)+'">Excluir</button></td></tr>').join('')||'<tr><td colspan="6">Nenhum arquivo salvo.</td></tr>';
+ p.innerHTML=stored.map(x=>'<tr><td><button class="btn secondary" data-view="'+escape(x.id)+'">'+escape(x.name)+'</button><br><small>'+escape(x.container||'individual')+'</small></td><td>'+escape(x.origin)+'</td><td>'+escape(x.project||'não vinculado')+'</td><td>'+escape(x.category)+'</td><td>'+x.candidates.length+' candidato(s)<br><small>'+escape(x.quality||'Leitura anterior — reanalisar')+'</small></td><td><button class="btn secondary" data-remove="'+escape(x.id)+'">Excluir</button></td></tr>').join('')||'<tr><td colspan="6">Nenhum arquivo salvo.</td></tr>';
  p.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>view(b.dataset.view));p.querySelectorAll('[data-remove]').forEach(b=>b.onclick=async()=>{if(!confirm('Excluir este documento da biblioteca local? Registros do DE/PARA não serão apagados.'))return;await transact('readwrite',s=>s.delete(b.dataset.remove));if(selected?.id===b.dataset.remove){selected=null;E('puc-library-detail').innerHTML=''}await reload();status('Documento excluído da biblioteca local.')})
 }
-function paint(){fileRows();bmRows();refreshBMConfront();const p=E('puc-library-count');if(p)p.textContent=stored.length+' arquivo(s) neste navegador · '+stored.filter(isBM).length+' BM(s) encontrados';if(window.PUCRefreshParts)window.PUCRefreshParts()}
+function paint(){fileRows();bmRows();refreshBMConfront();const p=E('puc-library-count');if(p)p.textContent=stored.length+' arquivo(s) · '+stored.filter(isBM).length+' BM(s) · '+stored.filter(x=>String(x.quality||'').includes('NÃO EXTRAÍDO')||String(x.quality||'').includes('OCR')||String(x.quality||'').includes('LEGADO')).length+' sem leitura integral';if(window.PUCRefreshParts)window.PUCRefreshParts()}
 function view(id){selected=stored.find(x=>x.id===id);if(!selected)return;
  E('puc-library-detail').innerHTML='<h3>'+escape(selected.name)+'</h3><p>Origem '+escape(selected.origin)+' · Processo '+escape(selected.ref||'não informado')+' · '+selected.candidates.length+' candidatos extraídos. <strong>Não comprovados.</strong></p><div class="scroll"><table class="data-table"><thead><tr><th>Tipo</th><th>Trecho localizado</th><th>Valores candidatos</th></tr></thead><tbody>'+selected.candidates.map(c=>'<tr><td>'+escape(c.type)+'</td><td>'+escape(c.excerpt)+'</td><td>'+escape(c.values.join(' | '))+'</td></tr>').join('')+'</tbody></table></div><pre style="max-height:260px;overflow:auto;white-space:pre-wrap;font-size:12px">'+escape(selected.text.slice(0,14000))+'</pre><button type="button" class="btn" id="puc-use-evidence">Vincular ao formulário de confronto</button>';
  E('puc-use-evidence').onclick=()=>{if(!E('obs-evidence'))return;const project=selected.project||E('cmp-project').value;if(!project){status('Selecione antes o empreendimento na aba Confronto.');return}E('obs-project').value=project;E('obs-source').value=selected.origin==='SEI'?'SEI':selected.origin==='BALANCO'?'BALANCO':selected.origin==='DOCAS'?'DOCAS':'PORTAL';E('obs-evidence').value=[selected.ref,selected.container,selected.name].filter(Boolean).join(' · ');E('obs-verified').checked=false;E('obs-note').value='Evidência identificada na biblioteca local; valores candidatos NÃO CONFERIDOS. Conferir documento, período, medição, contrato e valor antes de registrar.';document.querySelector('[data-page="comparacao"]').click();E('observation-form').scrollIntoView({behavior:'smooth'});};
@@ -99,6 +107,9 @@ function view(id){selected=stored.find(x=>x.id===id);if(!selected)return;
 function setup(){
  let section=E('documentos');if(!section)return;let pane=document.createElement('div');pane.className='panel';pane.id='puc-library';pane.innerHTML='<h2>Biblioteca documental compartilhada e persistente (local)</h2><p class="muted">Anexe vários documentos de uma vez. Ficam armazenados no navegador (IndexedDB) para consulta em Documentos e Confronto; não são publicados nem compartilhados entre computadores.</p><div class="formgrid"><label>Origem<select id="puc-lib-origin"><option>SEI</option><option>DOCAS</option><option>BALANCO</option><option>PORTAL</option></select></label><label>Investimento<select id="puc-lib-project"><option value="">Selecionar ao confrontar</option></select></label><label>Processo / referência<input id="puc-lib-ref"></label><label>Arquivos (múltiplos ou ZIP)<input id="puc-lib-files" multiple type="file" accept=".pdf,.zip,.txt,.csv,.json,.xml,.xls,.xlsx,.doc,.docx,.png,.jpg,.jpeg"></label></div><div class="two-actions" style="margin:12px 0"><button class="btn" type="button" id="puc-lib-save">Importar e guardar nesta máquina</button><button class="btn secondary" type="button" id="puc-lib-export">Exportar índice JSON</button><strong id="puc-library-count"></strong></div><p role="status" id="puc-library-status"></p><div class="scroll"><table class="data-table"><thead><tr><th>Arquivo</th><th>Origem</th><th>Projeto</th><th>Tipo</th><th>Achados sugeridos</th><th>Ação</th></tr></thead><tbody id="puc-library-list"></tbody></table></div><div id="puc-library-detail"></div>';
  section.appendChild(pane);
+ const reBtn=document.createElement('button');reBtn.type='button';reBtn.id='puc-reanalyse';reBtn.className='btn secondary';reBtn.textContent='Reanalisar documentos já anexados';reBtn.onclick=reanalyse;
+ E('puc-library-count')?.parentElement?.appendChild(reBtn);
+
  // A lista de anexos fica recolhível, sem remover nem apagar arquivos.
  const toggle=document.createElement('button');toggle.type='button';toggle.className='btn secondary';toggle.id='puc-toggle-docs';toggle.setAttribute('aria-expanded','false');toggle.textContent='Mostrar documentos anexados';pane.insertBefore(toggle,E('puc-library-count')?.parentElement?.nextSibling||null);
  const table=E('puc-library-list')?.closest('.scroll');if(table){table.id='puc-docs-table';table.hidden=true;toggle.onclick=()=>{table.hidden=!table.hidden;toggle.setAttribute('aria-expanded',String(!table.hidden));toggle.textContent=table.hidden?'Mostrar documentos anexados':'Ocultar documentos anexados'}};
