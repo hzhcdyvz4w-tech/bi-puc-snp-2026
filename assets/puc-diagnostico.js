@@ -8,6 +8,12 @@ async function run(){
  try{
   const projects=JSON.parse(el('embedded-data')?.textContent||'{}').projetos||[];
   add('Carteira de PUCs carregada',projects.length>=12,projects.length+' investimentos');
+  const central=document.querySelector('#documentos #puc3-central-files');
+  add('Anexos concentrados em Documentos',!!central);
+  const up=['puc3-files-SEI','puc3-files-BALANCO','puc3-files-SIOP'];
+  add('Três campos SEI, Balanço e SIOP em Documentos',up.every(id=>!!document.getElementById(id)&&central?.contains(document.getElementById(id))),up.length+' entradas previstas');
+  const other=[...document.querySelectorAll('input[type=file]')].filter(e=>!central?.contains(e)).filter(e=>{const style=getComputedStyle(e),label=e.closest('label'),sLabel=label?getComputedStyle(label):null;return style.display!=='none'&&sLabel?.display!=='none'&&!e.closest('[hidden]')});
+  add('Sem anexos concorrentes nas outras abas',other.length===0,other.length+' campos extras visíveis');
   const engine=window.PUCDocEngine;add('Leitor de documentos',!!engine);
   add('Leitor de arquivos ZIP',typeof window.JSZip==='function');
   if(engine&&window.JSZip){
@@ -34,7 +40,7 @@ async function run(){
 function init(){
  const section=el('documentos');if(!section)return;
  const div=document.createElement('div');div.className='panel';div.id='puc-selftest';div.innerHTML='<div class="section-header"><h2>Diagnóstico de funcionamento do BI PUC</h2><button type="button" id="puc-selftest-btn" class="btn secondary">Executar autodiagnóstico</button></div><p class="muted">Teste de carteira, ZIP com documentos internos, reconhecimento de BMs, exclusão de CSS e leitura de valores candidatos. Utiliza apenas dados artificiais, sem alterar anexos ou observações.</p><div id="puc-selftest-results" class="statusline" role="status">Clique para verificar o funcionamento neste navegador.</div>';
- section.insertBefore(div,section.firstChild);
+ section.insertBefore(div,document.getElementById('puc3-central-files')?.nextSibling||section.firstChild);
  el('puc-selftest-btn').onclick=run;
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
