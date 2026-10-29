@@ -157,6 +157,36 @@ function exportReport(){
  lines.push('','RESSALVAS: somente documentos anexados; valores não equivalentes não são comparados; nenhuma conclusão jurídica automática; homologação SNP pendente.');
  download(new Blob([lines.join('\n')],{type:'text/plain;charset=utf-8'}),'RELATORIO_CONFRONTO_SEI_BALANCO_SIOP.txt');
 }
+
+function reportHtml(){
+ const result=audit();let rows=result.findings,body='';
+ for(const id of selected){
+  const p=projects.find(x=>x.id===id);
+  body+='<section><h2>'+esc(id)+' · '+esc(p?.empreendimento||'')+'</h2><p><strong>Companhia:</strong> '+esc(p?.empresa||'')+'</p>';
+  const ds=docs().filter(d=>d.project===id||((d.findings||[]).some(f=>f.project===id)));
+  body+='<h3>Arquivos anexados</h3><table><thead><tr><th>Fonte</th><th>Documento</th><th>Leitura</th><th>BM</th></tr></thead><tbody>';
+  body+=ds.length?ds.map(d=>'<tr><td>'+esc(d.origin)+'</td><td>'+esc(d.name)+'</td><td>'+esc(d.quality||'não informada')+'</td><td>'+esc(d.bmStatus||'Não identificado')+'</td></tr>').join(''):'<tr><td colspan="4">Nenhum documento vinculado à PUC</td></tr>';
+  body+='</tbody></table><h3>Achados extraídos e conferidos</h3><table><thead><tr><th>Fonte</th><th>Indicador</th><th>Valor</th><th>Competência / corte</th><th>Conferência</th></tr></thead><tbody>';
+  const fs=rows.filter(x=>x.project===id);
+  body+=fs.length?fs.map(f=>'<tr><td>'+esc(f.source)+'</td><td>'+esc(label[f.indicator]||f.indicator)+'</td><td>'+esc(val(f.value))+' '+esc(units[f.indicator]||'')+'</td><td>'+esc(f.period||'Não informada')+' / '+esc(f.cutoff||'Não informado')+'</td><td>'+esc(f.verified?'Conferido pelo operador':'Pendente')+'</td></tr>').join(''):'<tr><td colspan="5">Não há achados revisados</td></tr>';
+  body+='</tbody></table><h3>Comparações documentais</h3><table><thead><tr><th>Indicador</th><th>Fonte A / fonte B</th><th>Resultado</th><th>Justificativa</th></tr></thead><tbody>';
+  let pr=result.pairs.filter(x=>x.project===id);
+  body+=pr.length?pr.map(pair=>'<tr><td>'+esc(label[pair.a.indicator]||pair.a.indicator)+'</td><td>'+esc(pair.a.source)+' × '+esc(pair.b.source)+'</td><td>'+esc(pair.state)+'</td><td>'+esc(pair.reason||'Diferença: '+val(pair.diff))+'</td></tr>').join(''):'<tr><td colspan="4">Não foi possível confronto equivalente entre duas fontes nesta PUC</td></tr>';
+  body+='</tbody></table></section>';
+ }
+ let html='<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Relatório documental BI PUC</title><style>body{font:13px/1.5 Arial,sans-serif;color:#1a3147;max-width:1050px;margin:30px auto;padding:0 20px}h1{color:#123b61}h2{margin-top:26px;color:#185781}section{break-inside:avoid;margin:22px 0;border-top:2px solid #b8d6e3}table{width:100%;border-collapse:collapse;font-size:11px;margin:10px 0 16px}th,td{border:1px solid #d6e1e8;padding:7px;text-align:left;vertical-align:top}th{background:#eef4f7}.warning{background:#fff6e9;border-left:4px solid #bd8732;padding:12px}@media print{body{margin:5mm;max-width:none}section{page-break-inside:avoid}}</style><h1>BI Executivo PUC · Confronto Documental</h1><p>Secretaria Nacional de Portos · MPOR</p><p>Emitido em '+esc(new Date().toLocaleString('pt-BR'))+' · PUCs: '+esc([...selected].join(', '))+'</p><p class="warning"><strong>Documento auxiliar — não homologado pela SNP.</strong> Compara somente arquivos efetivamente anexados e indicadores equivalentes, conferidos, com competência, data de corte, objeto, contrato e apuração compatíveis. Valores SIOP pré-carregados não integram este relatório. Sem evidência, não há conclusão de correspondência.</p>'+body+'</html>';
+ return html;
+}
+function initReportPage(){
+ const page=$('relatorio');if(!page)return;
+ const previous=[...page.children].filter(el=>el.classList?.contains('panel'));
+ const legacy=document.createElement('details');legacy.className='panel';legacy.innerHTML='<summary>Relatório anterior · SIOP referencial (consulta auxiliar)</summary><p class="muted">A estrutura anterior permanece disponível, mas não deve substituir o confronto documental das três fontes anexadas.</p>';for(const el of previous)legacy.appendChild(el);page.appendChild(legacy);
+ const p=document.createElement('div');p.id='puc3-report-panel';p.className='panel';p.innerHTML='<h2>Relatório documental · SEI × Balanço × SIOP</h2><p class="muted">Usa exclusivamente os documentos anexados e os achados registrados no Confronto das Fontes, incluindo as PUCs selecionadas. O resultado só indica correspondência quando há pelo menos duas fontes com valores de mesmo indicador e contexto comprovado.</p><div class="two-actions"><button type="button" class="btn" id="puc3-report-preview-btn">Visualizar resultado documental</button><button type="button" class="btn secondary" id="puc3-report-html-btn">Baixar relatório HTML para impressão/PDF</button></div><div id="puc3-report-preview" class="statusline">Selecione PUCs e confira os achados na aba Confronto das fontes.</div>';
+ page.insertBefore(p,page.firstChild);
+ $('puc3-report-preview-btn').onclick=()=>{audit();$('puc3-report-preview').innerHTML=$('puc3-result').innerHTML;};
+ $('puc3-report-html-btn').onclick=()=>download(new Blob([reportHtml()],{type:'text/html;charset=utf-8'}),'RELATORIO_DOCUMENTAL_PUC_SEI_BALANCO_SIOP.html');
+}
+
 function render(){renderFiles();renderFindings();}
 function init(){
  const cmp=$('comparacao');if(!cmp)return;
@@ -174,7 +204,7 @@ function init(){
  '<h3>4 · Confrontar e gerar relatório</h3><div class="two-actions"><button type="button" class="btn" id="puc3-run">Confrontar fontes anexadas</button><button type="button" class="btn secondary" id="puc3-csv">Exportar achados CSV</button><button type="button" class="btn secondary" id="puc3-report">Gerar relatório documental</button></div><div id="puc3-result"></div>';
  cmp.insertBefore(panel,cmp.firstChild);
  const style=document.createElement('style');style.textContent='.puc3-projects{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:7px;margin:12px 0 20px}.puc3-choose{display:flex;gap:8px;align-items:start;border:1px solid #dbe5ed;border-radius:8px;padding:9px;font-size:12px;cursor:pointer}.puc3-choose small{display:block;color:#637a8e}.puc3-choose input{margin-top:3px}.puc3-uploads,.puc3-coverage{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}.puc3-source,.puc3-kpi{padding:13px;border:1px solid #dce7ee;border-radius:10px;background:#f8fafc;min-width:0}.puc3-source label{display:grid;gap:4px;font-size:12px;margin:10px 0}.puc3-source input,.puc3-source select{width:100%;max-width:100%;padding:8px;border:1px solid #cedbe4;border-radius:7px}.puc3-source small,.puc3-kpi span{display:block;font-size:11px;color:#667d90;margin-top:8px}.puc3-kpi strong{font-size:21px;display:block}.puc3-review{padding:18px;border:1px solid #bcd6e3;background:#f5fafc;border-radius:11px;margin:16px 0}.puc3-review[hidden],#puc-docs-table[hidden]{display:none!important}#puc3-files-rows small,#puc3-findings-rows small,#puc3-result small{display:block;color:#667d90;margin-top:4px}#puc3-result{margin-top:18px}#puc3-legacy summary{cursor:pointer;font-weight:650}@media(max-width:850px){.puc3-uploads,.puc3-coverage{grid-template-columns:1fr}.puc3-projects{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.puc3-projects{grid-template-columns:1fr}.puc3-source{padding:11px}}';document.head.appendChild(style);
- sourceCards();renderChecks();render();
+ sourceCards();renderChecks();render();initReportPage();
  $('puc3-search').oninput=renderChecks;
  $('puc3-all').onclick=()=>{selected=new Set(projects.map(p=>p.id));renderChecks();render()};
  $('puc3-clear').onclick=()=>{selected.clear();renderChecks();render();$('puc3-result').innerHTML=''};
@@ -182,7 +212,7 @@ function init(){
  $('puc3-review-close').onclick=()=>$('puc3-review').hidden=true;
  $('puc3-run').onclick=audit;
  $('puc3-csv').onclick=()=>csv(lastRows.map(f=>({puc:f.project,fonte:f.source,documento:f.document,referencia:f.reference||'',indicador:label[f.indicator]||f.indicator,valor:f.value,unidade:units[f.indicator],competencia:f.period,data_corte:f.cutoff,objeto:f.object,contrato:f.contract,apuracao:f.aggregation,conferido:f.verified?'SIM':'NÃO',observacao:f.note})),'PUC_ACHADOS_DOCUMENTAIS_SEI_BALANCO_SIOP.csv');
- $('puc3-report').onclick=exportReport;
+ $('puc3-report').onclick=()=>download(new Blob([reportHtml()],{type:'text/html;charset=utf-8'}),'RELATORIO_DOCUMENTAL_PUC_SEI_BALANCO_SIOP.html');
  document.addEventListener('puc-documents-updated',render);
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
