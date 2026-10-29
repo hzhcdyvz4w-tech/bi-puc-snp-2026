@@ -1,0 +1,60 @@
+/* BI PUC – Biblioteca documental local e recortes por objeto (29/10/2026) */
+(()=>{'use strict';
+const E=id=>document.getElementById(id),key='puc-doc-meta-v2';let db=null;
+const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ext=s=>(s.split('.').pop()||'').toLowerCase();
+const category=n=>/boletim|medi[cç][aã]o|(^|[^\w])bm[\s_-]?\d/i.test(n)?'BM / medição':/aditivo/i.test(n)?'Aditivo':/apostil/i.test(n)?'Apostilamento':/pagamento|nota.?fiscal/i.test(n)?'Pagamento':'Documento';
+const stored=[];let selected=null;
+function openDB(){return new Promise((resolve,reject)=>{let r=indexedDB.open('BI_PUC_DOCUMENTOS_LOCAL',2);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('files'))r.result.createObjectStore('files',{keyPath:'id'})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
+function transact(mode,fn){return new Promise((resolve,reject)=>{let tx=db.transaction('files',mode),store=tx.objectStore('files');let request=fn(store);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
+async function reload(){stored.splice(0);stored.push(...(await transact('readonly',s=>s.getAll())).sort((a,b)=>b.time-a.time));paint()}
+function status(msg){let p=E('puc-library-status');if(p)p.textContent=msg}
+function normalizeName(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}
+function candidates(s){
+ const text=String(s||'');let result=[];let lines=text.split(/\n/);
+ for(let i=0;i<lines.length;i++){let line=lines[i];let type=/total\s*(?:da|de|do)?\s*medi[cç][aã]o|valor\s*(?:total|medido)|total\s*executado/i.test(line)?'Valor medido':/valor\s*(?:pago|liquidado)|total\s*pagamento/i.test(line)?'Valor pago':/(?:execu[cç][aã]o\s*f[ií]sica|avan[cç]o\s*f[ií]sico)\s*[:\-]?\s*\d/i.test(line)?'Percentual físico':null;
+ if(!type)continue;let nearby=line.slice(0,420);const m=nearby.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+(?:[.,]\d{1,2})?)\s*(%)?/g);result.push({type,excerpt:nearby.slice(0,260),values:(m||[]).slice(0,5),line:i+1,status:'CANDIDATO – NÃO CONFERIDO'});if(result.length>=30)break
+ }return result
+}
+async function extract(f){
+ if(ext(f.name)==='zip'){if(!window.JSZip)throw Error('Biblioteca ZIP indisponível');let z=await JSZip.loadAsync(await f.arrayBuffer());let out=[];let entries=Object.values(z.files).filter(x=>!x.dir);if(entries.length>300)throw Error('ZIP com mais de 300 itens');
+ let size=0;for(let it of entries){if(it.name.includes('..')||it.name.startsWith('/'))continue;const b=await it.async('blob');size+=b.size;if(size>90*1024*1024)throw Error('ZIP excedeu 90 MB descompactados');out.push({name:it.name,blob:b,container:f.name})}return out
+ }return [{name:f.name,blob:f,container:''}]
+}
+async function fileText(item){
+ const f=item.blob,n=item.name,t=ext(n);
+ if(['txt','csv','json','md','xml','html'].includes(t))return (await f.text()).slice(0,250000);
+ if(t==='pdf'&&window.pdfjsLib){try{const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;const ss=[];for(let i=1;i<=Math.min(pdf.numPages,45);i++){const p=await pdf.getPage(i),words=await p.getTextContent();ss.push('PÁGINA '+i+'\n'+words.items.map(x=>x.str||'').join(' '))}return ss.join('\n').slice(0,250000)}catch(e){return '[PDF não extraído: '+e.message+']'}}
+ if(t==='xlsx'||t==='docx')return '[Arquivo registrado; extração estruturada deste formato ainda não homologada.]';
+ return '[Arquivo registrado; texto indisponível. Pode exigir OCR autorizado.]'
+}
+async function ingest(files,origin,project,ref){let count=0;let errors=[];
+ for(const file of files){try{if(file.size>90*1024*1024)throw Error('arquivo acima de 90 MB');let sub=await extract(file);
+ for(let item of sub){const text=await fileText(item);const entry={id:crypto.randomUUID(),name:item.name,container:item.container,blob:item.blob,origin,project,ref,time:Date.now(),category:category(item.name),text,candidates:candidates(text)};
+ await transact('readwrite',s=>s.put(entry));count++}
+ }catch(e){errors.push(file.name+': '+e.message)}}
+ await reload();status(count+' documento(s) arquivado(s) neste navegador. '+(errors.length?'Pendências: '+errors.join('; '):'Os outros módulos podem consultar a biblioteca.'));return count
+}
+function fileRows(){const p=E('puc-library-list');if(!p)return;
+ p.innerHTML=stored.map(x=>'<tr><td><button class="btn secondary" data-view="'+escape(x.id)+'">'+escape(x.name)+'</button><br><small>'+escape(x.container||'individual')+'</small></td><td>'+escape(x.origin)+'</td><td>'+escape(x.project||'não vinculado')+'</td><td>'+escape(x.category)+'</td><td>'+x.candidates.length+' candidato(s)</td><td><button class="btn secondary" data-remove="'+escape(x.id)+'">Excluir</button></td></tr>').join('')||'<tr><td colspan="6">Nenhum arquivo salvo.</td></tr>';
+ p.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>view(b.dataset.view));p.querySelectorAll('[data-remove]').forEach(b=>b.onclick=async()=>{if(!confirm('Excluir este documento do armazenamento local?'))return;await transact('readwrite',s=>s.delete(b.dataset.remove));await reload()})
+}
+function paint(){fileRows();const p=E('puc-library-count');if(p)p.textContent=stored.length+' arquivo(s) neste navegador';if(window.PUCRefreshParts)window.PUCRefreshParts()}
+function view(id){selected=stored.find(x=>x.id===id);if(!selected)return;
+ E('puc-library-detail').innerHTML='<h3>'+escape(selected.name)+'</h3><p>Origem '+escape(selected.origin)+' · Processo '+escape(selected.ref||'não informado')+' · '+selected.candidates.length+' candidatos extraídos. <strong>Não comprovados.</strong></p><div class="scroll"><table class="data-table"><thead><tr><th>Tipo</th><th>Trecho localizado</th><th>Valores candidatos</th></tr></thead><tbody>'+selected.candidates.map(c=>'<tr><td>'+escape(c.type)+'</td><td>'+escape(c.excerpt)+'</td><td>'+escape(c.values.join(' | '))+'</td></tr>').join('')+'</tbody></table></div><pre style="max-height:260px;overflow:auto;white-space:pre-wrap;font-size:12px">'+escape(selected.text.slice(0,14000))+'</pre><button type="button" class="btn" id="puc-use-evidence">Vincular ao formulário de confronto</button>';
+ E('puc-use-evidence').onclick=()=>{if(!E('obs-evidence'))return;const project=selected.project||E('cmp-project').value;if(!project){status('Selecione antes o empreendimento na aba Confronto.');return}E('obs-project').value=project;E('obs-source').value=selected.origin==='SEI'?'SEI':selected.origin==='BALANCO'?'BALANCO':selected.origin==='DOCAS'?'DOCAS':'PORTAL';E('obs-evidence').value=[selected.ref,selected.container,selected.name].filter(Boolean).join(' · ');E('obs-verified').checked=false;E('obs-note').value='Evidência identificada na biblioteca local; valores candidatos NÃO CONFERIDOS. Conferir documento, período, medição, contrato e valor antes de registrar.';document.querySelector('[data-page="comparacao"]').click();E('observation-form').scrollIntoView({behavior:'smooth'});};
+}
+function setup(){
+ let section=E('documentos');if(!section)return;let pane=document.createElement('div');pane.className='panel';pane.id='puc-library';pane.innerHTML='<h2>Biblioteca documental compartilhada e persistente (local)</h2><p class="muted">Anexe vários documentos de uma vez. Ficam armazenados no navegador (IndexedDB) para consulta em Documentos e Confronto; não são publicados nem compartilhados entre computadores.</p><div class="formgrid"><label>Origem<select id="puc-lib-origin"><option>SEI</option><option>DOCAS</option><option>BALANCO</option><option>PORTAL</option></select></label><label>Investimento<select id="puc-lib-project"><option value="">Selecionar ao confrontar</option></select></label><label>Processo / referência<input id="puc-lib-ref"></label><label>Arquivos (múltiplos ou ZIP)<input id="puc-lib-files" multiple type="file" accept=".pdf,.zip,.txt,.csv,.json,.xml,.xlsx,.docx,.png,.jpg,.jpeg"></label></div><div class="two-actions" style="margin:12px 0"><button class="btn" type="button" id="puc-lib-save">Importar e guardar nesta máquina</button><button class="btn secondary" type="button" id="puc-lib-export">Exportar índice JSON</button><strong id="puc-library-count"></strong></div><p role="status" id="puc-library-status"></p><div class="scroll"><table class="data-table"><thead><tr><th>Arquivo</th><th>Origem</th><th>Projeto</th><th>Tipo</th><th>Achados sugeridos</th><th>Ação</th></tr></thead><tbody id="puc-library-list"></tbody></table></div><div id="puc-library-detail"></div>';
+ section.appendChild(pane);
+ E('puc-lib-save').onclick=async()=>{const b=E('puc-lib-save');b.disabled=true;try{await ingest([...E('puc-lib-files').files],E('puc-lib-origin').value,E('puc-lib-project').value,E('puc-lib-ref').value)}finally{b.disabled=false}};
+ E('puc-lib-export').onclick=()=>{let data=stored.map(({id,name,container,origin,project,ref,time,category,candidates})=>({id,name,container,origin,project,ref,time,category,candidates}));let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download='indice_documental_puc_local.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
+ // Reutilizar os anexos de Documentos e da janela SEI para manter uma única biblioteca.
+ const original=E('import-files');if(original)original.addEventListener('click',async()=>{let files=[...E('upload-file').files];if(files.length)await ingest(files,E('upload-origin').value,E('upload-project').value,E('upload-ref').value)}, {capture:true});
+ const other=E('sei-confront-read');if(other)other.addEventListener('click',async()=>{let files=[...E('sei-confront-input').files];if(files.length)await ingest(files,'SEI',E('cmp-project').value,E('sei-confront-ref').value)}, {capture:true});
+ const select=E('puc-lib-project'),source=E('cmp-project');if(source){select.innerHTML=source.innerHTML;source.addEventListener('change',()=>{select.value=source.value;status('Investimento selecionado: '+(source.selectedOptions[0]?.textContent||''))})}
+ const fromCompare=document.createElement('button');fromCompare.type='button';fromCompare.className='btn secondary';fromCompare.textContent='Abrir biblioteca de documentos salvos';fromCompare.onclick=()=>{document.querySelector('[data-page="documentos"]').click();pane.scrollIntoView({behavior:'smooth'})};E('sei-confront-pane')?.querySelector('.two-actions')?.appendChild(fromCompare);
+}
+async function init(){try{db=await openDB();setup();await reload()}catch(err){status('Não foi possível abrir o armazenamento local: '+err.message)}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+})();
