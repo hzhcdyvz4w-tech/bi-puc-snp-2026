@@ -31,7 +31,15 @@ function indicators(text){
  ['Valor medido (acumulado)',/(?:valor\s+(?:medido|executado)\s+acumulado|total\s+medido\s+at[eé]\s+(?:o\s+)?per[ií]odo)\s*[:=–-]?\s*(R\$\s*)?(\d[\d.]*,\d{2})/gi],
  ['Valor medido (apuração não determinada)',/(?:valor\s+(?:total\s+)?medido|total\s+d[ao]\s+medi[cç][aã]o)\s*[:=–-]?\s*(R\$\s*)?(\d[\d.]*,\d{2})/gi],
  ['Valor pago (não comprova OB)',/(?:valor\s+(?:total\s+)?pago|total\s+de\s+pagamentos)\s*[:=–-]?\s*(R\$\s*)?(\d[\d.]*,\d{2})/gi],
- ['Execução física (%)',/(?:execu[cç][aã]o\s+f[ií]sica|avan[cç]o\s+f[ií]sico)\s*[:=–-]?\s*(\d{1,3}(?:,\d{1,2})?)\s*%/gi]
+ ['Execução física (%)',/(?:execu[cç][aã]o\s+f[ií]sica|avan[cç]o\s+f[ií]sico)\s*[:=–-]?\s*(\d{1,3}(?:,\d{1,2})?)\s*%/gi],
+ ['Dotação atual (SIOP candidato)',/(?:dota[cç][aã]o\s+atual(?:izada)?)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
+ ['Empenhado (SIOP candidato)',/(?:valor\s+empenhado|empenhado)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
+ ['Liquidado (SIOP candidato)',/(?:valor\s+liquidado|liquidado)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
+ ['Pago (origem a conferir)',/(?:total\s+pago|valor\s+pago|pago\s+no\s+per[ií]odo)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
+ ['PUC recebida (candidato)',/(?:PUC\s+recebida|aporte\s+recebido)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
+ ['PUC aplicada (candidato)',/(?:PUC\s+aplicada|recurso\s+aplicado)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
+ ['Execução financeira (candidato)',/(?:execu[cç][aã]o\s+financeira)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
+ ['Valor global do empreendimento (candidato)',/(?:valor\s+global\s+do\s+empreendimento)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi]
  ];
  for(const [type,rx] of patterns){let m;while((m=rx.exec(t))&&out.length<50){let value=m[2]||m[1];out.push({type,values:[value],excerpt:t.slice(Math.max(0,m.index-60),Math.min(t.length,m.index+m[0].length+65)).replace(/\s+/g,' ').slice(0,270),line:t.slice(0,m.index).split('\n').length,status:'CANDIDATO — EXIGE CONFERÊNCIA'});}}
  return out
@@ -72,12 +80,31 @@ async function read(item){
   }catch(e){return {text:'',quality:'DOCX NÃO EXTRAÍDO: '+e.message}}
  }
  if(ext==='xlsx'){
-  try{const z=await w.JSZip.loadAsync(await blob.arrayBuffer());let ss=[];if(z.file('xl/sharedStrings.xml')){let d=xml(await z.file('xl/sharedStrings.xml').async('string'));ss=nodes(d,'si').map(x=>nodes(x,'t').map(t=>t.textContent).join(''))}
-   let result=[];for(const [name,part] of Object.entries(z.files)){if(!/^xl\/worksheets\/sheet\d+\.xml$/i.test(name)||result.length>12)continue;let d=xml(await part.async('string'));const lines=[];
-    for(const row of nodes(d,'row').slice(0,3500)){const vals=[];for(const c of nodes(row,'c').slice(0,80)){let v=nodes(c,'v')[0]?.textContent||'';let t=c.getAttribute('t');if(t==='s')v=ss[Number(v)]||'';if(t==='inlineStr')v=nodes(c,'t').map(x=>x.textContent).join('');if(v)vals.push(v)}if(vals.length)lines.push(vals.join(' | '))}
+  try{
+   const z=await w.JSZip.loadAsync(await blob.arrayBuffer());let ss=[];
+   if(z.file('xl/sharedStrings.xml')){const d=xml(await z.file('xl/sharedStrings.xml').async('string'));ss=nodes(d,'si').map(x=>nodes(x,'t').map(t=>t.textContent).join(''))}
+   const result=[];for(const [name,part] of Object.entries(z.files)){
+    if(!/^xl\/worksheets\/sheet\d+\.xml$/i.test(name)||result.length>=12)continue;
+    const d=xml(await part.async('string')),lines=[],rawRows=[];
+    for(const row of nodes(d,'row').slice(0,2000)){const cells={};for(const c of nodes(row,'c').slice(0,110)){
+      let v=nodes(c,'v')[0]?.textContent||'',t=c.getAttribute('t'),ref=c.getAttribute('r')||'';
+      if(t==='s')v=ss[Number(v)]||'';if(t==='inlineStr')v=nodes(c,'t').map(x=>x.textContent).join('');
+      if(v){let letters=(ref.match(/^[A-Z]+/)||[])[0];if(letters)cells[letters]=v}
+     }rawRows.push({row:row.getAttribute('r'),cells})}
+    let headers=null;
+    for(const r of rawRows.slice(0,25)){
+      let vals=Object.values(r.cells).map(normal),hits=vals.filter(v=>/dota[cç][aã]o|empenh|liquid|pago|empreendimento|medi[cç][aã]o|execu[cç][aã]o|investimento|a[cç][aã]o|plano or[cç]ament[aá]rio/.test(v));
+      if(hits.length>=2){headers=r;break}
+    }
+    for(const row of rawRows){let pieces=Object.entries(row.cells).map(([col,value])=>{
+      let colName=headers&&row!==headers?headers.cells[col]:null;
+      return colName?String(colName).trim()+': '+value:value;
+    });
+    if(pieces.length)lines.push('ABA '+name+' LINHA '+row.row+' | '+pieces.join(' | '))}
     result.push(name+'\n'+lines.join('\n'));
-   }return {text:result.join('\n').slice(0,300000),quality:result.length?'TABELA EXTRAÍDA (XLSX)':'XLSX SEM PLANILHAS LEGÍVEIS'};
-  }catch(e){return {text:'',quality:'XLSX NÃO EXTRAÍDO: '+e.message}}
+   }
+   return {text:result.join('\n').slice(0,300000),quality:result.length?'TABELA EXTRAÍDA (XLSX) — CABEÇALHO CANDIDATO':'XLSX SEM PLANILHAS LEGÍVEIS'};
+  }catch(err){return {text:'',quality:'XLSX NÃO EXTRAÍDO: '+err.message}}
  }
  if(ext==='pdf'){
   if(!w.pdfjsLib){let txt=basicPDF(new Uint8Array(await blob.arrayBuffer()));return {text:txt,quality:txt?'PDF BÁSICO — LEITURA PARCIAL, CONFERIR':'PDF NÃO EXTRAÍDO: PDF.js indisponível ou PDF digitalizado'}};
