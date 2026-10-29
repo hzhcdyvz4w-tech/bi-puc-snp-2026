@@ -124,9 +124,10 @@ function setup(){
  const input=E(id);if(!input)continue;
  input.setAttribute('accept','.csv,.zip,.pdf,.xls,.xlsx,.doc,.docx');
  input.addEventListener('change',async()=>{const files=[...input.files];if(!files.length)return;
- if(files.every(f=>id==='load-schedule-csv'?/\.csv$|\.zip$/i.test(f.name):/\.csv$/i.test(f.name)))return;
- E('puc-lib-files').value='';const sourceId=E('puc-lib-origin');if(sourceId)sourceId.value=id==='load-schedule-csv'?'BALANCO':'SEI';
- status('Este arquivo não é CSV padronizado. Use a Biblioteca Documental para anexar ZIP/PDF/XLS; o sistema não o interpretará como CSV.');});
+ if(files.every(f=>/\.csv$/i.test(f.name)))return;
+ const origin=id==='load-schedule-csv'?'BALANCO':'SEI';const project=E('cmp-project')?.value||E('puc-lib-project')?.value||'';const ref=E('puc-lib-ref')?.value||'';
+ await ingest(files,origin,project,ref);input.value='';
+ status(files.length+' arquivo(s) encaminhado(s) automaticamente à Biblioteca Documental; consulte a lista e os BMs abaixo. Dados brutos não foram lançados no DE/PARA.');});
  }
  const select=E('puc-lib-project'),source=E('cmp-project');
  const projectData=()=>{try{const raw=E('embedded-data')?.textContent;return JSON.parse(raw||'{}').projetos||[]}catch(e){return []}};
