@@ -150,7 +150,7 @@ function audit(){
  html+='<h3>Confrontos numéricos por indicador</h3><div class="scroll"><table class="data-table"><thead><tr><th>PUC</th><th>Indicador</th><th>Fonte A / valor</th><th>Fonte B / valor</th><th>Conclusão</th></tr></thead><tbody>';
  html+=pairs.length?pairs.map(p=>'<tr><td>'+esc(p.project)+'</td><td>'+esc(label[p.a.indicator]||p.a.indicator)+'</td><td>'+esc(p.a.source)+' · '+esc(val(p.a.value))+'</td><td>'+esc(p.b.source)+' · '+esc(val(p.b.value))+'</td><td><strong>'+esc(p.state)+'</strong><small>'+esc(p.reason||('Diferença '+val(p.diff)))+'</small></td></tr>').join(''):'<tr><td colspan="5">Não existem dois achados do mesmo indicador em fontes diferentes para confronto. Ausência de confronto não comprova regularidade.</td></tr>';
  html+='</tbody></table></div><p class="notice">Regra: o SIOP de demonstração não integra os resultados. Só são comparados indicadores de mesma natureza, período, data de corte, apuração, objeto e contrato, com conferência registrada. Pagamento da União, PUC recebida, medição e valor pago à contratada não são equivalentes por definição. Relatório auxiliar não homologado pela SNP.</p>';
- body.innerHTML=html;status('Confronto documental calculado: '+selected.size+' PUC(s), '+findings.length+' achados, '+pairs.length+' pares analisados.');
+ body.innerHTML=html;body.dataset.generated='1';status('Confronto documental calculado: '+selected.size+' PUC(s), '+findings.length+' achados, '+pairs.length+' pares analisados.');
  return {pairs,findings};
 }
 function exportReport(){
@@ -190,7 +190,7 @@ function initReportPage(){
  $('puc3-report-html-btn').onclick=()=>download(new Blob([reportHtml()],{type:'text/html;charset=utf-8'}),'RELATORIO_DOCUMENTAL_PUC_SEI_BALANCO_SIOP.html');
 }
 
-function render(){renderFiles();renderFindings();}
+function render(){renderFiles();renderFindings();if($('puc3-result')?.dataset?.generated==='1')audit()}
 function init(){
  const cmp=$('comparacao');if(!cmp)return;
  const oldMulti=$('puc-multi-panel');if(oldMulti)oldMulti.remove();
