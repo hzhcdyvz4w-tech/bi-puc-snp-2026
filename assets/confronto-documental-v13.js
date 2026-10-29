@@ -191,6 +191,20 @@ function initReportPage(){
 }
 
 function render(){renderFiles();renderFindings();if($('puc3-result')?.dataset?.generated==='1')audit()}
+function simplifyDocuments(){
+ const page=$('documentos');if(!page)return;
+ const help=document.createElement('div');help.className='panel';help.innerHTML='<h2>Importação principal: Confronto das três fontes</h2><p class="muted">Para comparar dados entre <strong>SEI, Balanço e SIOP</strong>, anexe os documentos na aba Confronto das Fontes. A biblioteca abaixo permanece disponível para consulta, reanálise e exclusão dos arquivos.</p><button type="button" class="btn" id="puc3-open-compare">Abrir Confronto das Fontes · SEI × Balanço × SIOP</button>';
+ page.insertBefore(help,page.firstChild);
+ $('puc3-open-compare').onclick=()=>{document.querySelector('[data-page="comparacao"]')?.click();$('puc3-main')?.scrollIntoView({behavior:'smooth',block:'start'})};
+ const standard=$('load-standard-csv')?.closest('.mini-panel'),schedule=$('schedule-import-panel');
+ if(standard||schedule){
+  const advanced=document.createElement('details');advanced.className='panel';advanced.id='puc3-advanced-imports';
+  advanced.innerHTML='<summary>Importação avançada de CSV padronizado e cronogramas (opcional)</summary><p class="muted">Os modelos CSV permanecem disponíveis para usuários que já tenham extraído e conferido os dados. Para anexar ZIP/PDF/XLSX use a aba Confronto das Fontes.</p>';
+  const container=standard?.parentElement||schedule?.parentElement;
+  container.insertBefore(advanced,standard||schedule);
+  if(standard)advanced.appendChild(standard);if(schedule)advanced.appendChild(schedule);
+ }
+}
 function init(){
  const cmp=$('comparacao');if(!cmp)return;
  const oldMulti=$('puc-multi-panel');if(oldMulti)oldMulti.remove();
@@ -207,7 +221,7 @@ function init(){
  '<h3>4 · Confrontar e gerar relatório</h3><div class="two-actions"><button type="button" class="btn" id="puc3-run">Confrontar fontes anexadas</button><button type="button" class="btn secondary" id="puc3-csv">Exportar achados CSV</button><button type="button" class="btn secondary" id="puc3-report">Gerar relatório documental</button></div><div id="puc3-result"></div>';
  cmp.insertBefore(panel,cmp.firstChild);
  const style=document.createElement('style');style.textContent='.puc3-projects{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:7px;margin:12px 0 20px}.puc3-choose{display:flex;gap:8px;align-items:start;border:1px solid #dbe5ed;border-radius:8px;padding:9px;font-size:12px;cursor:pointer}.puc3-choose small{display:block;color:#637a8e}.puc3-choose input{margin-top:3px}.puc3-uploads,.puc3-coverage{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0}.puc3-source,.puc3-kpi{padding:13px;border:1px solid #dce7ee;border-radius:10px;background:#f8fafc;min-width:0}.puc3-source label{display:grid;gap:4px;font-size:12px;margin:10px 0}.puc3-source input,.puc3-source select{width:100%;max-width:100%;padding:8px;border:1px solid #cedbe4;border-radius:7px}.puc3-source small,.puc3-kpi span{display:block;font-size:11px;color:#667d90;margin-top:8px}.puc3-kpi strong{font-size:21px;display:block}.puc3-review{padding:18px;border:1px solid #bcd6e3;background:#f5fafc;border-radius:11px;margin:16px 0}.puc3-review[hidden],#puc-docs-table[hidden]{display:none!important}#puc3-files-rows small,#puc3-findings-rows small,#puc3-result small{display:block;color:#667d90;margin-top:4px}#puc3-result{margin-top:18px}#puc3-legacy summary{cursor:pointer;font-weight:650}@media(max-width:850px){.puc3-uploads,.puc3-coverage{grid-template-columns:1fr}.puc3-projects{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.puc3-projects{grid-template-columns:1fr}.puc3-source{padding:11px}}';document.head.appendChild(style);
- sourceCards();renderChecks();render();initReportPage();
+ sourceCards();renderChecks();render();initReportPage();simplifyDocuments();
  $('puc3-search').oninput=renderChecks;
  $('puc3-all').onclick=()=>{selected=new Set(projects.map(p=>p.id));renderChecks();render()};
  $('puc3-clear').onclick=()=>{selected.clear();renderChecks();render();$('puc3-result').innerHTML=''};
