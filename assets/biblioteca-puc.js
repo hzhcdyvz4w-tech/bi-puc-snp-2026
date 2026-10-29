@@ -10,14 +10,28 @@ function bmNumber(x){const m=String(x.name+' '+x.text.slice(0,1200)).match(/(?:b
 function bmCompetence(x){const m=String(x.text.slice(0,6000)+' '+x.name).match(/(?:compet[eê]ncia|refer[eê]ncia|per[ií]odo)\s*[:\-]?\s*(0?[1-9]|1[0-2])[\/-](20\d\d)/i);return m?m[2]+'-'+m[1].padStart(2,'0'):''}
 function openDB(){return new Promise((resolve,reject)=>{let r=indexedDB.open('BI_PUC_DOCUMENTOS_LOCAL',2);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('files'))r.result.createObjectStore('files',{keyPath:'id'})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 function transact(mode,fn){return new Promise((resolve,reject)=>{let tx=db.transaction('files',mode),store=tx.objectStore('files');let request=fn(store);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
-async function reload(){stored.splice(0);stored.push(...(await transact('readonly',s=>s.getAll())).sort((a,b)=>b.time-a.time));paint()}
+async function reload(){stored.splice(0);stored.push(...(await transact('readonly',s=>s.getAll())).sort((a,b)=>b.time-a.time).map(x=>{x.text=cleanDocumentText(x.text,ext(x.name));x.candidates=candidates(x.text);if(x.bm)x.bm.candidates=x.candidates;return x}));paint()}
 function status(msg){let p=E('puc-library-status');if(p)p.textContent=msg}
 function normalizeName(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}
-function candidates(s){
- const text=String(s||'');let result=[];let lines=text.split(/\n/);
- for(let i=0;i<lines.length;i++){let line=lines[i];let type=/total\s*(?:da|de|do)?\s*medi[cç][aã]o|valor\s*(?:total|medido)|total\s*executado/i.test(line)?'Valor medido':/valor\s*(?:pago|liquidado)|total\s*pagamento/i.test(line)?'Valor pago':/(?:execu[cç][aã]o\s*f[ií]sica|avan[cç]o\s*f[ií]sico)\s*[:\-]?\s*\d/i.test(line)?'Percentual físico':null;
- if(!type)continue;let nearby=line.slice(0,420);const m=nearby.match(/(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+(?:[.,]\d{1,2})?)\s*(%)?/g);result.push({type,excerpt:nearby.slice(0,260),values:(m||[]).slice(0,5),line:i+1,status:'CANDIDATO – NÃO CONFERIDO'});if(result.length>=30)break
- }return result
+function cleanDocumentText(source,type){
+ let raw=String(source||'');
+ if(type==='html'||type==='htm'||/<(?:html|head|style|body|p|div|span)\b/i.test(raw)){
+   const doc=new DOMParser().parseFromString(raw,'text/html');
+   doc.querySelectorAll('style,script,noscript,svg,template,head').forEach(x=>x.remove());
+   raw=(doc.body?.innerText||doc.body?.textContent||'').replace(/\u00a0/g,' ');
+ }
+ return raw.replace(/(?:^|\n)\s*(?:p\.[\w.#:\s>{},-]+|@media[^{]+)\s*\{[^}]*\}/gm,' ').replace(/[ \t]{3,}/g,' ').slice(0,250000)
+}
+function candidates(source){
+ const text=String(source||'');const result=[];
+ // Only take values adjacent to an explicit financial or physical indicator.
+ const patterns=[
+ {type:'Valor medido',regex:/(?:valor\s+(?:total\s+)?medido|total\s+d[ao]\s+medi[cç][aã]o)\s*[:\-–]?\s*(R\$\s*\d{1,3}(?:\.\d{3})*,\d{2}|R\$\s*\d+,\d{2})/gi},
+ {type:'Valor pago',regex:/(?:valor\s+(?:total\s+)?pago|total\s+pagamento)\s*[:\-–]?\s*(R\$\s*\d{1,3}(?:\.\d{3})*,\d{2}|R\$\s*\d+,\d{2})/gi},
+ {type:'Percentual físico',regex:/(?:execu[cç][aã]o\s+f[ií]sica|avan[cç]o\s+f[ií]sico)\s*[:\-–]?\s*(\d{1,3}(?:,\d{1,2})?\s*%)/gi}
+ ];
+ for(const item of patterns){let match;while((match=item.regex.exec(text))&&result.length<30){result.push({type:item.type,excerpt:text.slice(Math.max(0,match.index-70),Math.min(text.length,match.index+match[0].length+80)).replace(/\s+/g,' ').slice(0,260),values:[match[1]],line:text.slice(0,match.index).split('\n').length,status:'CANDIDATO – NÃO CONFERIDO'})}}
+ return result
 }
 async function extract(f){
  if(ext(f.name)==='zip'){if(!window.JSZip)throw Error('Biblioteca ZIP indisponível');let z=await JSZip.loadAsync(await f.arrayBuffer());let out=[];let entries=Object.values(z.files).filter(x=>!x.dir);if(entries.length>300)throw Error('ZIP com mais de 300 itens');
@@ -26,14 +40,14 @@ async function extract(f){
 }
 async function fileText(item){
  const f=item.blob,n=item.name,t=ext(n);
- if(['txt','csv','json','md','xml','html'].includes(t))return (await f.text()).slice(0,250000);
+ if(['txt','csv','json','md','xml','html','htm'].includes(t))return cleanDocumentText(await f.text(),t);
  if(t==='pdf'&&window.pdfjsLib){try{const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;const ss=[];for(let i=1;i<=Math.min(pdf.numPages,45);i++){const p=await pdf.getPage(i),words=await p.getTextContent();ss.push('PÁGINA '+i+'\n'+words.items.map(x=>x.str||'').join(' '))}return ss.join('\n').slice(0,250000)}catch(e){return '[PDF não extraído: '+e.message+']'}}
  if(t==='xlsx'||t==='docx')return '[Arquivo registrado; extração estruturada deste formato ainda não homologada.]';
  return '[Arquivo registrado; texto indisponível. Pode exigir OCR autorizado.]'
 }
 async function ingest(files,origin,project,ref){let count=0;let errors=[];
  for(const file of files){try{if(file.size>90*1024*1024)throw Error('arquivo acima de 90 MB');let sub=await extract(file);
- for(let item of sub){const hash=await digest(item.blob);const duplicate=stored.find(x=>x.hash===hash&&x.project===project&&x.ref===ref);if(duplicate){errors.push(item.name+': duplicado no mesmo processo e PUC');continue}const text=await fileText(item);const entry={id:crypto.randomUUID(),hash,name:item.name,container:item.container,blob:item.blob,origin,project,ref,time:Date.now(),category:category(item.name),text,candidates:candidates(text)};entry.bm=entry.category==='BM / medição'?{number:bmNumber(entry),period:bmCompetence(entry),candidates:entry.candidates,status:'PENDENTE DE CONFERÊNCIA'}:null;
+ for(let item of sub){const hash=await digest(item.blob);const duplicate=stored.find(x=>x.hash===hash&&x.project===project&&x.ref===ref);if(duplicate){errors.push(item.name+': duplicado no mesmo processo e PUC');continue}const text=cleanDocumentText(await fileText(item),ext(item.name));const entry={id:crypto.randomUUID(),hash,name:item.name,container:item.container,blob:item.blob,origin,project,ref,time:Date.now(),category:category(item.name),text,candidates:candidates(text)};entry.bm=entry.category==='BM / medição'?{number:bmNumber(entry),period:bmCompetence(entry),candidates:entry.candidates,status:'PENDENTE DE CONFERÊNCIA'}:null;
  await transact('readwrite',s=>s.put(entry));stored.push(entry);count++}
  }catch(e){errors.push(file.name+': '+e.message)}}
  await reload();status(count+' documento(s) arquivado(s) neste navegador. '+(errors.length?'Pendências: '+errors.join('; '):'Os outros módulos podem consultar a biblioteca.'));return count
