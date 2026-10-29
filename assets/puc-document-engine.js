@@ -53,6 +53,15 @@ async function unpack(file){
  }
  await walk(file,'',0);return results;
 }
+function basicPDF(bytes){
+ // Fallback da versao anterior: textos PDF nao comprimidos; nao equivale a leitor PDF completo.
+ const src=new TextDecoder('latin1').decode(bytes.slice(0,Math.min(bytes.length,850000)));
+ const segments=[];for(const seg of src.matchAll(/BT([\s\S]{0,28000}?)ET/g)){
+  for(const m of seg[1].matchAll(/\(([^)]{1,250})\)\s*Tj/g))segments.push(m[1].replace(/\\([()])/g,'$1'));
+  for(const m of seg[1].matchAll(/\[([^\]]{2,4500})\]\s*TJ/g)){segments.push([...m[1].matchAll(/\(([^)]*)\)/g)].map(z=>z[1]).join(''))}
+ }return segments.join(' ').slice(0,300000)
+}
+
 async function read(item){
  const ext=extension(item.name),blob=item.blob;
  if(['html','htm'].includes(ext))return {text:cleanHTML(await blob.text()),quality:'TEXTO EXTRAÍDO (HTML)'};
@@ -71,12 +80,12 @@ async function read(item){
   }catch(e){return {text:'',quality:'XLSX NÃO EXTRAÍDO: '+e.message}}
  }
  if(ext==='pdf'){
-  if(!w.pdfjsLib)return {text:'',quality:'PDF NÃO EXTRAÍDO: leitor PDF.js indisponível'};
+  if(!w.pdfjsLib){let txt=basicPDF(new Uint8Array(await blob.arrayBuffer()));return {text:txt,quality:txt?'PDF BÁSICO — LEITURA PARCIAL, CONFERIR':'PDF NÃO EXTRAÍDO: PDF.js indisponível ou PDF digitalizado'}};
   try{let pdf=await w.pdfjsLib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise,lines=[];let cap=Math.min(70,pdf.numPages);
    for(let p=1;p<=cap;p++){let page=await pdf.getPage(p);let content=await page.getTextContent();lines.push('PÁGINA '+p+'\n'+content.items.map(i=>i.str||'').join(' '))}
    const text=lines.join('\n').slice(0,300000);
    return {text,quality:text.replace(/PÁGINA \d+/g,'').trim()?'TEXTO EXTRAÍDO (PDF)':'PDF SEM TEXTO — OCR NECESSÁRIO'};
-  }catch(e){return {text:'',quality:'PDF NÃO EXTRAÍDO: '+e.message}}
+  }catch(e){const txt=basicPDF(new Uint8Array(await blob.arrayBuffer()));return {text:txt,quality:txt?'PDF BÁSICO — REVISAR':'PDF NÃO EXTRAÍDO: '+e.message}}
  }
  return {text:'',quality:ext==='xls'?'XLS LEGADO: ANEXADO, LEITURA NÃO DISPONÍVEL':'FORMATO ANEXADO, SEM LEITURA TEXTUAL'};
 }
