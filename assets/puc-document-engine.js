@@ -35,7 +35,7 @@ function indicators(text){
  ['Dotação atual (SIOP candidato)',/(?:dota[cç][aã]o\s+atual(?:izada)?)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
  ['Empenhado (SIOP candidato)',/(?:valor\s+empenhado|empenhado)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
  ['Liquidado (SIOP candidato)',/(?:valor\s+liquidado|liquidado)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
- ['Pago (origem a conferir)',/(?:total\s+pago|valor\s+pago|pago\s+no\s+per[ií]odo)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
+ ['Pago (origem a conferir)',/(?:total\s+pago|valor\s+pago|pago\s+no\s+per[ií]odo|pago)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
  ['PUC recebida (candidato)',/(?:PUC\s+recebida|aporte\s+recebido)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
  ['PUC aplicada (candidato)',/(?:PUC\s+aplicada|recurso\s+aplicado)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
  ['Execução financeira (candidato)',/(?:execu[cç][aã]o\s+financeira)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
