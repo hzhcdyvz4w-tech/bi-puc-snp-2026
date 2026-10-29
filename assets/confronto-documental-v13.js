@@ -161,7 +161,7 @@ function render(){renderFiles();renderFindings();}
 function init(){
  const cmp=$('comparacao');if(!cmp)return;
  const oldMulti=$('puc-multi-panel');if(oldMulti)oldMulti.remove();
- const oldPanels=[...cmp.children].filter(x=>x.classList?.contains('panel')&&x.id!=='puc-bm-confront');
+ const oldPanels=[...cmp.children].filter(x=>x.classList?.contains('panel'));
  const detail=document.createElement('details');detail.id='puc3-legacy';detail.className='panel';detail.innerHTML='<summary>Consulta auxiliar ao SIOP referencial e registros manuais antigos (não faz parte do confronto documental)</summary><p class="muted">Esta consulta permanece disponível para compatibilidade, mas os valores da base SIOP incorporada não são tratados como evidência confrontada.</p>';
  for(const x of oldPanels)detail.appendChild(x);cmp.appendChild(detail);
  const panel=document.createElement('div');panel.id='puc3-main';panel.className='panel';panel.innerHTML=
