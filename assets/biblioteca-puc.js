@@ -10,7 +10,7 @@ function bmNumber(x){const m=String(x.name+' '+x.text.slice(0,1200)).match(/(?:b
 function bmCompetence(x){const m=String(x.text.slice(0,6000)+' '+x.name).match(/(?:compet[eê]ncia|refer[eê]ncia|per[ií]odo)\s*[:\-]?\s*(0?[1-9]|1[0-2])[\/-](20\d\d)/i);return m?m[2]+'-'+m[1].padStart(2,'0'):''}
 function openDB(){return new Promise((resolve,reject)=>{let r=indexedDB.open('BI_PUC_DOCUMENTOS_LOCAL',2);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('files'))r.result.createObjectStore('files',{keyPath:'id'})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 function transact(mode,fn){return new Promise((resolve,reject)=>{let tx=db.transaction('files',mode),store=tx.objectStore('files');let request=fn(store);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
-async function reload(){stored.splice(0);stored.push(...(await transact('readonly',s=>s.getAll())).sort((a,b)=>b.time-a.time).map(x=>{x.text=cleanDocumentText(x.text,ext(x.name));x.candidates=candidates(x.text);if(x.bm)x.bm.candidates=x.candidates;return x}));paint()}
+async function reload(){stored.splice(0);stored.push(...(await transact('readonly',s=>s.getAll())).sort((a,b)=>b.time-a.time).map(x=>{x.text=cleanDocumentText(x.text,ext(x.name));x.candidates=candidates(x.text);if(isBM(x)){x.category='BM / medição';x.bm=x.bm||{number:bmNumber(x),period:bmCompetence(x),status:'PENDENTE DE CONFERÊNCIA'};x.bm.candidates=x.candidates}return x}));paint()}
 function status(msg){let p=E('puc-library-status');if(p)p.textContent=msg}
 function normalizeName(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}
 function cleanDocumentText(source,type){
@@ -47,7 +47,7 @@ async function fileText(item){
 }
 async function ingest(files,origin,project,ref){let count=0;let errors=[];
  for(const file of files){try{if(file.size>90*1024*1024)throw Error('arquivo acima de 90 MB');let sub=await extract(file);
- for(let item of sub){const hash=await digest(item.blob);const duplicate=stored.find(x=>x.hash===hash&&x.project===project&&x.ref===ref);if(duplicate){errors.push(item.name+': duplicado no mesmo processo e PUC');continue}const text=cleanDocumentText(await fileText(item),ext(item.name));const entry={id:crypto.randomUUID(),hash,name:item.name,container:item.container,blob:item.blob,origin,project,ref,time:Date.now(),category:category(item.name),text,candidates:candidates(text)};entry.bm=entry.category==='BM / medição'?{number:bmNumber(entry),period:bmCompetence(entry),candidates:entry.candidates,status:'PENDENTE DE CONFERÊNCIA'}:null;
+ for(let item of sub){const hash=await digest(item.blob);const duplicate=stored.find(x=>x.hash===hash&&x.project===project&&x.ref===ref);if(duplicate){errors.push(item.name+': duplicado no mesmo processo e PUC');continue}const text=cleanDocumentText(await fileText(item),ext(item.name));const entry={id:crypto.randomUUID(),hash,name:item.name,container:item.container,blob:item.blob,origin,project,ref,time:Date.now(),category:category(item.name),text,candidates:candidates(text)};entry.bm=isBM(entry)?{number:bmNumber(entry),period:bmCompetence(entry),candidates:entry.candidates,status:'PENDENTE DE CONFERÊNCIA'}:null;
  await transact('readwrite',s=>s.put(entry));stored.push(entry);count++}
  }catch(e){errors.push(file.name+': '+e.message)}}
  await reload();status(count+' documento(s) arquivado(s) neste navegador. '+(errors.length?'Pendências: '+errors.join('; '):'Os outros módulos podem consultar a biblioteca.'));return count
@@ -63,12 +63,12 @@ async function deleteBatch(mode){
  if(selected&&targets.some(x=>x.id===selected.id)){selected=null;E('puc-library-detail').innerHTML=''}
  await reload();status(targets.length+' documento(s) excluído(s) da biblioteca local. Registros já lançados no DE/PARA não foram apagados.')
 }
-function bmRows(){const el=E('puc-bm-list');if(!el)return;const arr=stored.filter(x=>x.bm||x.category==='BM / medição');el.innerHTML=arr.length?arr.map(x=>'<tr><td>'+escape(x.ref||'Processo não identificado')+'</td><td>'+escape(x.project||'Sem PUC vinculada')+'</td><td>'+escape(x.bm?.number||'Nº não identificado')+'</td><td>'+escape(x.bm?.period||'Competência não identificada')+'</td><td>'+escape(x.name)+'</td><td>'+escape(String(x.candidates.length))+' candidato(s), não conferido(s)</td><td><button type="button" class="btn secondary" data-bm-open="'+escape(x.id)+'">Conferir</button></td></tr>').join(''):'<tr><td colspan="7">Nenhum boletim de medição identificado nos arquivos anexados.</td></tr>';el.querySelectorAll('[data-bm-open]').forEach(b=>b.onclick=()=>{view(b.dataset.bmOpen);E('puc-library-detail')?.scrollIntoView({behavior:'smooth'})})}
+function bmRows(){const el=E('puc-bm-list');if(!el)return;const arr=stored.filter(isBM);el.innerHTML=arr.length?arr.map(x=>'<tr><td>'+escape(x.ref||'Processo não identificado')+'</td><td>'+escape(x.project||'Sem PUC vinculada')+'</td><td>'+escape(x.bm?.number||'Nº não identificado')+'</td><td>'+escape(x.bm?.period||'Competência não identificada')+'</td><td>'+escape(x.name)+'</td><td>'+escape(String(x.candidates.length))+' candidato(s), não conferido(s)</td><td><button type="button" class="btn secondary" data-bm-open="'+escape(x.id)+'">Conferir</button></td></tr>').join(''):'<tr><td colspan="7">Nenhum boletim de medição identificado nos arquivos anexados.</td></tr>';el.querySelectorAll('[data-bm-open]').forEach(b=>b.onclick=()=>{view(b.dataset.bmOpen);E('puc-library-detail')?.scrollIntoView({behavior:'smooth'})})}
 
-function isBM(x){return x.category==='BM / medição'||/boletim\s*(de\s*)?medi[cç][aã]o|\bBM[\s_-]?\d/i.test(x.name+' '+(x.text||'').slice(0,2500))}
+function isBM(x){return x.category==='BM / medição'||/boletim\s*(de\s*)?medi[cç][aã]o|\bBM[\s_-]?\d/i.test(x.name+' '+(x.text||'').slice(0,20000))}
 function bmFiltered(){
  const project=E('cmp-project')?.value||'',process=E('puc-bm-filter-process')?.value.trim().toLowerCase()||'';
- return stored.filter(x=>isBM(x)&&(!project||x.project===project)&&(!process||(x.ref||'').toLowerCase().includes(process)));
+ return stored.filter(x=>isBM(x)&&(!project||!x.project||x.project===project)&&(!process||((x.ref||'')+' '+(x.container||'')).toLowerCase().includes(process)));
 }
 function refreshBMConfront(){
  const body=E('puc-bm-confront-rows');if(!body)return;const list=bmFiltered();
@@ -91,7 +91,7 @@ function fileRows(){const p=E('puc-library-list');if(!p)return;
  p.innerHTML=stored.map(x=>'<tr><td><button class="btn secondary" data-view="'+escape(x.id)+'">'+escape(x.name)+'</button><br><small>'+escape(x.container||'individual')+'</small></td><td>'+escape(x.origin)+'</td><td>'+escape(x.project||'não vinculado')+'</td><td>'+escape(x.category)+'</td><td>'+x.candidates.length+' candidato(s)</td><td><button class="btn secondary" data-remove="'+escape(x.id)+'">Excluir</button></td></tr>').join('')||'<tr><td colspan="6">Nenhum arquivo salvo.</td></tr>';
  p.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>view(b.dataset.view));p.querySelectorAll('[data-remove]').forEach(b=>b.onclick=async()=>{if(!confirm('Excluir este documento da biblioteca local? Registros do DE/PARA não serão apagados.'))return;await transact('readwrite',s=>s.delete(b.dataset.remove));if(selected?.id===b.dataset.remove){selected=null;E('puc-library-detail').innerHTML=''}await reload();status('Documento excluído da biblioteca local.')})
 }
-function paint(){fileRows();bmRows();refreshBMConfront();const p=E('puc-library-count');if(p)p.textContent=stored.length+' arquivo(s) neste navegador';if(window.PUCRefreshParts)window.PUCRefreshParts()}
+function paint(){fileRows();bmRows();refreshBMConfront();const p=E('puc-library-count');if(p)p.textContent=stored.length+' arquivo(s) neste navegador · '+stored.filter(isBM).length+' BM(s) encontrados';if(window.PUCRefreshParts)window.PUCRefreshParts()}
 function view(id){selected=stored.find(x=>x.id===id);if(!selected)return;
  E('puc-library-detail').innerHTML='<h3>'+escape(selected.name)+'</h3><p>Origem '+escape(selected.origin)+' · Processo '+escape(selected.ref||'não informado')+' · '+selected.candidates.length+' candidatos extraídos. <strong>Não comprovados.</strong></p><div class="scroll"><table class="data-table"><thead><tr><th>Tipo</th><th>Trecho localizado</th><th>Valores candidatos</th></tr></thead><tbody>'+selected.candidates.map(c=>'<tr><td>'+escape(c.type)+'</td><td>'+escape(c.excerpt)+'</td><td>'+escape(c.values.join(' | '))+'</td></tr>').join('')+'</tbody></table></div><pre style="max-height:260px;overflow:auto;white-space:pre-wrap;font-size:12px">'+escape(selected.text.slice(0,14000))+'</pre><button type="button" class="btn" id="puc-use-evidence">Vincular ao formulário de confronto</button>';
  E('puc-use-evidence').onclick=()=>{if(!E('obs-evidence'))return;const project=selected.project||E('cmp-project').value;if(!project){status('Selecione antes o empreendimento na aba Confronto.');return}E('obs-project').value=project;E('obs-source').value=selected.origin==='SEI'?'SEI':selected.origin==='BALANCO'?'BALANCO':selected.origin==='DOCAS'?'DOCAS':'PORTAL';E('obs-evidence').value=[selected.ref,selected.container,selected.name].filter(Boolean).join(' · ');E('obs-verified').checked=false;E('obs-note').value='Evidência identificada na biblioteca local; valores candidatos NÃO CONFERIDOS. Conferir documento, período, medição, contrato e valor antes de registrar.';document.querySelector('[data-page="comparacao"]').click();E('observation-form').scrollIntoView({behavior:'smooth'});};
@@ -119,6 +119,15 @@ function setup(){
  // Reutilizar os anexos de Documentos e da janela SEI para manter uma única biblioteca.
  /* Importador SIOP original preservado. Os demais documentos usam apenas a biblioteca. */
  /* Painel SEI duplicado substituído por atalho. */
+ // Ao selecionar ZIP/PDF por engano nos importadores CSV, redirecionar para a biblioteca, sem tentar interpretar como CSV.
+ for(const id of ['load-standard-csv','load-schedule-csv']){
+ const input=E(id);if(!input)continue;
+ input.setAttribute('accept','.csv,.zip,.pdf,.xls,.xlsx,.doc,.docx');
+ input.addEventListener('change',async()=>{const files=[...input.files];if(!files.length)return;
+ if(files.every(f=>id==='load-schedule-csv'?/\.csv$|\.zip$/i.test(f.name):/\.csv$/i.test(f.name)))return;
+ E('puc-lib-files').value='';const sourceId=E('puc-lib-origin');if(sourceId)sourceId.value=id==='load-schedule-csv'?'BALANCO':'SEI';
+ status('Este arquivo não é CSV padronizado. Use a Biblioteca Documental para anexar ZIP/PDF/XLS; o sistema não o interpretará como CSV.');});
+ }
  const select=E('puc-lib-project'),source=E('cmp-project');
  const projectData=()=>{try{const raw=E('embedded-data')?.textContent;return JSON.parse(raw||'{}').projetos||[]}catch(e){return []}};
  const syncProjects=()=>{
