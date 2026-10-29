@@ -12,7 +12,7 @@ function cleanHTML(raw){
 }
 function bmClass(name,text){
  const n=normal(name),head=normal(String(text||'').slice(0,4500));
- if(/(?:^|[/ _\[-])(?:bm[\s._-]*\d{1,4}|boletim(?:[\s_-]+de)?[\s_-]+medic(?:ao|oes)|planilha[\s_-]+de[\s_-]+medic(?:ao|oes)|relatorio[\s_-]+de[\s_-]+medic(?:ao|oes))(?=$|[^a-z0-9])/.test(n))return 'BM IDENTIFICADO';
+ if(/(?:^|[/ _\[-])(?:bm[\s._-]*\d{1,4}|(?:boletim|planilha|relatorio)(?:[\s_-]+de)?[\s_-]+medic(?:ao|oes))(?=$|[^a-z0-9])/.test(n))return 'BM IDENTIFICADO';
  if(/(?:^|\n)\s*(?:boletim\s+de\s+medic(?:ao|oes)|bm\s*(?:n[ºo.]?\s*)?\d+|planilha\s+de\s+medic(?:ao|oes))\s*(?:n[ºo.]?\s*|:|-)?\d{0,4}/m.test(head))return 'BM PROVÁVEL';
  if(/\b(?:boletim\s+de\s+medic(?:ao|oes)|bm\s*(?:n[ºo.]?\s*)?\d{1,3})\b/.test(head))return 'BM MENCIONADO';
  return 'SEM INDICAÇÃO DE BM'
