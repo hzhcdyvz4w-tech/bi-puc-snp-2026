@@ -11,8 +11,8 @@ function bmNumber(x){return engine()?.bmNumber(x.name,x.text)||''}
 function bmCompetence(x){return engine()?.bmPeriod(x.name,x.text)||''}
 function classification(x){return engine()?.bmClass(x.name,x.text)||'SEM INDICAÇÃO DE BM'}
 function updateEntry(x){x.text=String(x.text||'');x.candidates=engine()?.indicators(x.text)||[];
- x.bmStatus=classification(x);
- if(x.bmStatus==='BM IDENTIFICADO'||x.bmStatus==='BM PROVÁVEL'){
+ x.bmStatus=x.bmManual?'BM IDENTIFICADO (MANUAL)':classification(x);
+ if(x.bmManual||x.bmStatus==='BM IDENTIFICADO'||x.bmStatus==='BM PROVÁVEL'){
   x.category='BM / medição';x.bm={number:bmNumber(x),period:bmCompetence(x),candidates:x.candidates,status:'PENDENTE DE CONFERÊNCIA'}
  }else{x.category=x.bmStatus==='BM MENCIONADO'?'Documento com referência a BM':(category(x.name)==='BM / medição'?'Documento':category(x.name));x.bm=null}
  return x
@@ -73,7 +73,7 @@ async function deleteBatch(mode){
 }
 function bmRows(){const el=E('puc-bm-list');if(!el)return;const arr=stored.filter(isBM);el.innerHTML=arr.length?arr.map(x=>'<tr><td>'+escape(x.ref||'Processo não identificado')+'</td><td>'+escape(x.project||'Sem PUC vinculada')+'</td><td>'+escape(x.bm?.number||'Nº não identificado')+'</td><td>'+escape(x.bm?.period||'Competência não identificada')+'</td><td>'+escape(x.name)+'</td><td>'+escape(String(x.candidates.length))+' candidato(s), não conferido(s)</td><td><button type="button" class="btn secondary" data-bm-open="'+escape(x.id)+'">Conferir</button></td></tr>').join(''):'<tr><td colspan="7">Nenhum BM identificado. Confirme se o ZIP foi importado na Biblioteca e use Reanalisar anexos; PDFs digitalizados ou XLS antigos podem precisar de tratamento externo.</td></tr>';el.querySelectorAll('[data-bm-open]').forEach(b=>b.onclick=()=>{view(b.dataset.bmOpen);E('puc-library-detail')?.scrollIntoView({behavior:'smooth'})})}
 
-function isBM(x){return x.bmStatus==='BM IDENTIFICADO'||x.bmStatus==='BM PROVÁVEL'||classification(x)==='BM IDENTIFICADO'||classification(x)==='BM PROVÁVEL'}
+function isBM(x){return !!x.bmManual||x.bmStatus==='BM IDENTIFICADO'||x.bmStatus==='BM PROVÁVEL'||classification(x)==='BM IDENTIFICADO'||classification(x)==='BM PROVÁVEL'}
 function bmFiltered(){
  const project=E('cmp-project')?.value||'',process=E('puc-bm-filter-process')?.value.trim().toLowerCase()||'';
  return stored.filter(x=>isBM(x)&&(!project||!x.project||x.project===project)&&(!process||((x.ref||'')+' '+(x.container||'')).toLowerCase().includes(process)));
