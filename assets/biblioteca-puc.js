@@ -119,7 +119,20 @@ function setup(){
  // Reutilizar os anexos de Documentos e da janela SEI para manter uma única biblioteca.
  /* Importador SIOP original preservado. Os demais documentos usam apenas a biblioteca. */
  /* Painel SEI duplicado substituído por atalho. */
- const select=E('puc-lib-project'),source=E('cmp-project');if(source){select.innerHTML=source.innerHTML;source.addEventListener('change',()=>{select.value=source.value;status('Investimento selecionado: '+(source.selectedOptions[0]?.textContent||''))})}
+ const select=E('puc-lib-project'),source=E('cmp-project');
+ const projectData=()=>{try{const raw=E('embedded-data')?.textContent;return JSON.parse(raw||'{}').projetos||[]}catch(e){return []}};
+ const syncProjects=()=>{
+  const ps=projectData();if(!ps.length){status('Não foi possível ler a carteira PUC embutida; recarregue a página.');return}
+  const targets=[source,select,E('obs-project'),E('upload-project')].filter(Boolean);
+  for(const target of targets){const current=target.value;const old=Array.from(target.options).some(o=>o.value&&ps.some(p=>p.id===o.value));if(!old){target.innerHTML='<option value="">Selecionar investimento PUC</option>';for(const p of ps){const opt=document.createElement('option');opt.value=p.id;opt.textContent=p.id+' · '+p.empresa+' · '+p.empreendimento;target.add(opt)}}if(current&&ps.some(p=>p.id===current))target.value=current}
+  if(source&&select&&source.value&&!select.value)select.value=source.value;
+  const summary=E('puc-project-count');if(summary)summary.textContent=ps.length+' PUCs cadastradas';
+ };
+ const count=document.createElement('small');count.id='puc-project-count';count.className='muted';select?.parentElement?.appendChild(count);
+ syncProjects();source?.addEventListener('change',()=>{syncProjects();if(select)select.value=source.value;refreshBMConfront()});
+ select?.addEventListener('focus',syncProjects);
+ E('puc-lib-save')?.addEventListener('click',syncProjects,{capture:true});
+ window.addEventListener('pageshow',syncProjects);
  const fromCompare=document.createElement('button');fromCompare.type='button';fromCompare.className='btn secondary';fromCompare.textContent='Abrir biblioteca de documentos salvos';fromCompare.onclick=()=>{document.querySelector('[data-page="documentos"]').click();pane.scrollIntoView({behavior:'smooth'})};E('sei-confront-pane')?.querySelector('.two-actions')?.appendChild(fromCompare);
 }
 async function init(){try{db=await openDB();setup();await reload()}catch(err){status('Não foi possível abrir o armazenamento local: '+err.message)}}
