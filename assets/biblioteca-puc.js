@@ -118,6 +118,15 @@ function setup(){
  E('puc-delete-project').onclick=()=>deleteBatch('project');
  E('puc-delete-process').onclick=()=>deleteBatch('process');
  E('puc-delete-all').onclick=()=>deleteBatch('all');
+ const link=document.createElement('button');link.type='button';link.className='btn secondary';link.textContent='Vincular anexos sem PUC ao investimento escolhido';controls.appendChild(link);
+ link.onclick=async()=>{const project=E('puc-lib-project').value,ref=E('puc-lib-ref').value.trim();
+ if(!project){status('Escolha primeiro uma PUC na Biblioteca.');return}
+ const docs=stored.filter(x=>!x.project&&(!ref||x.ref===ref));if(!docs.length){status('Não há anexos sem PUC nesse processo.');return}
+ if(!confirm('Vincular '+docs.length+' documento(s) sem PUC ao investimento '+project+'? Confira se o processo corresponde a este investimento.'))return;
+ const tx=db.transaction('files','readwrite');docs.forEach(d=>{d.project=project;tx.objectStore('files').put(d)});
+ await new Promise((ok,fail)=>{tx.oncomplete=ok;tx.onerror=()=>fail(tx.error);tx.onabort=()=>fail(tx.error)});
+ await reload();status(docs.length+' documentos associados a '+project+'.');
+ };
  E('puc-clear-form').onclick=()=>{E('puc-lib-files').value='';E('puc-lib-ref').value='';E('puc-lib-project').value='';status('Seleção limpa; documentos arquivados foram preservados.')};
 
  const bms=document.createElement('div');bms.className='panel';bms.id='puc-bm-dashboard';bms.innerHTML='<h2>Boletins de medição por processo anexado</h2><p class="muted">Identificação documental preliminar por processo, PUC e número do BM. Valores e competências extraídos do texto são candidatos e exigem conferência antes de integrar o DE/PARA. Um processo pode ter vários BMs.</p><div class="scroll"><table class="data-table"><thead><tr><th>Processo SEI</th><th>PUC</th><th>BM nº</th><th>Competência</th><th>Arquivo</th><th>Valores candidatos</th><th>Ação</th></tr></thead><tbody id="puc-bm-list"></tbody></table></div>';section.appendChild(bms);setupBMConfront();
@@ -138,8 +147,10 @@ function setup(){
  input.addEventListener('change',async()=>{const files=[...input.files];if(!files.length)return;
  if(files.every(f=>/\.csv$/i.test(f.name)))return;
  const origin=id==='load-schedule-csv'?'BALANCO':'SEI';const project=E('cmp-project')?.value||E('puc-lib-project')?.value||'';const ref=E('puc-lib-ref')?.value||'';
- await ingest(files,origin,project,ref);input.value='';
- status(files.length+' arquivo(s) encaminhado(s) automaticamente à Biblioteca Documental; consulte a lista e os BMs abaixo. Dados brutos não foram lançados no DE/PARA.');});
+ const saved=await ingest(files,origin,project,ref);input.value='';
+ const msg=saved+' documento(s) processado(s) a partir de '+files.length+' anexo(s). '+stored.filter(isBM).length+' BM(s) identificados. '+(!project?'ATENÇÃO: escolha a PUC na Biblioteca Documental para vincular os documentos.':'Dados disponíveis na biblioteca.');
+ const feedback=E(id==='load-schedule-csv'?'schedule-feedback':'standard-feedback');if(feedback)feedback.textContent=msg;
+ status(msg);});
  }
  const select=E('puc-lib-project'),source=E('cmp-project');
  const projectData=()=>{try{const raw=E('embedded-data')?.textContent;return JSON.parse(raw||'{}').projetos||[]}catch(e){return []}};
