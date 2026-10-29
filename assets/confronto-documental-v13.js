@@ -71,10 +71,13 @@ function renderFindings(){
 function chooseCandidate(i){
  const d=docs().find(x=>x.id===selectedFile);if(!d)return;
  const c=d.candidates?.[i];if(!c)return;
- const txt=c.values?.[0]||'';const n=txt.replace(/^R\$\s*/,'').replace(/\s*%$/,'').replace(/\./g,'').replace(',','.');
+ const txt=c.values?.[0]||'';let n=String(txt).replace(/^R\$\s*/,'').replace(/\s*%$/,'').replace(/\s/g,'');
+ if(n.includes(',')&&n.includes('.')){n=n.lastIndexOf(',')>n.lastIndexOf('.')?n.replace(/\./g,'').replace(',','.'):n.replace(/,/g,'')}
+ else if(n.includes(','))n=n.replace(',','.');
+ else if(/^(?:\d{1,3}\.)+\d{3}$/.test(n))n=n.replace(/\./g,'');
  $('puc3-find-value').value=Number.isFinite(Number(n))?Number(n):'';
  const cat=(c.type||'').toLowerCase();
- $('puc3-find-indicator').value=cat.includes('físic')||cat.includes('fisic')?'execucao_fisica':cat.includes('pago')?'pagamento_bm':'medicao_bm';
+ $('puc3-find-indicator').value=cat.includes('dota')?'dotacao_atual':cat.includes('empenh')?'empenho_uniao':cat.includes('liquid')?'liquidacao_uniao':cat.includes('puc recebida')?'aporte_puc_recebido':cat.includes('puc aplicada')?'puc_aplicada':cat.includes('valor global')?'valor_empreendimento':cat.includes('execução financeira')?'execucao_financeira_balanco':cat.includes('físic')||cat.includes('fisic')?'execucao_fisica':cat.includes('pago')?(d.origin==='SIOP'?'pagamento_uniao':'pagamento_bm'):'medicao_bm';
  $('puc3-find-note').value='Candidato localizado: '+c.excerpt+'. Necessária verificação da natureza, apuração e documentação original.';
  $('puc3-find-confirm').checked=false;
 }
