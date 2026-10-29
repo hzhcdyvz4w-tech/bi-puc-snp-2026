@@ -22,6 +22,8 @@
   // Na ficha/Curva S, retirar duplicacoes de anexo; manter a ficha e as curvas.
   for(const id of ['ficha-sei-files','ficha-upload-bms-csv','ficha-balanco-file'])labelHide(id);
   const oldBm=$('ficha-extract-bms');if(oldBm)oldBm.hidden=true;
+  const oldToggle=$('ficha-toggle-sources');if(oldToggle){const label=oldToggle.querySelector('span:last-child');if(label)label.textContent='Consultar fontes';else oldToggle.title='Anexos centralizados em Documentos'}
+  const sourceHeading=$('ficha-source-panel')?.querySelector('.ficha-source-heading h3');if(sourceHeading)sourceHeading.textContent='Consultar fontes documentais (anexos na aba Documentos)';
   const heading=$('ficha-source-panel')?.querySelector('.ficha-source-heading');
   if(heading&&!$('puc3-ficha-go-docs')){
    const note=document.createElement('div');note.id='puc3-ficha-go-docs';
