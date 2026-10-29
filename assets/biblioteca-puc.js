@@ -175,7 +175,7 @@ async function saveFinding(docId,finding){const item=stored.find(d=>d.id===docId
  else {find.id=crypto.randomUUID();item.findings.push(find)}
  await transact('readwrite',st=>st.put(item));await reload();return find}
 async function deleteFinding(docId,findingId){const item=stored.find(d=>d.id===docId);if(!item)return;item.findings=(item.findings||[]).filter(x=>x.id!==findingId);await transact('readwrite',st=>st.put(item));await reload()}
-window.PUCDocLibrary={list:()=>stored.map(x=>({id:x.id,name:x.name,container:x.container,origin:x.origin,project:x.project,ref:x.ref,category:x.category,bmStatus:x.bmStatus,quality:x.quality,candidates:x.candidates||[],findings:x.findings||[],text:x.text||'',hash:x.hash})),ingest:async(files,origin,project,ref)=>{if(!db)throw Error('Banco documental não inicializado');return ingest(files,origin,project,ref)},saveFinding,deleteFinding,refresh:reload};
+window.PUCDocLibrary={list:()=>stored.map(x=>({id:x.id,name:x.name,container:x.container,origin:x.origin,project:x.project,ref:x.ref,category:x.category,bmStatus:x.bmStatus,bmNumber:x.bm?.number||'',quality:x.quality,candidates:x.candidates||[],findings:x.findings||[],text:x.text||'',hash:x.hash})),ingest:async(files,origin,project,ref)=>{if(!db)throw Error('Banco documental não inicializado');return ingest(files,origin,project,ref)},saveFinding,deleteFinding,refresh:reload};
 
 async function init(){try{db=await openDB();setup();await reload()}catch(err){status('Não foi possível abrir o armazenamento local: '+err.message)}}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
