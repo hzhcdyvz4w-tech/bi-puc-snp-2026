@@ -60,7 +60,7 @@
   await lib.saveFinding(balDoc.id,{...finding,bmNumber:'5'});
   d().querySelector('#puc3-projects input[value="PUC-01"]').click();
   d().getElementById('puc3-run').click();
-  assert(d().getElementById('puc3-result').textContent.includes('CORRESPONDÊNCIA'),'Confronto de duas fontes equivalentes');
+  assert(d().getElementById('puc3-result').textContent.includes('CORRESPONDÊNCIA'),'Confronto de duas fontes equivalentes',JSON.stringify({selected:d().getElementById('puc3-selected').textContent,files:lib.list().map(x=>({origin:x.origin,project:x.project,findings:x.findings})),result:d().getElementById('puc3-result').textContent.slice(0,1400)}));
   let fid=lib.list().find(x=>x.id===balDoc.id).findings[0].id;
   await lib.saveFinding(balDoc.id,{...finding,id:fid,value:1300});
   d().getElementById('puc3-run').click();
