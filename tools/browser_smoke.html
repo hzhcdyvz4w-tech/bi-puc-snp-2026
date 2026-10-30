@@ -13,7 +13,7 @@
  const w=frame.contentWindow,d=()=>frame.contentDocument;
  try{
   log.textContent='';
-  assert(await until(()=>d()?.getElementById('puc3-central-files')&&w.PUCDocLibrary?.list), 'Inicialização dos módulos e da biblioteca');
+  assert(await until(()=>d()?.getElementById('puc3-central-files')&&d()?.getElementById('puc-library-count')&&w.PUCDocLibrary?.list), 'Inicialização dos módulos e da biblioteca');
   const docs=d().getElementById('documentos'),compare=d().getElementById('comparacao');
   const central=d().getElementById('puc3-central-files'),uploads=d().getElementById('puc3-uploads');
   assert(docs.contains(central)&&central.contains(uploads)&&!compare.contains(uploads),'Anexos somente em Documentos');
