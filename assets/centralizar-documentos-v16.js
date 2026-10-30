@@ -20,9 +20,9 @@
   labelHide('puc-lib-files');const oldSave=$('puc-lib-save');if(oldSave)oldSave.hidden=true;
   labelHide('puc-lib-origin');
   // Na ficha/Curva S, retirar duplicacoes de anexo; manter a ficha e as curvas.
-  for(const id of ['ficha-sei-files','ficha-upload-bms-csv','ficha-balanco-file'])labelHide(id);
+  for(const id of ['ficha-sei-files','ficha-upload-bms-csv','ficha-balanco-file','ficha-planned-file','ficha-restore-session'])labelHide(id);
   const oldBm=$('ficha-extract-bms');if(oldBm)oldBm.hidden=true;
-  const oldToggle=$('ficha-toggle-sources');if(oldToggle){const label=oldToggle.querySelector('span:last-child');if(label)label.textContent='Consultar fontes';else oldToggle.title='Anexos centralizados em Documentos'}
+  const oldToggle=$('ficha-toggle-sources');if(oldToggle){oldToggle.innerHTML='<span aria-hidden="true">▸</span> Consultar fontes';oldToggle.title='Anexos centralizados em Documentos'}
   const sourceHeading=$('ficha-source-panel')?.querySelector('.ficha-source-heading h3');if(sourceHeading)sourceHeading.textContent='Consultar fontes documentais (anexos na aba Documentos)';
   const heading=$('ficha-source-panel')?.querySelector('.ficha-source-heading');
   if(heading&&!$('puc3-ficha-go-docs')){
@@ -31,8 +31,14 @@
    heading.insertAdjacentElement('afterend',note);
    $('puc3-ficha-docs-button').onclick=toDocuments;
   }
+  const oldHelp=$('puc3-open-compare')?.closest('.panel');if(oldHelp)oldHelp.hidden=true;
   const oldPanelText=$('puc-library')?.querySelector('h2');
   if(oldPanelText)oldPanelText.textContent='Biblioteca documental — arquivos já registrados';
+  const sourceCards=$('ficha-source-panel')?.querySelectorAll('.ficha-source-card');sourceCards?.forEach(card=>{const p=card.querySelector('p');if(p)p.textContent='Anexação exclusiva na aba Documentos. Utilize esta seção para consultar dados já registrados, conferir boletins e baixar modelos.'});
+  const goDocas=$('docas-import-sources');if(goDocas){goDocas.textContent='Abrir Documentos · SEI, Balanço e SIOP';goDocas.addEventListener('click',e=>{e.stopImmediatePropagation();e.preventDefault();toDocuments()},true)}
+  $('fichas')?.addEventListener('click',e=>{const btn=e.target.closest('[data-open-ficha-sources]');if(!btn)return;e.stopImmediatePropagation();e.preventDefault();toDocuments()},true);
+  for(const btn of document.querySelectorAll('#fichas [data-open-ficha-sources]'))btn.textContent='Anexar na aba Documentos';
+  const syncBtn=$('ficha-sync-confront');if(syncBtn)syncBtn.title='Integra o confronto auxiliar anterior; o confronto documental das três fontes exige achados revisados na aba Confronto das Fontes.';
  }
  function init(){
   const cmp=$('comparacao'),docs=$('documentos'),main=$('puc3-main');
@@ -56,7 +62,9 @@
   if(intro)intro.innerHTML='Os documentos são anexados exclusivamente na aba <strong>Documentos</strong>. Esta aba apresenta os achados por arquivo, o confronto dos indicadores conferidos e o relatório documental, sem utilizar automaticamente os números SIOP de referência.';
   const forward=document.createElement('div');forward.id='puc3-compare-source-link';forward.className='two-actions';
   forward.innerHTML='<button type="button" class="btn secondary" id="puc3-back-to-docs">Abrir Documentos · SEI, Balanço e SIOP</button><span class="muted" id="puc3-compare-selected">PUCs selecionadas em Documentos</span>';
+  const compareStatus=document.createElement('p');compareStatus.id='puc3-compare-status';compareStatus.className='statusline';compareStatus.setAttribute('role','status');compareStatus.textContent='Revise os achados e selecione as PUCs em Documentos antes de confrontar.';
   if(intro)intro.insertAdjacentElement('afterend',forward);else main.insertBefore(forward,main.firstChild);
+  forward.insertAdjacentElement('afterend',compareStatus);
   $('puc3-back-to-docs').onclick=toDocuments;
   const counter=$('puc3-selected');
   const sync=()=>{$('puc3-compare-selected').textContent=counter?.textContent||'PUCs selecionadas em Documentos'};
