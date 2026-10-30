@@ -53,6 +53,9 @@ async function unpack(file){
   if(extension(name)==='zip'&&depth<2){
    const archive=await w.JSZip.loadAsync(await item.arrayBuffer());
    for(const entry of Object.values(archive.files)){if(entry.dir||/(^|\/)(?:__MACOSX|\.)/.test(entry.name)||entry.name.includes('..')||entry.name.startsWith('/'))continue;
+    const expected=Number(entry._data?.uncompressedSize||0),compressed=Number(entry._data?.compressedSize||0);
+    if(expected>limits.maxBytes-limits.bytes)throw Error('ZIP excede limite de 120 MB descompactados (pré-verificação)');
+    if(expected>15*1024*1024&&compressed>0&&expected/compressed>500)throw Error('Entrada ZIP com taxa de expansão anormal');
     const blob=await entry.async('blob');limits.bytes+=blob.size;if(limits.bytes>limits.maxBytes)throw Error('ZIP descompactado acima de 120 MB');limits.entries++;
     await walk({name:entry.name,blob,arrayBuffer:()=>blob.arrayBuffer()},(container?container+' / ':'')+name,depth+1);
    }return;
@@ -111,7 +114,8 @@ async function read(item){
   try{let pdf=await w.pdfjsLib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise,lines=[];let cap=Math.min(70,pdf.numPages);
    for(let p=1;p<=cap;p++){let page=await pdf.getPage(p);let content=await page.getTextContent();lines.push('PÁGINA '+p+'\n'+content.items.map(i=>i.str||'').join(' '))}
    const text=lines.join('\n').slice(0,300000);
-   return {text,quality:text.replace(/PÁGINA \d+/g,'').trim()?'TEXTO EXTRAÍDO (PDF)':'PDF SEM TEXTO — OCR NECESSÁRIO'};
+   const quality=text.replace(/PÁGINA \d+/g,'').trim()?'TEXTO EXTRAÍDO (PDF'+(pdf.numPages>cap?'; LEITURA PARCIAL '+cap+'/'+pdf.numPages+' PÁGINAS':'')+')':'PDF SEM TEXTO — OCR NECESSÁRIO';
+   await pdf.destroy();return {text,quality};
   }catch(e){const txt=basicPDF(new Uint8Array(await blob.arrayBuffer()));return {text:txt,quality:txt?'PDF BÁSICO — REVISAR':'PDF NÃO EXTRAÍDO: '+e.message}}
  }
  return {text:'',quality:ext==='xls'?'XLS LEGADO: ANEXADO, LEITURA NÃO DISPONÍVEL':'FORMATO ANEXADO, SEM LEITURA TEXTUAL'};
