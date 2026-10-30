@@ -2,7 +2,7 @@
 
 **Atualização técnica de 30/10/2026.** O fluxo vigente centraliza a anexação exclusivamente na aba **Documentos**, em três quadros: **SEI (BMs)**, **Balanço** e **SIOP**. A seleção das 12 PUCs também está em Documentos. As abas **Confronto das Fontes** e **Relatório Crítico** usam somente arquivos anexados e achados revisados; a base SIOP embutida é **referencial** e não constitui confronto documental.
 
-**Testes realizados:** 18 testes sintéticos de regressão aprovados e verificação de sintaxe dos módulos. **Pendente:** teste completo em navegador real e homologação documental dos processos e valores oficiais. Ver [relatório da auditoria](docs/AUDITORIA_INTEGRAL_2026-10-30.md). Executar regressões locais com `node tools/test_documental_regressao.js`.
+**Testes realizados:** 18 testes de regressão e **27 testes funcionais em Chrome headless**, todos aprovados, além da verificação de sintaxe dos módulos. **Pendente:** homologação no navegador/rede institucional e conferência documental dos processos e valores oficiais. Ver [relatório da auditoria](docs/AUDITORIA_INTEGRAL_2026-10-30.md). Executar regressões locais com `node tools/test_documental_regressao.js`.
 
 **Segurança:** anexos institucionais permanecem no armazenamento IndexedDB do navegador usado e não devem ser enviados ao repositório público. PDFs digitalizados exigem OCR/transcrição externa; XLS legado pode ser arquivado sem extração textual. Não confundir valores de BM, pagamento da União, PUC recebida e execução da Docas.
 
