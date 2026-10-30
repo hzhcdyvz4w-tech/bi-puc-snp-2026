@@ -38,7 +38,7 @@
   const goDocas=$('docas-import-sources');if(goDocas){goDocas.textContent='Abrir Documentos · SEI, Balanço e SIOP';goDocas.addEventListener('click',e=>{e.stopImmediatePropagation();e.preventDefault();toDocuments()},true)}
   $('fichas')?.addEventListener('click',e=>{const btn=e.target.closest('[data-open-ficha-sources]');if(!btn)return;e.stopImmediatePropagation();e.preventDefault();toDocuments()},true);
   for(const btn of document.querySelectorAll('#fichas [data-open-ficha-sources]'))btn.textContent='Anexar na aba Documentos';
-  const syncBtn=$('ficha-sync-confront');if(syncBtn)syncBtn.title='Integra o confronto auxiliar anterior; o confronto documental das três fontes exige achados revisados na aba Confronto das Fontes.';
+  const syncBtn=$('ficha-sync-confront');if(syncBtn){syncBtn.textContent='Registrar no confronto auxiliar (legado)';syncBtn.title='Integra apenas o confronto auxiliar anterior; o confronto documental das três fontes exige achados revisados na aba Confronto das Fontes.'}
  }
  function init(){
   const cmp=$('comparacao'),docs=$('documentos'),main=$('puc3-main');
