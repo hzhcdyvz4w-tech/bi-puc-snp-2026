@@ -1,6 +1,6 @@
 # Auditoria integral do BI Executivo PUC — 30/10/2026
 
-**Escopo:** repositório `hzhcdyvz4w-tech/bi-puc-snp-2026`, interface pública e módulos documentais. **Natureza:** revisão técnica de código e testes sintéticos, não homologação dos dados de execução da SNP/MPOR.
+**Escopo:** repositório `hzhcdyvz4w-tech/bi-puc-snp-2026`, interface pública e módulos documentais. **Natureza:** revisão técnica de código, testes unitários e teste funcional em Chrome headless com arquivos sintéticos, sem homologação dos dados de execução da SNP/MPOR.
 
 ## Regras preservadas
 - Anexação visível **exclusivamente em Documentos**, com três fontes: **SEI/BMs**, **Balanço** e **SIOP anexado**. Seleção de uma, várias ou todas as 12 PUCs nesse mesmo painel.
@@ -22,12 +22,13 @@
 
 ## Testes efetivamente executados
 - **18 testes de regressão do núcleo documental: 18 aprovados, 0 falhas** — `tools/test_documental_regressao.js`. Incluem classificação de BMs, distinção percentual/R$, carteira, regras de correspondência/divergência/não comparabilidade, exclusão de origem antiga e ausência de seleção.
+- **27 testes funcionais em Chrome headless: 27 aprovados, 0 falhas** — `tools/browser_smoke.html` e `tools/browser_smoke_cdp.js`, executados em GitHub Actions com servidor HTTP local e dados inteiramente sintéticos. Abrangem as três fontes, responsividade mobile, seleção de PUCs, ZIP SEI, DOCX/XLSX, Balanço/SIOP, correspondência/divergência/BM incompatível, prévia do relatório, persistência IndexedDB após recarga, navegação e exclusão. Execução: https://github.com/hzhcdyvz4w-tech/bi-puc-snp-2026/actions/workflows/bi-puc-smoke.yml
 - **12 verificações de sintaxe JavaScript:** 12 aprovadas, incluindo módulos ativos, auxiliares e scripts embutidos no HTML.
 - **Coerência das bases:** 12 PUCs no HTML e 12 na carteira referencial, sem divergência dos campos comparados; 12 registros SIOP coerentes nos campos comparados com o JSON público.
 - **Matriz documental:** 54 requisitos no CSV e 54 regras no módulo de minutas; códigos, etapas, documentos e classificações jurídicas coincidem. **Não equivale a verificação jurídica da vigência dos dispositivos.**
 
 ## Limitações e homologação pendente
-- **Sem teste de interface em navegador real do site publicado:** a estrutura DOM e a sintaxe foram verificadas, mas a renderização, cliques, responsividade e IndexedDB reais exigem validação manual no navegador de destino.
+- **Teste funcional em navegador realizado em ambiente automatizado local:** Chrome headless aprovou 27 cenários sintéticos. **Ainda pendente** homologação no navegador/rede institucional de destino e conferência da versão efetivamente entregue pelo GitHub Pages ao usuário.
 - **Sem processos SEI, BMs ou Balanços oficiais privados nesta execução:** não houve teste de leitura de documentos reais, conferência de valores, cortes, contratos, execução física ou financeira.
 - **PDF digitalizado:** sem OCR; é marcado como necessitando leitura/transcrição humana. **XLS legado e DOC antigo:** anexados com aviso, sem leitura textual garantida.
 - **Ficha e Curva S:** o módulo legado mantém dados e controles de conferência; a sincronização anterior não alimenta automaticamente o novo confronto documental. Campos antigos de upload foram ocultados para manter as três fontes em Documentos; restauração da sessão da Ficha por campo próprio também não está exposta nessa versão.
@@ -42,4 +43,4 @@
 5. Recarregar a página e verificar persistência; excluir um arquivo e verificar remoção do documento e dos achados vinculados.
 6. Exportar CSV e relatório HTML; conferir referências, datas, BM, unidade e ausência de valores SIOP pré-carregados.
 
-**Situação:** código revisado e testes sintéticos aprovados; homologação funcional em navegador e homologação documental pela SNP **pendentes**.
+**Situação:** código revisado, 18 testes de regressão e 27 testes de navegador sintéticos aprovados; homologação em ambiente institucional e homologação documental pela SNP **pendentes**.
