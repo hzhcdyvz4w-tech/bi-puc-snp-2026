@@ -8,6 +8,7 @@ on:
       - "assets/**"
       - "tools/test_documental_regressao.js"
       - "tools/browser_smoke.html"
+      - "tools/browser_smoke_cdp.js"
       - ".github/workflows/bi-puc-smoke.yml"
   workflow_dispatch:
 
@@ -38,11 +39,7 @@ jobs:
           if [ -z "$CHROME" ]; then
             echo "Chrome/Chromium indisponível no runner"; exit 1
           fi
-          timeout 90s "$CHROME" --headless=new --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-extensions --virtual-time-budget=35000 --dump-dom "http://127.0.0.1:8765/tools/browser_smoke.html" > /tmp/bi-puc-smoke.html 2>/tmp/bi-puc-chrome.log || true
-          echo "Resultado do smoke:"
-          grep -E 'PASS|FAIL|RESULTADO|ERRO:' /tmp/bi-puc-smoke.html | tail -35 || true
-          if ! grep -q 'data-smoke-status="PASS"' /tmp/bi-puc-smoke.html; then
-            echo "Smoke do navegador falhou"
-            tail -50 /tmp/bi-puc-chrome.log || true
-            exit 1
-          fi
+          "$CHROME" --headless=new --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-extensions --window-size=1600,1000 --remote-debugging-port=9222 --user-data-dir=/tmp/bi-puc-chrome-profile "http://127.0.0.1:8765/tools/browser_smoke.html" >/tmp/bi-puc-chrome.log 2>&1 &
+          CHROME_PID=$!
+          trap 'kill "$CHROME_PID" "$SERVER_PID" 2>/dev/null || true' EXIT
+          node tools/browser_smoke_cdp.js
