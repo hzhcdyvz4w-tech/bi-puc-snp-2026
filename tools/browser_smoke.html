@@ -77,9 +77,9 @@
   w.location.reload();await loaded;
   assert(await until(()=>w.PUCDocLibrary?.list?.().length===4&&d().getElementById('puc-library-count')),'Persistência IndexedDB após recarregar');
   d().querySelector('#nav [data-page="comparacao"]').click();
-  assert(!compare.classList.contains('hidden'),'Navegação Confronto');
+  assert(!d().getElementById('comparacao').classList.contains('hidden'),'Navegação Confronto');
   d().querySelector('#nav [data-page="documentos"]').click();
-  assert(!docs.classList.contains('hidden'),'Navegação Documentos');
+  assert(!d().getElementById('documentos').classList.contains('hidden'),'Navegação Documentos');
   w.confirm=()=>true;
   d().getElementById('puc-delete-all').click();
   assert(await until(()=>w.PUCDocLibrary.list().length===0),'Exclusão local de documentos');
