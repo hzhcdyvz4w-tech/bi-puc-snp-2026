@@ -4,7 +4,7 @@ const E=id=>document.getElementById(id),key='puc-doc-meta-v2';let db=null;
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const ext=s=>(s.split('.').pop()||'').toLowerCase();
 const category=n=>/boletim|medi[cç][aã]o|(^|[^\w])bm[\s_-]?\d/i.test(n)?'BM / medição':/aditivo/i.test(n)?'Aditivo':/apostil/i.test(n)?'Apostilamento':/pagamento|nota.?fiscal/i.test(n)?'Pagamento':'Documento';
-const stored=[];let selected=null;
+const stored=[];let selected=null;let lastIngestReport={count:0,errors:[]};
 async function digest(blob){const raw=await blob.arrayBuffer();const h=await crypto.subtle.digest('SHA-256',raw);return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 const engine=()=>window.PUCDocEngine;
 function bmNumber(x){return engine()?.bmNumber(x.name,x.text)||''}
@@ -18,7 +18,7 @@ function updateEntry(x){x.text=String(x.text||'');x.candidates=engine()?.indicat
  return x
 }
 function openDB(){return new Promise((resolve,reject)=>{let r=indexedDB.open('BI_PUC_DOCUMENTOS_LOCAL',2);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('files'))r.result.createObjectStore('files',{keyPath:'id'})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
-function transact(mode,fn){return new Promise((resolve,reject)=>{let tx=db.transaction('files',mode),store=tx.objectStore('files');let request=fn(store);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
+function transact(mode,fn){return new Promise((resolve,reject)=>{let tx=db.transaction('files',mode),store=tx.objectStore('files'),result;let request;try{request=fn(store)}catch(e){tx.abort();reject(e);return}request.onsuccess=()=>{result=request.result};request.onerror=()=>reject(request.error);tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error||request.error);tx.onabort=()=>reject(tx.error||Error('Transação documental cancelada'))})}
 async function reload(){stored.splice(0);stored.push(...(await transact('readonly',s=>s.getAll())).sort((a,b)=>b.time-a.time).map(updateEntry));paint()}
 function status(msg){let p=E('puc-library-status');if(p)p.textContent=msg}
 function normalizeName(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()}
@@ -55,10 +55,10 @@ async function reanalyse(){
 }
 async function ingest(files,origin,project,ref){let count=0;let errors=[];
  for(const file of files){try{if(file.size>90*1024*1024)throw Error('arquivo acima de 90 MB');let sub=await extract(file);
- for(let item of sub){const hash=await digest(item.blob);const duplicate=stored.find(x=>x.hash===hash&&x.project===project&&x.ref===ref);if(duplicate){errors.push(item.name+': duplicado no mesmo processo e PUC');continue}const parsed=await fileText(item);const entry=updateEntry({id:crypto.randomUUID(),hash,name:item.name,container:item.container,blob:item.blob,origin,project,ref,time:Date.now(),category:category(item.name),text:parsed.text,quality:parsed.quality});
+ for(let item of sub){const hash=await digest(item.blob);const duplicate=stored.find(x=>x.hash===hash&&x.origin===origin&&x.project===project&&x.ref===ref);if(duplicate){errors.push(item.name+': duplicado no mesmo processo e PUC');continue}const parsed=await fileText(item);const entry=updateEntry({id:crypto.randomUUID(),hash,name:item.name,container:item.container,blob:item.blob,origin,project,ref,time:Date.now(),category:category(item.name),text:parsed.text,quality:parsed.quality});
  await transact('readwrite',s=>s.put(entry));stored.push(entry);count++}
  }catch(e){errors.push(file.name+': '+e.message)}}
- await reload();status(count+' documento(s) arquivado(s) neste navegador. '+(errors.length?'Pendências: '+errors.join('; '):'Os outros módulos podem consultar a biblioteca.'));return count
+ lastIngestReport={count,errors};await reload();status(count+' documento(s) arquivado(s) neste navegador. '+(errors.length?'Pendências: '+errors.slice(0,12).join('; '):'Os outros módulos podem consultar a biblioteca.'));return count
 }
 async function deleteBatch(mode){
  let targets=mode==='all'?[...stored]:stored.filter(x=>mode==='project'?x.project===E('puc-lib-project').value:x.ref.trim()===E('puc-lib-ref').value.trim());
@@ -175,7 +175,7 @@ async function saveFinding(docId,finding){const item=stored.find(d=>d.id===docId
  else {find.id=crypto.randomUUID();item.findings.push(find)}
  await transact('readwrite',st=>st.put(item));await reload();return find}
 async function deleteFinding(docId,findingId){const item=stored.find(d=>d.id===docId);if(!item)return;item.findings=(item.findings||[]).filter(x=>x.id!==findingId);await transact('readwrite',st=>st.put(item));await reload()}
-window.PUCDocLibrary={list:()=>stored.map(x=>({id:x.id,name:x.name,container:x.container,origin:x.origin,project:x.project,ref:x.ref,category:x.category,bmStatus:x.bmStatus,bmNumber:x.bm?.number||'',quality:x.quality,candidates:x.candidates||[],findings:x.findings||[],text:x.text||'',hash:x.hash})),ingest:async(files,origin,project,ref)=>{if(!db)throw Error('Banco documental não inicializado');return ingest(files,origin,project,ref)},saveFinding,deleteFinding,refresh:reload};
+window.PUCDocLibrary={list:()=>stored.map(x=>({id:x.id,name:x.name,container:x.container,origin:x.origin,project:x.project,ref:x.ref,category:x.category,bmStatus:x.bmStatus,bmNumber:x.bm?.number||'',bmPeriod:x.bm?.period||'',quality:x.quality,candidates:x.candidates||[],findings:x.findings||[],text:x.text||'',hash:x.hash})),ingest:async(files,origin,project,ref)=>{if(!db)throw Error('Banco documental não inicializado');return ingest(files,origin,project,ref)},saveFinding,deleteFinding,getLastIngestReport:()=>({...lastIngestReport,errors:[...lastIngestReport.errors]}),refresh:reload};
 
 async function init(){try{db=await openDB();setup();await reload()}catch(err){status('Não foi possível abrir o armazenamento local: '+err.message)}}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
