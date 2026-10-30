@@ -26,7 +26,7 @@ function download(blob,name){const a=document.createElement('a'),u=URL.createObj
 function renderChecks(){
  let query=($('puc3-search')?.value||'').trim().toLowerCase();
  $('puc3-projects').innerHTML=projects.filter(p=>(p.id+' '+p.empresa+' '+p.empreendimento).toLowerCase().includes(query)).map(p=>'<label class="puc3-choose"><input type="checkbox" value="'+esc(p.id)+'" '+(selected.has(p.id)?'checked':'')+'><span><strong>'+esc(p.id)+'</strong> · '+esc(p.empresa)+'<small>'+esc(p.empreendimento)+'</small></span></label>').join('');
- $('puc3-projects').querySelectorAll('input').forEach(x=>x.onchange=()=>{x.checked?selected.add(x.value):selected.delete(x.value);render();});
+ $('puc3-projects').querySelectorAll('input').forEach(x=>x.onchange=()=>{x.checked?selected.add(x.value):selected.delete(x.value);renderChecks();render();});
  const c=$('puc3-selected');if(c)c.textContent=selected.size+' PUC(s) selecionada(s) — '+projects.length+' cadastradas';
 }
 function filesForReview(){
