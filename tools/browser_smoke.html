@@ -24,6 +24,10 @@
   const other=[...d().querySelectorAll('input[type=file]')].filter(el=>!central.contains(el)&&w.getComputedStyle(el).display!=='none'&&w.getComputedStyle(el.closest('label')||el).display!=='none'&&!el.closest('[hidden]'));
   assert(other.length===0,'Nenhum outro campo de anexo visível',String(other.length));
   assert(d().querySelectorAll('#puc3-projects input[type=checkbox]').length===12,'12 PUCs selecionáveis');
+  d().querySelector('#nav [data-page="documentos"]').click();frame.style.width='375px';await sleep(250);
+  const mobileColumns=w.getComputedStyle(uploads).gridTemplateColumns.trim().split(/\s+/).length;
+  assert(mobileColumns===1,'Responsividade: três fontes em coluna única no celular',w.getComputedStyle(uploads).gridTemplateColumns);
+  frame.style.width='1400px';await sleep(150);
   const first=d().querySelector('#puc3-projects input[value="PUC-01"]');first.click();
   assert(d().getElementById('puc3-selected').textContent.startsWith('1 PUC'),'Seleção individual');
   d().getElementById('puc3-all').click();
@@ -32,6 +36,10 @@
   assert(d().getElementById('puc3-selected').textContent.startsWith('0 PUC'),'Limpar seleção');
   assert(!!d().getElementById('puc3-compare-status'),'Feedback visível no Confronto');
   assert(!!w.JSZip,'JSZip disponível no navegador');
+  d().getElementById('puc-selftest-btn').click();
+  assert(await until(()=>d().getElementById('puc-selftest-results').textContent.includes('XLSX dentro do ZIP SEI')),'Autodiagnóstico executado com XLSX');
+  const diagnosis=d().getElementById('puc-selftest-results').textContent;
+  assert(diagnosis.includes('✓ DOCX dentro do ZIP SEI')&&diagnosis.includes('✓ XLSX dentro do ZIP SEI'),'Leitura de DOCX e XLSX internos ao ZIP');
   const zip=new w.JSZip();
   zip.file('BM_05_Medicao.html','<html><body><h1>Boletim de Medição nº 05</h1><p>Competência: 09/2026</p><p>Valor medido no período: R$ 1.234,56</p></body></html>');
   zip.file('Despacho_323.html','<html><body>Despacho que menciona Boletim de Medição 05.</body></html>');
