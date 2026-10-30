@@ -38,7 +38,8 @@ function indicators(text){
  ['Pago (origem a conferir)',/(?:total\s+pago|valor\s+pago|pago\s+no\s+per[ií]odo|pago)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
  ['PUC recebida (candidato)',/(?:PUC\s+recebida|aporte\s+recebido)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
  ['PUC aplicada (candidato)',/(?:PUC\s+aplicada|recurso\s+aplicado)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
- ['Execução financeira (candidato)',/(?:execu[cç][aã]o\s+financeira)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi],
+ ['Execução financeira (%)',/(?:execu[cç][aã]o\s+financeira)\s*[:=|–-]?\s*(\d{1,3}(?:,\d{1,2})?)\s*%/gi],
+ ['Execução financeira (R$ candidato)',/(?:execu[cç][aã]o\s+financeira)\s*[:=|–-]?\s*R\$\s*(\d+(?:[.,]\d+)*)/gi],
  ['Valor global do empreendimento (candidato)',/(?:valor\s+global\s+do\s+empreendimento)\s*[:=|–-]?\s*(R\$\s*)?(\d+(?:[.,]\d+)*)/gi]
  ];
  for(const [type,rx] of patterns){let m;while((m=rx.exec(t))&&out.length<50){let value=m[2]||m[1];out.push({type,values:[value],excerpt:t.slice(Math.max(0,m.index-60),Math.min(t.length,m.index+m[0].length+65)).replace(/\s+/g,' ').slice(0,270),line:t.slice(0,m.index).split('\n').length,status:'CANDIDATO — EXIGE CONFERÊNCIA'});}}
