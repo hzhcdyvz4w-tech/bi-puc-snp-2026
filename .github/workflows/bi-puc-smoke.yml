@@ -1,0 +1,44 @@
+name: BI PUC - testes sintéticos
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "assets/**"
+      - "tools/test_documental_regressao.js"
+      - "tools/browser_smoke.html"
+      - ".github/workflows/bi-puc-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regressao:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regressão documental em Node
+        run: node tools/test_documental_regressao.js
+      - name: Smoke funcional em Chrome headless
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/bi-puc-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          sleep 2
+          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$CHROME" ]; then
+            echo "Chrome/Chromium indisponível no runner"; exit 1
+          fi
+          timeout 90s "$CHROME" --headless=new --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-extensions --virtual-time-budget=35000 --dump-dom "http://127.0.0.1:8765/tools/browser_smoke.html" > /tmp/bi-puc-smoke.html 2>/tmp/bi-puc-chrome.log || true
+          echo "Resultado do smoke:"
+          grep -E 'PASS|FAIL|RESULTADO|ERRO:' /tmp/bi-puc-smoke.html | tail -35 || true
+          if ! grep -q 'data-smoke-status="PASS"' /tmp/bi-puc-smoke.html; then
+            echo "Smoke do navegador falhou"
+            tail -50 /tmp/bi-puc-chrome.log || true
+            exit 1
+          fi
