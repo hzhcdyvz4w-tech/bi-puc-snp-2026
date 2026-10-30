@@ -14,7 +14,7 @@
  try{
   log.textContent='';
   const ready=await until(()=>d()?.getElementById('puc3-central-files')&&d()?.getElementById('puc-library-count')&&w.PUCDocLibrary?.list,25000);
-  const info=()=>{try{return JSON.stringify({readyState:d()?.readyState,url:w.location.href,central:!!d()?.getElementById('puc3-central-files'),library:!!w.PUCDocLibrary,libraryCount:!!d()?.getElementById('puc-library-count'),nav:!!d()?.getElementById('nav'),bodyLength:d()?.body?.innerHTML?.length})}catch(e){return 'iframe indisponível: '+e.message}};
+  const info=()=>{try{return JSON.stringify({readyState:d()?.readyState,url:w.location.href,central:!!d()?.getElementById('puc3-central-files'),library:!!w.PUCDocLibrary,libraryCount:!!d()?.getElementById('puc-library-count'),libraryPanel:!!d()?.getElementById('puc-library'),libraryError:w.PUCDocLibrary?.storageError||d()?.getElementById('puc-library-error')?.textContent||'',indexedDB:!!w.indexedDB,nav:!!d()?.getElementById('nav'),bodyLength:d()?.body?.innerHTML?.length})}catch(e){return 'iframe indisponível: '+e.message}};
   assert(ready, 'Inicialização dos módulos e da biblioteca',info());
   const docs=d().getElementById('documentos'),compare=d().getElementById('comparacao');
   const central=d().getElementById('puc3-central-files'),uploads=d().getElementById('puc3-uploads');
