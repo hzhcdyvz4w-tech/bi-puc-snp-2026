@@ -152,7 +152,7 @@ function audit(){
    if(!a.bmNumber||!b.bmNumber)reason.push('Número do BM não comprovado');
    else if(String(a.bmNumber).replace(/^0+(?=\d)/,'')!==String(b.bmNumber).replace(/^0+(?=\d)/,''))reason.push('BMs diferentes');
   }
-  if((a.source==='SIOP'||b.source==='SIOP')&&['medicao_bm','pagamento_bm','valor_contrato','aporte_puc_recebido','puc_aplicada','execucao_financeira_balanco'].includes(a.indicator))reason.push('Indicador não comprovável por SIOP orçamentário');
+  if((a.source==='SIOP'||b.source==='SIOP')&&!['dotacao_atual','empenho_uniao','liquidacao_uniao','pagamento_uniao'].includes(a.indicator))reason.push('Indicador não comprovável por SIOP orçamentário');
    const diff=Number(a.value)-Number(b.value),tolerance=units[a.indicator]==='%'?0.1:0.01;
   const state=reason.length?'NÃO COMPARÁVEL':Math.abs(diff)>tolerance?'DIVERGÊNCIA':'CORRESPONDÊNCIA';
   const pair={project:id,a,b,state,reason:reason.join('; '),diff:reason.length?null:diff};pairs.push(pair);r.pairs.push(pair)
@@ -186,7 +186,7 @@ function reportHtml(){
  for(const id of selected){
   const p=projects.find(x=>x.id===id);
   body+='<section><h2>'+esc(id)+' · '+esc(p?.empreendimento||'')+'</h2><p><strong>Companhia:</strong> '+esc(p?.empresa||'')+'</p>';
-  const ds=docs().filter(d=>d.project===id||((d.findings||[]).some(f=>f.project===id)));
+  const ds=docs().filter(d=>sources.includes(d.origin)&&(d.project===id||((d.findings||[]).some(f=>f.project===id))));
   body+='<h3>Arquivos anexados</h3><table><thead><tr><th>Fonte</th><th>Documento</th><th>Leitura</th><th>BM</th></tr></thead><tbody>';
   body+=ds.length?ds.map(d=>'<tr><td>'+esc(d.origin)+'</td><td>'+esc(d.name)+'</td><td>'+esc(d.quality||'não informada')+'</td><td>'+esc(d.bmStatus||'Não identificado')+'</td></tr>').join(''):'<tr><td colspan="4">Nenhum documento vinculado à PUC</td></tr>';
   body+='</tbody></table><h3>Achados extraídos e conferidos</h3><table><thead><tr><th>Fonte / documento / referência</th><th>Indicador</th><th>Valor</th><th>Competência / corte</th><th>Objeto / contrato / BM</th><th>Conferência</th></tr></thead><tbody>';
