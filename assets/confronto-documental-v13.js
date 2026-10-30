@@ -14,14 +14,14 @@ const indicators=[
  ['valor_empreendimento','Valor global do empreendimento','R$'],['financeiro_previsto','Desembolso previsto','R$']
 ];
 const label=Object.fromEntries(indicators.map(x=>[x[0],x[1]])),units=Object.fromEntries(indicators.map(x=>[x[0],x[2]]));
-const metricSelect=()=>indicators.map(x=>'<option value="'+x[0]+'">'+esc(x[1])+'</option>').join('');
+const metricSelect=()=>'<option value="">Selecione a natureza comprovada</option>'+indicators.map(x=>'<option value="'+x[0]+'">'+esc(x[1])+'</option>').join('');
 const pOptions='<option value="">Sem PUC específica — carteira/documento geral</option>'+projects.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.id+' · '+p.empresa)+'</option>').join('');
 let selected=new Set(),selectedFile=null,lastRows=[],lastPairs=[];
 const lib=()=>window.PUCDocLibrary;
 const docs=()=>lib()?.list()||[];
-function status(message){const el=$('puc3-status');if(el)el.textContent=message}
+function status(message){for(const id of ['puc3-status','puc3-compare-status']){const el=$(id);if(el)el.textContent=message}}
 function val(v){return Number.isFinite(Number(v))&&v!==''?Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—'}
-function csv(rows,filename){const head=['puc','fonte','documento','referencia','indicador','valor','unidade','competencia','data_corte','objeto','contrato','apuracao','conferido','observacao'];const txt=[head.join(';'),...rows.map(r=>head.map(k=>'"'+String(r[k]??'').replace(/"/g,'""')+'"').join(';'))].join('\r\n');download(new Blob(['\ufeff'+txt],{type:'text/csv;charset=utf-8'}),filename)}
+function csv(rows,filename){const head=['puc','fonte','documento','referencia','indicador','valor','unidade','competencia','data_corte','objeto','contrato','numero_bm','apuracao','conferido','observacao'];const safe=v=>{const x=String(v??'');return /^[\s]*[=+@\-\t\r]/.test(x)?"'"+x:x};const txt=[head.join(';'),...rows.map(r=>head.map(k=>'"'+safe(r[k]).replace(/"/g,'""')+'"').join(';'))].join('\r\n');download(new Blob(['\ufeff'+txt],{type:'text/csv;charset=utf-8'}),filename)}
 function download(blob,name){const a=document.createElement('a'),u=URL.createObjectURL(blob);a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),1500)}
 function renderChecks(){
  let query=($('puc3-search')?.value||'').trim().toLowerCase();
@@ -30,7 +30,7 @@ function renderChecks(){
  const c=$('puc3-selected');if(c)c.textContent=selected.size+' PUC(s) selecionada(s) — '+projects.length+' cadastradas';
 }
 function filesForReview(){
- return docs().filter(d=>!selected.size||!d.project||selected.has(d.project)||(d.findings||[]).some(f=>selected.has(f.project)));
+ return docs().filter(d=>sources.includes(d.origin)&&(!selected.size||!d.project||selected.has(d.project)||(d.findings||[]).some(f=>selected.has(f.project))));
 }
 function sourceCards(){
  $('puc3-uploads').innerHTML=sources.map(source=>'<div class="puc3-source"><h3>'+esc(names[source])+'</h3><label>PUC associada ao lote<select id="puc3-project-'+source+'">'+pOptions+'</select></label><label>Processo / referência<input id="puc3-ref-'+source+'" placeholder="SEI, período ou referência do relatório"></label><label>Arquivos<input type="file" multiple id="puc3-files-'+source+'" accept=".zip,.pdf,.xls,.xlsx,.csv,.doc,.docx,.txt,.html,.htm,.xml,.json"></label><button class="btn" type="button" data-import="'+source+'">Analisar anexos '+source+'</button><small>'+ (source==='SEI'?'Busca possíveis BMs pelo nome e texto.':source==='BALANCO'?'Selecione a planilha/relatório oficial.':'A base pré-carregada não conta: anexe a consulta a confrontar.')+'</small></div>').join('');
@@ -46,7 +46,7 @@ async function importFiles(source){
   $('puc3-files-'+source).value='';
   if(project)selected.add(project);
   renderChecks();render();
-  status(n+' documento(s) incorporado(s) a '+source+'. '+docs().filter(d=>d.origin===source&&/^BM IDENTIFICADO|^BM PROVÁVEL/.test(d.bmStatus||'')).length+' possíveis BMs nesta origem. Revise os achados antes de comparar.');
+  const errors=lib().getLastIngestReport?.().errors||[];status(n+' documento(s) incorporado(s) a '+source+'. '+docs().filter(d=>d.origin===source&&/^BM IDENTIFICADO|^BM PROVÁVEL/.test(d.bmStatus||'')).length+' possíveis BMs nesta origem. '+(errors.length?'Pendências: '+errors.slice(0,4).join('; ')+'. ':'')+'Revise os achados antes de comparar.');
  }catch(e){status('Falha ao analisar '+source+': '+e.message)}
  finally{button.disabled=false}
 }
@@ -77,7 +77,7 @@ function chooseCandidate(i){
  else if(/^(?:\d{1,3}\.)+\d{3}$/.test(n))n=n.replace(/\./g,'');
  $('puc3-find-value').value=Number.isFinite(Number(n))?Number(n):'';
  const cat=(c.type||'').toLowerCase();
- $('puc3-find-indicator').value=cat.includes('dota')?'dotacao_atual':cat.includes('empenh')?'empenho_uniao':cat.includes('liquid')?'liquidacao_uniao':cat.includes('puc recebida')?'aporte_puc_recebido':cat.includes('puc aplicada')?'puc_aplicada':cat.includes('valor global')?'valor_empreendimento':cat.includes('execução financeira')?'execucao_financeira_balanco':cat.includes('físic')||cat.includes('fisic')?'execucao_fisica':cat.includes('pago')?(d.origin==='SIOP'?'pagamento_uniao':'pagamento_bm'):'medicao_bm';
+ $('puc3-find-indicator').value=cat.includes('dota')?'dotacao_atual':cat.includes('empenh')?'empenho_uniao':cat.includes('liquid')?'liquidacao_uniao':cat.includes('puc recebida')?'aporte_puc_recebido':cat.includes('puc aplicada')?'puc_aplicada':cat.includes('valor global')?'valor_empreendimento':cat.includes('execução financeira')?'execucao_financeira_balanco':cat.includes('físic')||cat.includes('fisic')?'execucao_fisica':cat.includes('pago')?(d.origin==='SIOP'?'pagamento_uniao':(d.origin==='SEI'&&/^BM IDENTIFICADO|^BM PROVÁVEL/.test(d.bmStatus||'')?'pagamento_bm':'')):cat.includes('medido')?'medicao_bm':'';
  $('puc3-find-note').value='Candidato localizado: '+c.excerpt+'. Necessária verificação da natureza, apuração e documentação original.';
  $('puc3-find-confirm').checked=false;
 }
@@ -90,9 +90,9 @@ function review(id,fid){
  $('puc3-find-id').value=f.id||'';
  $('puc3-find-project').innerHTML='<option value="">Selecione a PUC comprovada</option>'+projects.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.id+' · '+p.empreendimento)+'</option>').join('');
  $('puc3-find-project').value=f.project||d.project||(selected.size===1?[...selected][0]:'');
- $('puc3-find-indicator').innerHTML=metricSelect();$('puc3-find-indicator').value=f.indicator||'medicao_bm';
+ $('puc3-find-indicator').innerHTML=metricSelect();$('puc3-find-indicator').value=f.indicator||'';
  $('puc3-find-value').value=f.value??'';
- $('puc3-find-period').value=f.period||'';
+ $('puc3-find-period').value=f.period||d.bmPeriod||'';
  $('puc3-find-cutoff').value=f.cutoff||'';
  $('puc3-find-object').value=f.object||'GLOBAL_PROJETO';
  $('puc3-find-contract').value=f.contract||'';
@@ -114,8 +114,13 @@ async function save(){
  const doc=docs().find(x=>x.id===selectedFile);if(!doc)return;
  const value=$('puc3-find-value').value,project=$('puc3-find-project').value,indicator=$('puc3-find-indicator').value;
  if(!project){status('Escolha a PUC correspondente ao documento e ao achado.');return}
+  if(!indicator){status('Selecione o indicador e sua natureza; a classificação automática não é prova.');return}
  const numeric=numericInput(value);if(!Number.isFinite(numeric)){status('Informe um valor válido. Use 1234,56 ou 1234.56; vazio não significa zero.');return}
- const id=$('puc3-find-id').value||'';
+ if(units[indicator]==='%'&&(numeric<0||numeric>100)){status('Percentual físico fora do intervalo de 0 a 100%.');return}
+  const checked=$('puc3-find-confirm').checked;
+  if(checked&&(!$('puc3-find-period').value||!$('puc3-find-cutoff').value)){status('Para conferir, informe competência e data de corte comprovadas.');return}
+  if(checked&&['medicao_bm','pagamento_bm'].includes(indicator)&&(!$('puc3-find-contract').value.trim()||!$('puc3-find-bm').value.trim())){status('Para conferir BM, informe contrato e número do boletim.');return}
+  const id=$('puc3-find-id').value||'';
  const item={id,project,indicator,value:numeric,period:$('puc3-find-period').value,cutoff:$('puc3-find-cutoff').value,object:($('puc3-find-object').value||'GLOBAL_PROJETO').trim().toUpperCase(),contract:$('puc3-find-contract').value.trim().toUpperCase(),bmNumber:$('puc3-find-bm').value.trim(),aggregation:$('puc3-find-aggregation').value,verified:$('puc3-find-confirm').checked,note:$('puc3-find-note').value.trim()};
  try{await lib().saveFinding(doc.id,item);selected.add(project);renderChecks();render();$('puc3-review').hidden=true;status('Achado registrado em '+doc.origin+' para '+project+'. '+(item.verified?'Conferido pelo operador; homologação SNP pendente.':'Pendente de conferência.'))}
  catch(e){status('Erro ao salvar achado: '+e.message)}
@@ -126,7 +131,8 @@ async function removeFinding(){
  await lib().deleteFinding(selectedFile,$('puc3-find-id').value);$('puc3-review').hidden=true;render();status('Achado excluído; arquivo preservado.')
 }
 function audit(){
- const findings=lastRows.filter(f=>selected.has(f.project));
+ if(!selected.size){$('puc3-result').innerHTML='<p class="notice">Selecione uma ou mais PUCs na aba Documentos antes de confrontar. Nenhuma correspondência foi calculada.</p>';status('Confronto não executado: nenhuma PUC selecionada.');lastPairs=[];return {pairs:[],findings:[]}}
+  const findings=lastRows.filter(f=>selected.has(f.project)&&sources.includes(f.source));
  const byProject=new Map();
  for(const p of selected){byProject.set(p,{sources:new Set(),found:[],pairs:[],pending:0,docs:filesForReview().filter(d=>d.project===p||!d.project)})}
  for(const f of findings){const r=byProject.get(f.project);if(!r)continue;r.found.push(f);r.sources.add(f.source);if(!f.verified||!f.period||!f.cutoff)r.pending++}
@@ -137,14 +143,15 @@ function audit(){
   if(!a.period||!b.period||a.period!==b.period)reason.push('Competência distinta/ausente');
   if(!a.cutoff||!b.cutoff||a.cutoff!==b.cutoff)reason.push('Data de corte distinta/ausente');
   if((a.aggregation||'')!==(b.aggregation||''))reason.push('Apuração distinta');
-  if((a.object||'')!==(b.object||''))reason.push('Objeto distinto');
-  if((a.contract||'')!==(b.contract||''))reason.push('Contrato distinto');
+  if(String(a.object||'').trim().toUpperCase()!==String(b.object||'').trim().toUpperCase())reason.push('Objeto distinto');
+  if(String(a.contract||'').trim().toUpperCase()!==String(b.contract||'').trim().toUpperCase())reason.push('Contrato distinto');
   if(['medicao_bm','pagamento_bm','valor_contrato'].includes(a.indicator)&&(!a.contract||!b.contract))reason.push('Contrato não informado');
   if(['medicao_bm','pagamento_bm'].includes(a.indicator)){
    if(!a.bmNumber||!b.bmNumber)reason.push('Número do BM não comprovado');
-   else if(a.bmNumber!==b.bmNumber)reason.push('BMs diferentes');
+   else if(String(a.bmNumber).replace(/^0+(?=\d)/,'')!==String(b.bmNumber).replace(/^0+(?=\d)/,''))reason.push('BMs diferentes');
   }
-  const diff=Number(a.value)-Number(b.value),tolerance=units[a.indicator]==='%'?0.1:0.01;
+  if((a.source==='SIOP'||b.source==='SIOP')&&['medicao_bm','pagamento_bm','valor_contrato','aporte_puc_recebido','puc_aplicada','execucao_financeira_balanco'].includes(a.indicator))reason.push('Indicador não comprovável por SIOP orçamentário');
+   const diff=Number(a.value)-Number(b.value),tolerance=units[a.indicator]==='%'?0.1:0.01;
   const state=reason.length?'NÃO COMPARÁVEL':Math.abs(diff)>tolerance?'DIVERGÊNCIA':'CORRESPONDÊNCIA';
   const pair={project:id,a,b,state,reason:reason.join('; '),diff:reason.length?null:diff};pairs.push(pair);r.pairs.push(pair)
  }}
@@ -239,7 +246,7 @@ function init(){
  $('puc3-find-save').onclick=save;$('puc3-find-delete').onclick=removeFinding;
  $('puc3-review-close').onclick=()=>$('puc3-review').hidden=true;
  $('puc3-run').onclick=audit;
- $('puc3-csv').onclick=()=>csv(lastRows.map(f=>({puc:f.project,fonte:f.source,documento:f.document,referencia:f.reference||'',indicador:label[f.indicator]||f.indicator,valor:f.value,unidade:units[f.indicator],competencia:f.period,data_corte:f.cutoff,objeto:f.object,contrato:f.contract,apuracao:f.aggregation,conferido:f.verified?'SIM':'NÃO',observacao:f.note})),'PUC_ACHADOS_DOCUMENTAIS_SEI_BALANCO_SIOP.csv');
+ $('puc3-csv').onclick=()=>csv(lastRows.map(f=>({puc:f.project,fonte:f.source,documento:f.document,referencia:f.reference||'',indicador:label[f.indicator]||f.indicator,valor:f.value,unidade:units[f.indicator],competencia:f.period,data_corte:f.cutoff,objeto:f.object,contrato:f.contract,numero_bm:f.bmNumber,apuracao:f.aggregation,conferido:f.verified?'SIM':'NÃO',observacao:f.note})),'PUC_ACHADOS_DOCUMENTAIS_SEI_BALANCO_SIOP.csv');
  $('puc3-report').onclick=()=>download(new Blob([reportHtml()],{type:'text/html;charset=utf-8'}),'RELATORIO_DOCUMENTAL_PUC_SEI_BALANCO_SIOP.html');
  document.addEventListener('puc-documents-updated',render);
 }
