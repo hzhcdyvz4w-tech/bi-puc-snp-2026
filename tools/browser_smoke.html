@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><title>Teste funcional sintético BI PUC</title>
+<body data-smoke-status="RUNNING"><h1>Teste funcional do BI PUC — somente dados artificiais</h1>
+<pre id="log">Iniciando...</pre><iframe id="app" src="../index.html" style="width:1400px;height:900px;position:absolute;left:-9999px;top:0" title="BI PUC"></iframe>
+<script>
+(async()=>{
+ const log=document.getElementById('log');let passes=0,failures=0;
+ const write=(ok,label,details='')=>{passes+=!!ok;failures+=!ok;log.textContent+=(ok?'PASS ':'FAIL ')+label+(details?' — '+details:'')+'\n'};
+ const assert=(condition,label,details='')=>{write(!!condition,label,details);if(!condition)throw Error(label)};
+ const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+ const until=async(check,ms=14000)=>{const start=Date.now();while(Date.now()-start<ms){try{if(check())return true}catch(e){}await sleep(100)}return false};
+ const frame=document.getElementById('app');
+ const w=frame.contentWindow,d=()=>frame.contentDocument;
+ try{
+  log.textContent='';
+  assert(await until(()=>d()?.getElementById('puc3-central-files')&&w.PUCDocLibrary?.list), 'Inicialização dos módulos e da biblioteca');
+  const docs=d().getElementById('documentos'),compare=d().getElementById('comparacao');
+  const central=d().getElementById('puc3-central-files'),uploads=d().getElementById('puc3-uploads');
+  assert(docs.contains(central)&&central.contains(uploads)&&!compare.contains(uploads),'Anexos somente em Documentos');
+  const ids=['puc3-files-SEI','puc3-files-BALANCO','puc3-files-SIOP'];
+  assert(ids.every(id=>d().querySelectorAll('#'+id).length===1&&central.contains(d().getElementById(id))),'Três fontes com IDs únicos');
+  const other=[...d().querySelectorAll('input[type=file]')].filter(el=>!central.contains(el)&&w.getComputedStyle(el).display!=='none'&&w.getComputedStyle(el.closest('label')||el).display!=='none'&&!el.closest('[hidden]'));
+  assert(other.length===0,'Nenhum outro campo de anexo visível',String(other.length));
+  assert(d().querySelectorAll('#puc3-projects input[type=checkbox]').length===12,'12 PUCs selecionáveis');
+  const first=d().querySelector('#puc3-projects input[value="PUC-01"]');first.click();
+  assert(d().getElementById('puc3-selected').textContent.startsWith('1 PUC'),'Seleção individual');
+  d().getElementById('puc3-all').click();
+  assert(d().getElementById('puc3-selected').textContent.startsWith('12 PUC'),'Seleção de todas');
+  d().getElementById('puc3-clear').click();
+  assert(d().getElementById('puc3-selected').textContent.startsWith('0 PUC'),'Limpar seleção');
+  assert(!!d().getElementById('puc3-compare-status'),'Feedback visível no Confronto');
+  assert(!!w.JSZip,'JSZip disponível no navegador');
+  const zip=new w.JSZip();
+  zip.file('BM_05_Medicao.html','<html><body><h1>Boletim de Medição nº 05</h1><p>Competência: 09/2026</p><p>Valor medido no período: R$ 1.234,56</p></body></html>');
+  zip.file('Despacho_323.html','<html><body>Despacho que menciona Boletim de Medição 05.</body></html>');
+  const file=new w.File([await zip.generateAsync({type:'blob'})],'PROCESSO_TESTE_SEI.zip',{type:'application/zip'});
+  const input=d().getElementById('puc3-files-SEI'),dt=new w.DataTransfer();dt.items.add(file);input.files=dt.files;
+  d().getElementById('puc3-project-SEI').value='PUC-01';
+  d().getElementById('puc3-ref-SEI').value='SEI-TESTE-NAO-OFICIAL';
+  d().querySelector('[data-import="SEI"]').click();
+  assert(await until(()=>w.PUCDocLibrary.list().filter(x=>x.origin==='SEI').length===2),'ZIP SEI com dois documentos registrado',d().getElementById('puc3-status').textContent);
+  const entries=w.PUCDocLibrary.list().filter(x=>x.origin==='SEI');
+  assert(entries.some(x=>x.bmStatus==='BM IDENTIFICADO')&&entries.some(x=>x.bmStatus==='BM MENCIONADO'),'BM distinguido de despacho');
+  const addCSV=async(source,name,body)=>{
+   const inp=d().getElementById('puc3-files-'+source),dt=new w.DataTransfer();
+   dt.items.add(new w.File([body],name,{type:'text/csv'}));inp.files=dt.files;
+   d().getElementById('puc3-project-'+source).value='PUC-01';
+   d().getElementById('puc3-ref-'+source).value='TESTE-SINTETICO';
+   d().querySelector('[data-import="'+source+'"]').click();
+   return until(()=>w.PUCDocLibrary.list().some(x=>x.origin===source));
+  };
+  assert(await addCSV('BALANCO','balanco_teste.csv','Empreendimento;Execução física\nPUC-01;20%'),'Balanço sintético importado');
+  assert(await addCSV('SIOP','siop_teste.csv','Dotação atual;Empenhado\n1000;800'),'SIOP sintético importado');
+  assert(w.PUCDocLibrary.list().length===4,'Quatro documentos nas três fontes');
+  d().querySelector('#nav [data-page="comparacao"]').click();
+  assert(!compare.classList.contains('hidden'),'Navegação Confronto');
+  d().querySelector('#nav [data-page="documentos"]').click();
+  assert(!docs.classList.contains('hidden'),'Navegação Documentos');
+  w.confirm=()=>true;
+  d().getElementById('puc-delete-all').click();
+  assert(await until(()=>w.PUCDocLibrary.list().length===0),'Exclusão local de documentos');
+  document.body.setAttribute('data-smoke-status','PASS');
+ }catch(err){log.textContent+='ERRO: '+String(err?.stack||err)+'\n';document.body.setAttribute('data-smoke-status','FAIL')}
+ log.textContent+='RESULTADO: '+passes+' aprovados, '+failures+' falhas\n';
+})();
+</script>
+</body></html>
