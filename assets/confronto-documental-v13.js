@@ -10,7 +10,7 @@ const indicators=[
  ['dotacao_atual','Dotação atual (União)','R$'],['empenho_uniao','Empenhado (União)','R$'],['liquidacao_uniao','Liquidado (União)','R$'],['pagamento_uniao','Pago pela União','R$'],
  ['aporte_puc_recebido','PUC recebida pela companhia','R$'],['puc_aplicada','PUC aplicada pela companhia','R$'],
  ['medicao_bm','BM · Valor medido','R$'],['pagamento_bm','BM · Valor pago','R$'],['valor_contrato','Valor do contrato','R$'],
- ['execucao_fisica','Execução física do empreendimento','%'],['execucao_financeira_balanco','Execução financeira do empreendimento','R$'],
+ ['execucao_fisica','Execução física do empreendimento','%'],['execucao_financeira_percentual','Execução financeira do empreendimento (%)','%'],['execucao_financeira_balanco','Execução financeira do empreendimento (R$)','R$'],
  ['valor_empreendimento','Valor global do empreendimento','R$'],['financeiro_previsto','Desembolso previsto','R$']
 ];
 const label=Object.fromEntries(indicators.map(x=>[x[0],x[1]])),units=Object.fromEntries(indicators.map(x=>[x[0],x[2]]));
@@ -77,7 +77,7 @@ function chooseCandidate(i){
  else if(/^(?:\d{1,3}\.)+\d{3}$/.test(n))n=n.replace(/\./g,'');
  $('puc3-find-value').value=Number.isFinite(Number(n))?Number(n):'';
  const cat=(c.type||'').toLowerCase();
- $('puc3-find-indicator').value=cat.includes('dota')?'dotacao_atual':cat.includes('empenh')?'empenho_uniao':cat.includes('liquid')?'liquidacao_uniao':cat.includes('puc recebida')?'aporte_puc_recebido':cat.includes('puc aplicada')?'puc_aplicada':cat.includes('valor global')?'valor_empreendimento':cat.includes('execução financeira')?'execucao_financeira_balanco':cat.includes('físic')||cat.includes('fisic')?'execucao_fisica':cat.includes('pago')?(d.origin==='SIOP'?'pagamento_uniao':(d.origin==='SEI'&&/^BM IDENTIFICADO|^BM PROVÁVEL/.test(d.bmStatus||'')?'pagamento_bm':'')):cat.includes('medido')?'medicao_bm':'';
+ $('puc3-find-indicator').value=cat.includes('dota')?'dotacao_atual':cat.includes('empenh')?'empenho_uniao':cat.includes('liquid')?'liquidacao_uniao':cat.includes('puc recebida')?'aporte_puc_recebido':cat.includes('puc aplicada')?'puc_aplicada':cat.includes('valor global')?'valor_empreendimento':cat.includes('execução financeira')?(cat.includes('(%)')?'execucao_financeira_percentual':'execucao_financeira_balanco'):cat.includes('físic')||cat.includes('fisic')?'execucao_fisica':cat.includes('pago')?(d.origin==='SIOP'?'pagamento_uniao':(d.origin==='SEI'&&/^BM IDENTIFICADO|^BM PROVÁVEL/.test(d.bmStatus||'')?'pagamento_bm':'')):cat.includes('medido')?'medicao_bm':'';
  $('puc3-find-note').value='Candidato localizado: '+c.excerpt+'. Necessária verificação da natureza, apuração e documentação original.';
  $('puc3-find-confirm').checked=false;
 }
@@ -143,9 +143,11 @@ function audit(){
   if(!a.period||!b.period||a.period!==b.period)reason.push('Competência distinta/ausente');
   if(!a.cutoff||!b.cutoff||a.cutoff!==b.cutoff)reason.push('Data de corte distinta/ausente');
   if((a.aggregation||'')!==(b.aggregation||''))reason.push('Apuração distinta');
-  if(String(a.object||'').trim().toUpperCase()!==String(b.object||'').trim().toUpperCase())reason.push('Objeto distinto');
+  if(!String(a.object||'').trim()||!String(b.object||'').trim())reason.push('Objeto não comprovado');
+   if(String(a.object||'').trim().toUpperCase()!==String(b.object||'').trim().toUpperCase())reason.push('Objeto distinto');
   if(String(a.contract||'').trim().toUpperCase()!==String(b.contract||'').trim().toUpperCase())reason.push('Contrato distinto');
   if(['medicao_bm','pagamento_bm','valor_contrato'].includes(a.indicator)&&(!a.contract||!b.contract))reason.push('Contrato não informado');
+   if(a.indicator==='execucao_fisica'&&(a.bmNumber||b.bmNumber)&&(!a.contract||!b.contract))reason.push('Escopo físico de BM sem contrato comprovado');
   if(['medicao_bm','pagamento_bm'].includes(a.indicator)){
    if(!a.bmNumber||!b.bmNumber)reason.push('Número do BM não comprovado');
    else if(String(a.bmNumber).replace(/^0+(?=\d)/,'')!==String(b.bmNumber).replace(/^0+(?=\d)/,''))reason.push('BMs diferentes');
