@@ -11,6 +11,10 @@ on:
       - ".github/workflows/bi-puc-smoke.yml"
   workflow_dispatch:
 
+concurrency:
+  group: bi-puc-smoke-main
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
