@@ -76,6 +76,7 @@ function ui(){
   <p class="ficha-status" id="ficha-top-status"></p>
   <div class="ficha-actions"><button class="btn secondary" id="ficha-open-critico">Abrir Relatório Crítico</button><button class="btn secondary" id="ficha-sync-confront">Enviar BMs e Balanço conferidos ao Confronto</button><button class="btn secondary" id="ficha-export-session">Salvar sessão da ficha (JSON)</button><label style="font-size:12px">Restaurar sessão <input id="ficha-restore-session" type="file" accept=".json,application/json" style="max-width:210px"/></label></div></div>
   <div class="panel" id="ficha-review-bms"><div class="section-header"><h3>1. BMs localizados nos processos SEI</h3><button class="btn secondary" type="button" data-open-ficha-sources="sei">Inserir mais arquivos SEI/BMs</button></div><p class="muted">A varredura é iniciada pelo botão <b>Inserir fontes</b>, junto dos filtros acima. Aqui ficam os boletins encontrados e o histórico para revisão dos dados físicos e financeiros. Nenhum candidato entra na curva S antes de ser conferido.</p>
+  <div class="ficha-sei-biblioteca" id="ficha-biblioteca-sei"><h4>Boletins selecionados em Documentos → SEI</h4><p class="muted">A lista acompanha a seleção da biblioteca local. Escolha os BMs desta obra e incorpore os candidatos à ficha; todos exigem conferência. Percentuais financeiros não são utilizados como avanço físico.</p><div class="ficha-sei-biblioteca-actions"><button type="button" class="btn secondary" id="ficha-sei-refresh">Atualizar BMs selecionados</button><button type="button" class="btn" id="ficha-sei-load">Carregar candidatos à ficha</button></div><p class="ficha-status" id="ficha-sei-biblioteca-status"></p><div class="ficha-sei-biblioteca-list" id="ficha-sei-biblioteca-list"></div></div>
   <div class="scroll"><table class="bm-table"><thead><tr><th>BM / origem</th><th>Data de medição</th><th>Contrato</th><th>Físico acum. (%)</th><th>Medido no BM (R$)</th><th>Medido acum. (R$)</th><th>Conferência</th><th>Ação</th></tr></thead><tbody id="ficha-bms-rows"><tr><td colspan="8" class="empty">Ainda não há BMs identificados. Selecione um projeto e importe o processo SEI.</td></tr></tbody></table></div>
   <details style="margin-top:14px"><summary><b>Adicionar BM manualmente (PDF digitalizado ou não reconhecido)</b></summary><form id="ficha-manual-bm" class="ficha-form" style="margin-top:13px"><label>Nº do BM<input name="bm" placeholder="Ex.: 05" required/></label><label>Data da medição<input name="date" type="date" required/></label><label>Contrato<input name="contract" placeholder="Ex.: 01/2025"/></label><label>Físico acumulado (%)<input name="physical" type="number" step="any" min="0" max="100"/></label><label>Valor medido no BM (R$)<input name="med" inputmode="decimal" placeholder="Ex.: 12500,40"/></label><label>Valor medido acumulado (R$)<input name="acc" inputmode="decimal" placeholder="Ex.: 345000,40"/></label><label class="span2">Referência do documento SEI<input name="evidence" placeholder="Documento SEI nº..., fls. ..." required/></label><div style="display:flex;align-items:end"><button class="btn" type="submit">Incluir BM para conferência</button></div></form></details>
   <div class="ficha-actions"><button class="btn secondary" id="ficha-export-bms">Exportar BMs conferidos e pendentes (CSV)</button><span class="muted" id="ficha-bm-count"></span></div></div>
@@ -94,7 +95,7 @@ function updateProjects(){const co=$f('ficha-company'),p=$f('ficha-project'),pre
  option(p,rows.map(x=>x.id),id=>{const x=data.projetos.find(p=>p.id===id);return `${x.id} · ${x.empreendimento}`});if(rows.some(x=>x.id===prior))p.value=prior;else if(rows.some(x=>x.id===prev))p.value=prev;else p.value='';
  const id=p.value;selectedId=id;const contratos=[...new Set(bmRows.filter(x=>x.project===id&&x.contract&&x.status!=='ignorado'&&seiActive(x)).map(x=>x.contract))];const contract=$f('ficha-contract');const old=contract.value;
  contract.innerHTML='<option value="">'+(contratos.length>1?'Selecione um contrato para curva S':'Todos / contrato único')+'</option>';for(const c of contratos){const o=document.createElement('option');o.value=c;o.textContent=c;contract.appendChild(o)}contract.value=contratos.includes(old)?old:(contratos.length===1?contratos[0]:'');
- renderRows();loadBalanceForm();drawSheet();
+ renderRows();loadBalanceForm();drawSheet();refreshSelectedSEIBMs();
 }
 function openProject(id){const p=data.projetos.find(x=>x.id===id);if(!p)return;nav('fichas');$f('ficha-company').value=p.empresa;updateProjects();$f('ficha-project').value=id;selectedId=id;updateContractsOnly();loadBalanceForm();renderRows();drawSheet();}
 function sourcePanel(open=true,source='sei'){
@@ -109,6 +110,64 @@ function sourceCounts(){const id=$f('ficha-project')?.value||'';const badge=$f('
 function gotoSection(id){const el=$f(id);if(!el)return;el.scrollIntoView({behavior:'smooth',block:'start'});el.querySelector('input,select,button')?.focus({preventScroll:true});}
 
 function updateContractsOnly(){const id=$f('ficha-project').value,cs=[...new Set(bmRows.filter(x=>x.project===id&&x.contract&&x.status!=='ignorado'&&seiActive(x)).map(x=>x.contract))];const el=$f('ficha-contract'),old=el.value;el.innerHTML='<option value="">'+(cs.length>1?'Escolha um contrato para a curva S':'Todos / contrato único')+'</option>';for(const v of cs){const o=document.createElement('option');o.value=v;o.textContent=v;el.appendChild(o)}el.value=cs.includes(old)?old:(cs.length===1?cs[0]:'');}
+
+function selectedSEIDocs(){
+ const excluded=(()=>{try{return new Set(JSON.parse(localStorage.getItem('BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1')||'[]'))}catch(e){return new Set()}})();
+ return (window.PUCDocLibrary?.list?.()||[]).filter(d=>d.origin==='SEI'&&!excluded.has(d.id)&&/^(BM IDENTIFICADO|BM PROVÁVEL)/.test(d.bmStatus||''));
+}
+function candidateField(d,type){
+ const matching=(d.candidates||[]).filter(c=>c.type===type).flatMap(c=>c.values||[]);
+ return matching.length===1?numberBR(matching[0]):null;
+}
+function workCandidateForProject(doc,project){
+ if(doc.project)return doc.project===project.id;
+ const name=normal(doc.workName||''),title=normal(project.empreendimento||''),uf=normal(project.uf||'');
+ if(!name||!title||!uf)return false;
+ const stateTerms={RN:/\b(RN|NATAL|RIO GRANDE DO NORTE)\b/,PE:/\b(PE|SUAPE|PERNAMBUCO|IPOJUCA)\b/,RJ:/\b(RJ|RIO DE JANEIRO|ITAGUAI|GAMBOA)\b/,PA:/\b(PA|VILA DO CONDE)\b/};
+ if(stateTerms[uf]&&!stateTerms[uf].test(name))return false;
+ const keys=['ARMAZ','GALP','FOTOVOLTAIC','SOLAR','DOLPHIN','DEFENSA','DRAGAGEM','FERROVI','CAIS'];
+ return keys.some(k=>name.includes(k)&&title.includes(k));
+}
+function refreshSelectedSEIBMs(){
+ const place=$f('ficha-sei-biblioteca-list'),stat=$f('ficha-sei-biblioteca-status');
+ if(!place||!stat)return;
+ const docs=selectedSEIDocs(),project=data.projetos.find(p=>p.id===$f('ficha-project')?.value);
+ if(!project){place.innerHTML='';stat.textContent=docs.length+' BM(s) selecionado(s) na biblioteca. Selecione o empreendimento nesta ficha.';return}
+ const available=docs.filter(d=>!d.project||d.project===project.id),linked=available.filter(d=>d.project===project.id);
+ stat.textContent=available.length+' BM(s) disponível(is) na seleção atual do SEI · '+linked.length+' vinculado(s) à PUC. Para os demais, confira o objeto antes de associar.';
+ place.innerHTML=available.map(d=>{
+  const previously=bmRows.some(x=>x.sourceDocId===d.id&&x.project===project.id);
+  const indicated=workCandidateForProject(d,project),same=d.project===project.id;
+  return '<label class="ficha-sei-biblioteca-item"><input type="checkbox" data-sei-doc="'+ef(d.id)+'" '+(previously?'disabled':same||indicated?'checked':'')+'/><span><strong>'+ef(d.name)+'</strong><small>BM '+ef(d.bmNumber||'nº pendente')+' · '+ef(d.bmPeriod||'competência não identificada')+' · '+ef(d.workName||'Nome da obra não identificado')+'</small><small>'+(previously?'Já incorporado à ficha':same?'PUC vinculada nos documentos':indicated?'Objeto semelhante — confirmar na documentação':'Sem vínculo PUC — requer confirmação manual')+'</small></span></label>';
+ }).join('')||'<p class="muted">Nenhum BM selecionado disponível para este empreendimento. Confira o menu Documentos → SEI.</p>';
+}
+function loadSelectedSEIBMs(){
+ const project=data.projetos.find(p=>p.id===$f('ficha-project').value),stat=$f('ficha-sei-biblioteca-status');
+ if(!project){stat.textContent='Selecione primeiro um empreendimento.';return}
+ const selected=[...($f('ficha-sei-biblioteca-list')?.querySelectorAll('input[data-sei-doc]:checked:not(:disabled)')||[])].map(x=>x.dataset.seiDoc);
+ if(!selected.length){stat.textContent='Marque os documentos a incorporar. Nenhum BM foi alterado.';return}
+ const docs=selectedSEIDocs().filter(d=>selected.includes(d.id));
+ const provisional=docs.some(d=>d.project!==project.id);
+ if(provisional&&!window.confirm('Confirma, após conferir o objeto da obra, que os BMs selecionados pertencem a '+project.id+'? Os vínculos provisórios não homologam as medições.'))return;
+ let imported=0;
+ for(const d of docs){
+  if(d.project&&d.project!==project.id)continue;
+  if(bmRows.some(x=>x.sourceDocId===d.id&&x.project===project.id))continue;
+  const parsed=parseBmText(d.text||'',d.name);
+  const mDate=parsed.measurement_date||'';
+  const physicallyDocumented=parsed.physical_cumulative;
+  // Percentuais de execução financeira do BM jamais são copiados para físico acumulado.
+  bmRows.push({id:uniqueId(),project:project.id,number:d.bmNumber||parsed.bm_number||'',date:mDate,contract:parsed.contract||'',physical:physicallyDocumented,
+    measured:candidateField(d,'Valor da Medição (BM)')??parsed.measured_period,
+    cumulative:candidateField(d,'Valor Acumulado (BM)')??parsed.measured_cumulative,
+    evidence:(d.ref?d.ref+' · ':'')+d.name,warning:!mDate?'Data da medição pendente; conferir no BM.':d.project===project.id?'Valores candidatos da biblioteca SEI — conferir.':'Vínculo por nome da obra pendente de confirmação documental.',
+    status:'pendente',sourceDocId:d.id,workName:d.workName||'',source:'SEI biblioteca'});
+  imported++;
+ }
+ stat.textContent=imported+' BM(s) incorporado(s) como candidatos pendentes. Confira data, contrato e percentual físico acumulado antes de utilizá-los na Curva S.';
+ updateContractsOnly();renderRows();drawSheet();refreshSelectedSEIBMs();
+}
+
 function eligible(id){return bmRows.filter(x=>x.project===id&&x.status!=='ignorado'&&seiActive(x));}
 function renderRows(){const id=$f('ficha-project').value,rows=eligible(id);$f('ficha-bm-count').textContent=`${rows.length} BM(s) identificado(s) · ${rows.filter(x=>x.status==='confirmado').length} conferido(s)`;
  $f('ficha-bms-rows').innerHTML=rows.map(x=>`<tr data-bmrow="${ef(x.id)}"><td><b>BM ${ef(x.number||'s/n')}</b><span class="bm-evidence" title="${ef(x.evidence)}">${ef(txt(x.evidence,110))}</span>${x.warning?`<span class="ficha-flag">${ef(x.warning)}</span>`:''}</td><td><input data-bmfield="date" aria-label="Data BM ${ef(x.number)}" type="date" value="${ef(x.date)}" /></td><td><input data-bmfield="contract" aria-label="Contrato BM ${ef(x.number)}" value="${ef(x.contract)}" /></td><td><input data-bmfield="physical" aria-label="Físico acumulado BM ${ef(x.number)}" inputmode="decimal" placeholder="—" value="${ef(x.physical??'')}" /></td><td><input data-bmfield="measured" aria-label="Medição período BM ${ef(x.number)}" inputmode="decimal" placeholder="—" value="${ef(x.measured??'')}" /></td><td><input data-bmfield="cumulative" aria-label="Medição acumulada BM ${ef(x.number)}" inputmode="decimal" placeholder="—" value="${ef(x.cumulative??'')}" /></td><td><span class="status-tag ${x.status==='confirmado'?'ok':'wait'}">${x.status==='confirmado'?'Conferido pelo operador':'A conferir'}</span></td><td><div class="bm-op"><button type="button" class="btn" data-bmconfirm="${ef(x.id)}">Conferir</button><button type="button" class="btn secondary" data-bmremove="${ef(x.id)}">Ignorar</button></div></td></tr>`).join('')||'<tr><td colspan="8" class="empty">Nenhum BM identificado neste empreendimento.</td></tr>';
@@ -298,18 +357,22 @@ function init(){
  $f('fichas').addEventListener('click',e=>{const b=e.target.closest('[data-open-ficha-sources]');if(b){sourcePanel(true,b.dataset.openFichaSources);$f('ficha-source-panel').scrollIntoView({behavior:'smooth',block:'start'});$f('ficha-toggle-sources').focus({preventScroll:true})}});
  const docasBar=$f('docas')?.querySelector('.filters');if(docasBar){const b=document.createElement('button');b.className='btn';b.id='docas-import-sources';b.type='button';b.textContent='＋ Inserir fontes (SEI · BMs · Balanço)';b.addEventListener('click',()=>{const proj=$f('docas-project').value,co=$f('docas-company').value;if(proj)openProject(proj);else{nav('fichas');if(co){$f('ficha-company').value=co;updateProjects()}}sourcePanel(true,'sei');$f('ficha-source-panel').scrollIntoView({behavior:'smooth',block:'start'});if(!selectedId)$f('ficha-top-status').textContent='Selecione o empreendimento nos filtros superiores para vincular os arquivos.'});docasBar.appendChild(b)}
 
- $f('ficha-company').addEventListener('change',()=>{selectedId='';updateProjects()});$f('ficha-project').addEventListener('change',()=>{selectedId=$f('ficha-project').value;updateContractsOnly();loadBalanceForm();renderRows();drawSheet()});$f('ficha-contract').addEventListener('change',drawSheet);
+ $f('ficha-company').addEventListener('change',()=>{selectedId='';updateProjects()});$f('ficha-project').addEventListener('change',()=>{selectedId=$f('ficha-project').value;updateContractsOnly();loadBalanceForm();renderRows();drawSheet();refreshSelectedSEIBMs()});$f('ficha-contract').addEventListener('change',drawSheet);
  $f('ficha-extract-bms').addEventListener('click',importProcesses);$f('ficha-manual-bm').addEventListener('submit',manualBM);$f('ficha-bms-rows').addEventListener('input',e=>{if(!e.target.matches('[data-bmfield]'))return;const row=e.target.closest('[data-bmrow]');const x=bmRows.find(v=>v.id===row?.dataset.bmrow);if(x&&x.status==='confirmado'){x.status='pendente';$f('ficha-extraction-status').textContent='BM alterado após conferência: clique em Conferir novamente.';const tag=row.querySelector('.status-tag');if(tag){tag.textContent='A conferir';tag.className='status-tag wait';}drawSheet()}});$f('ficha-bms-rows').addEventListener('click',e=>{const a=e.target.closest('[data-bmconfirm]');if(a)confirmBM(a.dataset.bmconfirm);const b=e.target.closest('[data-bmremove]');if(b)ignoredBM(b.dataset.bmremove)});
  $f('ficha-balanco-form').addEventListener('submit',saveBalance);$f('ficha-upload-bms-csv').addEventListener('change',e=>importBmCSV(e.target.files?.[0]));$f('ficha-balanco-file').addEventListener('change',e=>importBalance(e.target.files?.[0]));$f('ficha-use-balanco-row').onclick=useBalanceRow;$f('ficha-planned-file').addEventListener('change',e=>importPlan(e.target.files?.[0]));
  $f('ficha-export-bms').onclick=exportBMCSV;$f('ficha-sync-confront').onclick=syncConfront;$f('ficha-export-session').onclick=exportSession;$f('ficha-restore-session').addEventListener('change',e=>restoreSession(e.target.files?.[0]));
  $f('ficha-csv-bms-model').onclick=()=>model('MODELO_BMS_SEI_PUC.csv',['investimento','numero_bm','data_medicao','contrato','fisico_acumulado_pct','valor_medido_periodo','valor_medido_acumulado','documento_sei']);
  $f('ficha-balanco-model').onclick=()=>model('MODELO_BALANCO_FICHA.csv',['investimento','id_governa','empreendimento','municipio','objeto','valor_global','execucao_fisica_pct','execucao_financeira_pct','inicio','termino_previsto','termino_real','data_corte','referencia']);
  $f('ficha-planned-model').onclick=()=>model('MODELO_CURVA_S_PREVISTA.csv',['investimento','competencia','fisico_previsto_acumulado_pct','referencia']);
- $f('ficha-generate').onclick=drawSheet;
+ $f('ficha-sei-refresh').onclick=refreshSelectedSEIBMs;
+ $f('ficha-sei-load').onclick=loadSelectedSEIBMs;
+ document.addEventListener('puc-documents-updated',()=>{refreshSelectedSEIBMs();drawSheet()});
+ document.addEventListener('puc-sei-selection-updated',()=>{refreshSelectedSEIBMs();renderRows();drawSheet()});
+  $f('ficha-generate').onclick=drawSheet;
  $f('ficha-print-btn').onclick=()=>{if(!selectedId){alert('Selecione empreendimento.');return}drawSheet();document.body.classList.add('ficha-print');window.print()};window.addEventListener('afterprint',()=>document.body.classList.remove('ficha-print'));
  $f('ficha-open-critico').onclick=()=>{if(!selectedId){alert('Selecione empreendimento.');return}const p=data.projetos.find(x=>x.id===selectedId);nav('relatorio');$f('report-company').value=p.empresa;updateCompanyProject('report-company','report-project','Selecione o empreendimento');$f('report-project').value=selectedId;showCritical()};
- updateProjects();drawSheet();
- window.PUCFichasBM={openProject,openSources:(id,kind='sei')=>{if(id)openProject(id);else nav('fichas');sourcePanel(true,kind)},parseBmText,physicalSeries,drawSheet,getState:()=>({bmRows,balances,planned}),importProcesses,syncConfront};
+ updateProjects();drawSheet();refreshSelectedSEIBMs();
+ window.PUCFichasBM={openProject,openSources:(id,kind='sei')=>{if(id)openProject(id);else nav('fichas');sourcePanel(true,kind)},parseBmText,physicalSeries,drawSheet,getState:()=>({bmRows,balances,planned}),selectedSEIDocs,loadSelectedSEIBMs,refreshSelectedSEIBMs,importProcesses,syncConfront};
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
