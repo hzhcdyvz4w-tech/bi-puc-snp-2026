@@ -190,7 +190,7 @@ function refreshAttachmentStatus(){
   }
  }
 }
-document.addEventListener('puc-documents-updated',refreshAttachmentStatus);
+document.addEventListener('puc-documents-updated',()=>{refreshAttachmentStatus();renderSeiSelector()});
 
 let balancoSelected=new Set(),balancoOptions=[],balancoRequest=0;
 function renderBalancoChoices(){
