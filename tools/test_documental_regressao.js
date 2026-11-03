@@ -14,6 +14,30 @@ const win={};new Function('window',engineCode)(win);
 const engine=win.PUCDocEngine;
 test('Classificação de BM efetivo',()=>assert.equal(engine.bmClass('BM_05.pdf','Boletim de Medição nº 05'),'BM IDENTIFICADO'));
 test('Despacho que apenas menciona BM não vira BM',()=>assert.equal(engine.bmClass('Despacho.pdf','Despacho menciona Boletim de Medição 05'),'BM MENCIONADO'));
+
+test('Cabeçalho de BM em coordenadas PDF: contrato, medição, acumulado e saldo com percentuais',()=>{
+ const pdfItems=[
+  {str:'VALOR DO CONTRATO',transform:[1,0,0,1,110,720],width:110},
+  {str:'VALOR DA MEDIÇÃO',transform:[1,0,0,1,300,720],width:120},
+  {str:'VALOR ACUMULADO',transform:[1,0,0,1,510,720],width:130},
+  {str:'SALDO DO CONTRATO',transform:[1,0,0,1,735,720],width:130},
+  ...[['R$',80],['7.527.632,53',117],['R$',275],['149.864,28',310],['1,99%',448],['R$',495],['149.864,28',535],['1,99%',680],['R$',720],['7.377.768,25',755],['98,01%',900]].map(([str,x])=>({str,transform:[1,0,0,1,x,681],width:String(str).length*7}))
+ ];
+ const out=engine.bmHeaderFromPDFItems(pdfItems);
+ const candidates=engine.indicators(out.lines.join('\n'));
+ const values=Object.fromEntries(candidates.map(x=>[x.type,x.values[0]]));
+ assert.equal(values['Valor do Contrato (BM)'],'7.527.632,53');
+ assert.equal(values['Valor da Medição (BM)'],'149.864,28');
+ assert.equal(values['Valor Acumulado (BM)'],'149.864,28');
+ assert.equal(values['Saldo do Contrato (BM)'],'7.377.768,25');
+ assert.equal(values['Valor da Medição (%) BM'],'1,99%');
+ assert.equal(values['Valor Acumulado (%) BM'],'1,99%');
+ assert.equal(values['Saldo do Contrato (%) BM'],'98,01%');
+});
+test('Valores financeiros de BM não são inventados sem quadro contratual identificável',()=>{
+ const result=engine.bmHeaderFromPDFItems([{str:'R$ 149.864,28',transform:[1,0,0,1,240,670],width:95}]);
+ assert.equal(result.lines.length,0);
+});
 test('Número e competência do BM',()=>{assert.equal(engine.bmNumber('BM_05.pdf','Boletim de Medição nº 05'),'05');assert.equal(engine.bmPeriod('BM_05.pdf','Competência 09/2026'),'2026-09')});
 test('Números de BM em anexos exportados do SEI',()=>{
  for(const [file,number] of [['[065]-10870234_Anexo_BM06_2.pdf','06'],['[064]-10870212_Anexo_BM06_1.pdf','06'],['[018]-10369072_Anexo_2_BM02.pdf','02'],['[010]-10270106_Anexo_4_BM1.pdf','1']])assert.equal(engine.bmNumber(file,''),number,file);
