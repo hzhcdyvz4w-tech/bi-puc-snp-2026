@@ -33,8 +33,85 @@ function bmPeriod(name,text){
  const m=(String(text||'').slice(0,9000)+'\n'+name).match(/(?:compet[eê]ncia|m[eê]s\s+de\s+refer[eê]ncia|per[ií]odo|refer[eê]ncia)\s*[:\-]?\s*(0?[1-9]|1[0-2])[\-/](20\d{2})/i);
  return m?m[2]+'-'+m[1].padStart(2,'0'):''
 }
+
+/* Leitura posicional do quadro-resumo de medição em PDF.
+   Só emite um campo quando encontra cabeçalho e valor no mesmo agrupamento.
+   A geometria impede confundir subtotais de itens com o quadro contratual. */
+function bmHeaderFromPDFItems(items){
+ const chunks=(items||[]).filter(i=>String(i.str||'').trim()&&i.transform&&Number.isFinite(i.transform[4])&&Number.isFinite(i.transform[5]))
+ .map(i=>({s:String(i.str).replace(/\s+/g,' ').trim(),x:i.transform[4],y:i.transform[5],width:Math.max(0,Number(i.width||0))}));
+ if(!chunks.length)return {lines:[],visualLines:[]};
+ const rows=[];
+ for(const item of chunks){
+  let row=rows.find(r=>Math.abs(r.y-item.y)<=3.5);
+  if(!row){row={y:item.y,parts:[]};rows.push(row)}
+  row.parts.push(item);
+ }
+ for(const row of rows){row.parts.sort((a,b)=>a.x-b.x);row.text=row.parts.map(p=>p.s).join(' ')}
+ rows.sort((a,b)=>b.y-a.y);
+ const visualLines=rows.map(r=>r.text);
+ const normal=src=>String(src||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+ const descriptors=[
+ {key:'Valor do Contrato (BM)',regex:/VALOR\s+DO\s+CONTRATO/},
+ {key:'Valor da Medição (BM)',regex:/VALOR\s+DA\s+MEDIC(?:AO|OES)/},
+ {key:'Valor Acumulado (BM)',regex:/VALOR\s+ACUMULADO/},
+ {key:'Saldo do Contrato (BM)',regex:/SALDO\s+DO\s+CONTRATO/}
+ ];
+ const amount=/\b\d{1,3}(?:\.\d{3})+,\d{2}\b|\b\d+,\d{2}\b/g;
+ const percent=/\b\d{1,3}(?:,\d{1,3})?\s*%/g;
+ const found=[];
+ for(let i=0;i<Math.min(rows.length,110);i++){
+  const row=rows[i],raw=normal(row.text);
+  if(descriptors.filter(d=>d.regex.test(raw)).length<3)continue;
+  const heading=[];
+  for(const d of descriptors){
+   const matching=row.parts.filter(p=>d.regex.test(normal(p.s)));
+   if(matching.length){heading.push({...d,x:matching[0].x,width:matching[0].width});continue}
+   const m=raw.match(d.regex);if(!m)continue;
+   let total=0,x=null;
+   for(const part of row.parts){
+    if(total+normal(part.s).length>=m.index){x=part.x;break}
+    total+=normal(part.s).length+1;
+   }
+   if(x!==null)heading.push({...d,x,width:0});
+  }
+  if(heading.length<3)continue;
+  heading.sort((a,b)=>a.x-b.x);
+  const mid=heading.map((h,j)=>j===0?-Infinity:(heading[j-1].x+h.x)/2);
+  const candidates=rows.filter(r=>r.y<row.y-3.5&&r.y>row.y-90);
+  const out=[];
+  for(let j=0;j<heading.length;j++){
+   const left=mid[j],right=j+1<heading.length?mid[j+1]:Infinity;
+   const local=candidates.flatMap(r=>r.parts.filter(p=>p.x>=left&&p.x<right).map(p=>({p,r})));
+   const tokens=local.map(z=>z.p.s).join(' ').replace(/R\$\s+/g,'R$ ');
+   const money=[...tokens.matchAll(amount)].map(m=>m[0]);
+   // Summary rows may split R$ and the number into adjacent text chunks.
+   // Do not infer from a percent; amount must have exactly two decimal places.
+   if(money.length)out.push(heading[j].key+': R$ '+money[0]);
+   const pct=[...tokens.matchAll(percent)].map(m=>m[0].replace(/\s+/g,''));
+   if(pct.length&&(heading[j].key==='Valor da Medição (BM)'||heading[j].key==='Valor Acumulado (BM)'||heading[j].key==='Saldo do Contrato (BM)'))
+    out.push(heading[j].key.replace(' (BM)',' (%) BM')+': '+pct[0]);
+  }
+  if(out.length>=3){found.push(...out);break}
+ }
+ return {lines:found,visualLines};
+}
 function indicators(text){
  const out=[],t=String(text||'');
+ const summaryPatterns=[
+ ['Valor do Contrato (BM)',/VALOR DO CONTRATO \(BM\): R\$\s*(\d[\d.]*,\d{2})/g],
+ ['Valor da Medição (BM)',/VALOR DA MEDIÇÃO \(BM\): R\$\s*(\d[\d.]*,\d{2})/g],
+ ['Valor Acumulado (BM)',/VALOR ACUMULADO \(BM\): R\$\s*(\d[\d.]*,\d{2})/g],
+ ['Saldo do Contrato (BM)',/SALDO DO CONTRATO \(BM\): R\$\s*(\d[\d.]*,\d{2})/g],
+ ['Valor da Medição (%) BM',/VALOR DA MEDIÇÃO \(%\) BM: (\d{1,3}(?:,\d{1,3})?)%/g],
+ ['Valor Acumulado (%) BM',/VALOR ACUMULADO \(%\) BM: (\d{1,3}(?:,\d{1,3})?)%/g],
+ ['Saldo do Contrato (%) BM',/SALDO DO CONTRATO \(%\) BM: (\d{1,3}(?:,\d{1,3})?)%/g]
+ ];
+ for(const [type,rx] of summaryPatterns){
+  let m;while((m=rx.exec(t))&&out.length<50){
+   out.push({type,values:[m[1]+(type.includes('(%)')?'%':'')],excerpt:m[0],line:t.slice(0,m.index).split('\n').length,status:'CANDIDATO DO CABEÇALHO BM — CONFERIR PDF ORIGINAL'});
+  }
+ }
  const patterns=[
  ['Valor medido (período)',/(?:valor\s+(?:da\s+)?medi[cç][aã]o\s+(?:no\s+)?per[ií]odo|valor\s+medido\s+no\s+per[ií]odo)\s*[:=–-]?\s*(R\$\s*)?(\d[\d.]*,\d{2})/gi],
  ['Valor medido (acumulado)',/(?:valor\s+(?:medido|executado)\s+acumulado|total\s+medido\s+at[eé]\s+(?:o\s+)?per[ií]odo)\s*[:=–-]?\s*(R\$\s*)?(\d[\d.]*,\d{2})/gi],
@@ -122,7 +199,7 @@ async function read(item){
  if(ext==='pdf'){
   if(!w.pdfjsLib){let txt=basicPDF(new Uint8Array(await blob.arrayBuffer()));return {text:txt,quality:txt?'PDF BÁSICO — LEITURA PARCIAL, CONFERIR':'PDF NÃO EXTRAÍDO: PDF.js indisponível ou PDF digitalizado'}};
   try{let pdf=await w.pdfjsLib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise,lines=[];let cap=Math.min(70,pdf.numPages);
-   for(let p=1;p<=cap;p++){let page=await pdf.getPage(p);let content=await page.getTextContent();lines.push('PÁGINA '+p+'\n'+content.items.map(i=>i.str||'').join(' '))}
+   for(let p=1;p<=cap;p++){let page=await pdf.getPage(p);let content=await page.getTextContent();const layout=bmHeaderFromPDFItems(content.items);lines.push('PÁGINA '+p+'\n'+layout.lines.join('\n')+'\n'+layout.visualLines.join('\n'))}
    const text=lines.join('\n').slice(0,300000);
    const quality=text.replace(/PÁGINA \d+/g,'').trim()?'TEXTO EXTRAÍDO (PDF'+(pdf.numPages>cap?'; LEITURA PARCIAL '+cap+'/'+pdf.numPages+' PÁGINAS':'')+')':'PDF SEM TEXTO — OCR NECESSÁRIO';
    await pdf.destroy();return {text,quality};
@@ -130,5 +207,5 @@ async function read(item){
  }
  return {text:'',quality:ext==='xls'?'XLS LEGADO: ANEXADO, LEITURA NÃO DISPONÍVEL':'FORMATO ANEXADO, SEM LEITURA TEXTUAL'};
 }
-w.PUCDocEngine={extension,bmClass,bmNumber,bmPeriod,indicators,unpack,read,cleanHTML};
+w.PUCDocEngine={extension,bmClass,bmNumber,bmPeriod,indicators,bmHeaderFromPDFItems,unpack,read,cleanHTML};
 })(window);
