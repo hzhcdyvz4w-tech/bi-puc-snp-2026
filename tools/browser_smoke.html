@@ -36,6 +36,9 @@
   assert(d().getElementById('puc3-selected').textContent.startsWith('0 PUC'),'Limpar seleção');
   assert(!!d().getElementById('puc3-compare-status'),'Feedback visível no Confronto');
   assert(!!w.JSZip,'JSZip disponível no navegador');
+  assert(!!d().getElementById('puc3-uf-balanco'),'Filtro UF no Balanço');
+  assert(d().getElementById('puc3-uf-balanco').options.length===28,'27 UFs mais Todas');
+  assert(!d().getElementById('puc3-project-SEI')&&!d().getElementById('puc3-project-BALANCO')&&!d().getElementById('puc3-project-SIOP'),'PUC associada ao lote removida');
   d().getElementById('puc-selftest-btn').click();
   assert(await until(()=>d().getElementById('puc-selftest-results').textContent.includes('XLSX dentro do ZIP SEI')),'Autodiagnóstico executado com XLSX');
   const diagnosis=d().getElementById('puc-selftest-results').textContent;
@@ -45,7 +48,6 @@
   zip.file('Despacho_323.html','<html><body>Despacho que menciona Boletim de Medição 05.</body></html>');
   const file=new w.File([await zip.generateAsync({type:'blob'})],'PROCESSO_TESTE_SEI.zip',{type:'application/zip'});
   const input=d().getElementById('puc3-files-SEI'),dt=new w.DataTransfer();dt.items.add(file);input.files=dt.files;
-  d().getElementById('puc3-project-SEI').value='PUC-01';
   d().getElementById('puc3-ref-SEI').value='SEI-TESTE-NAO-OFICIAL';
   d().querySelector('[data-import="SEI"]').click();
   assert(await until(()=>w.PUCDocLibrary.list().filter(x=>x.origin==='SEI').length===2),'ZIP SEI com dois documentos registrado',d().getElementById('puc3-status').textContent);
@@ -54,7 +56,6 @@
   const addCSV=async(source,name,body)=>{
    const inp=d().getElementById('puc3-files-'+source),dt=new w.DataTransfer();
    dt.items.add(new w.File([body],name,{type:'text/csv'}));inp.files=dt.files;
-   d().getElementById('puc3-project-'+source).value='PUC-01';
    d().getElementById('puc3-ref-'+source).value='TESTE-SINTETICO';
    d().querySelector('[data-import="'+source+'"]').click();
    return until(()=>w.PUCDocLibrary.list().some(x=>x.origin===source));
