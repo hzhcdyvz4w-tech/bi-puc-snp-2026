@@ -18,10 +18,19 @@ function bmClass(name,text){
  return 'SEM INDICAÇÃO DE BM'
 }
 function bmNumber(name,text){
- const m=(String(name||'')+'\n'+String(text||'').slice(0,2200)).match(/(?:boletim\s*(?:de\s*)?medi[cç][aã]o|(?:^|[^\w])BM)\s*(?:n[ºo.°]?\s*)?([0-9]{1,4}(?:[\/-][0-9]{2,4})?)/im);return m?m[1]:''
+ // A exportação SEI costuma nomear arquivos como [065]-10870234_Anexo_BM06_2.pdf.
+ // O sufixo "_2" indica uma versão/anexo, e NÃO deve virar número da medição.
+ const filename=String(name||'').replace(/^\[\d+\]-\d+[_-]?/,'');
+ const normalized=normal(filename);
+ const byName=normalized.match(/(?:^|[^a-z0-9])bm[\s._-]*(?:n[ºo°.]?[\s._-]*)?(\d{1,4})(?!\d)/i)
+  ||normalized.match(/(?:^|[^a-z0-9])boletim(?:[\s._-]+de)?[\s._-]+medic(?:ao|oes)[\s._-]*(?:n[ºo°.]?[\s._-]*)?(\d{1,4})(?!\d)/i);
+ if(byName)return byName[1];
+ const normalizedText=normal(String(text||'').slice(0,5500));
+ const byText=normalizedText.match(/(?:boletim\s+de\s+medic(?:ao|oes)|(?:^|[^a-z0-9])bm)\s*(?:n[ºo°.]?\s*)?(\d{1,4})(?!\d)/i);
+ return byText?byText[1]:'';
 }
 function bmPeriod(name,text){
- const m=(String(text||'').slice(0,6000)+'\n'+name).match(/(?:compet[eê]ncia|m[eê]s\s+de\s+refer[eê]ncia|per[ií]odo|refer[eê]ncia)\s*[:\-]?\s*(0?[1-9]|1[0-2])[\-/](20\d{2})/i);
+ const m=(String(text||'').slice(0,9000)+'\n'+name).match(/(?:compet[eê]ncia|m[eê]s\s+de\s+refer[eê]ncia|per[ií]odo|refer[eê]ncia)\s*[:\-]?\s*(0?[1-9]|1[0-2])[\-/](20\d{2})/i);
  return m?m[2]+'-'+m[1].padStart(2,'0'):''
 }
 function indicators(text){
