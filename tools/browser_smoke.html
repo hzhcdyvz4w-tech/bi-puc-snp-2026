@@ -152,6 +152,8 @@
   d().getElementById('puc3-sei-scan-bm').click();
   assert(await until(()=>!d().getElementById('puc3-sei-scan-bm').disabled&&d().getElementById('puc3-sei-zip-items').querySelectorAll('input').length===2),'Pesquisa identifica BM pelo conteúdo de arquivos avulsos',d().getElementById('puc3-sei-zip-count').textContent);
   assert(d().getElementById('puc3-sei-zip-items').textContent.includes('BM PROVÁVEL')||d().getElementById('puc3-sei-zip-items').textContent.includes('BM IDENTIFICADO'),'BM identificado/provável após leitura');
+  assert(d().getElementById('puc3-sei-zip-count').textContent.startsWith('1 de 3'),'Busca BM pré-seleciona boletim identificado/provável, não mero despacho');
+  assert(!!d().getElementById('puc3-sei-zip-visible'),'Ação para selecionar apenas resultados filtrados disponível');
   d().getElementById('puc3-sei-zip-search').value='';d().getElementById('puc3-sei-zip-search').dispatchEvent(new w.Event('input'));
   d().getElementById('puc3-sei-zip-clear').click();
   const bmSelected=[...d().querySelectorAll('#puc3-sei-zip-items label')].find(x=>x.textContent.includes('[101]-Planilha.html'));
