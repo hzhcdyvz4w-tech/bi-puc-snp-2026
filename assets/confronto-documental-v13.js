@@ -29,8 +29,13 @@ function renderChecks(){
  $('puc3-projects').querySelectorAll('input').forEach(x=>x.onchange=()=>{x.checked?selected.add(x.value):selected.delete(x.value);renderChecks();render();});
  const c=$('puc3-selected');if(c)c.textContent=selected.size+' PUC(s) selecionada(s) — '+projects.length+' cadastradas';
 }
+const SEI_EXCLUSIONS_KEY='BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1';
+let seiExcluded=new Set();
+try{seiExcluded=new Set(JSON.parse(localStorage.getItem(SEI_EXCLUSIONS_KEY)||'[]'))}catch(e){seiExcluded=new Set()}
+function saveSeiSelection(){try{localStorage.setItem(SEI_EXCLUSIONS_KEY,JSON.stringify([...seiExcluded]))}catch(e){}}
+function seiIncluded(d){return d.origin!=='SEI'||!seiExcluded.has(d.id)}
 function filesForReview(){
- return docs().filter(d=>sources.includes(d.origin)&&(!selected.size||!d.project||selected.has(d.project)||(d.findings||[]).some(f=>selected.has(f.project))));
+ return docs().filter(d=>sources.includes(d.origin)&&seiIncluded(d)&&(!selected.size||!d.project||selected.has(d.project)||(d.findings||[]).some(f=>selected.has(f.project))));
 }
 
 const PUC_BALANCO_UFS=['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
@@ -86,11 +91,14 @@ async function PUCFiltrarBalancoPorUF(file,uf,empreendimentoIds=null){
 }
 
 const multiStyle=document.createElement('style');multiStyle.textContent='.puc3-balanco-multi{border:1px solid #d2dfeb;border-radius:8px;padding:9px;margin:10px 0}.puc3-balanco-multi>strong{display:block;font-size:12px;margin-bottom:8px}.puc3-balanco-actions{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.puc3-balanco-actions button{font-size:11px;padding:6px 9px}.puc3-balanco-multi input[type=search]{width:100%;margin:4px 0 8px}.puc3-balanco-options{max-height:220px;overflow:auto;border:1px solid #dce5ed;border-radius:6px;padding:5px}.puc3-balanco-choice{display:flex!important;align-items:flex-start;gap:8px;padding:7px 5px;border-bottom:1px solid #eef3f7;font-size:12px;cursor:pointer}.puc3-balanco-choice input{flex:0 0 auto;width:auto;margin-top:3px}.puc3-balanco-choice span{overflow-wrap:anywhere}.puc3-balanco-multi small{display:block;margin-top:8px}';document.head.appendChild(multiStyle);
+const seiSelectorStyle=document.createElement('style');
+seiSelectorStyle.textContent='.puc3-sei-selector,.puc3-sei-zip{margin:10px 0;padding:10px;border:1px solid #d6e2ea;border-radius:8px;background:#f8fbfd}.puc3-sei-selector>strong,.puc3-sei-zip>strong{font-size:12px}.puc3-sei-selector input[type=search],.puc3-sei-zip input[type=search]{width:100%;margin:6px 0}.puc3-sei-actions{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0}.puc3-sei-actions button{padding:6px 9px;font-size:11px}.puc3-sei-choices{max-height:200px;overflow:auto;border:1px solid #dce6ee;border-radius:6px;background:white;padding:5px}.puc3-sei-choice{display:flex!important;align-items:flex-start;gap:8px;padding:6px 4px;font-size:12px;border-bottom:1px solid #edf2f6;cursor:pointer}.puc3-sei-choice input[type=checkbox]{flex:0 0 auto;width:auto;margin-top:3px}.puc3-sei-choice span{overflow-wrap:anywhere}.puc3-sei-selector small,.puc3-sei-zip small{display:block;margin-top:7px}';document.head.appendChild(seiSelectorStyle);
 const persistenceStyle=document.createElement('style');
 persistenceStyle.textContent='.puc3-attachment-status{font-size:12px;line-height:1.45;margin:7px 0 10px;padding:9px 10px;border:1px solid #c7dfd3;border-radius:7px;background:#f3faf5;color:#275545;overflow-wrap:anywhere}';
 document.head.appendChild(persistenceStyle);
 function sourceCards(){
  $('puc3-uploads').innerHTML=sources.map(source=>'<div class="puc3-source"><h3>'+esc(names[source])+'</h3>'+
+ (source==='SEI'?'<div class="puc3-sei-selector"><strong>Selecionar documentos do processo SEI</strong><p class="muted">Escolha vários documentos já armazenados para o confronto. A seleção não exclui arquivos.</p><input id="puc3-sei-search" type="search" placeholder="Pesquisar nome, número ou BM" aria-label="Pesquisar arquivos do SEI"><div class="puc3-sei-actions"><button class="btn secondary" type="button" id="puc3-sei-all">Selecionar todos</button><button class="btn secondary" type="button" id="puc3-sei-clear">Limpar seleção</button></div><div id="puc3-sei-choices" class="puc3-sei-choices" role="group" aria-label="Selecionar múltiplos documentos SEI"></div><small id="puc3-sei-selected-count" aria-live="polite"></small></div><div class="puc3-sei-zip"><strong>Arquivos internos do novo ZIP</strong><p class="muted">Ao anexar um ZIP, escolha quais arquivos internos deseja incorporar. Os demais não serão importados.</p><input type="search" id="puc3-sei-zip-search" placeholder="Localizar documento dentro do ZIP"><div class="puc3-sei-actions"><button type="button" class="btn secondary" id="puc3-sei-zip-all">Selecionar todos</button><button type="button" class="btn secondary" id="puc3-sei-zip-clear">Limpar</button></div><div id="puc3-sei-zip-items" class="puc3-sei-choices" role="group" aria-label="Selecionar arquivos do ZIP"></div><small id="puc3-sei-zip-count" aria-live="polite">Selecione um ZIP para visualizar os documentos internos.</small></div>':'')+
  (source==='BALANCO'?'<label>UF do Balanço (aba mais recente)<select id="puc3-uf-balanco"><option value="">Todas as UFs</option>'+PUC_BALANCO_UFS.map(uf=>'<option value="'+uf+'">'+uf+'</option>').join('')+'</select></label><div class="puc3-balanco-multi"><strong>Empreendimentos do Balanço · seleção múltipla</strong><div class="puc3-balanco-actions"><button type="button" class="btn secondary" id="puc3-balanco-all">Selecionar todos</button><button type="button" class="btn secondary" id="puc3-balanco-clear">Limpar seleção</button></div><input type="search" id="puc3-balanco-search" placeholder="Localizar ID ou empreendimento" aria-label="Pesquisar empreendimentos do Balanço"><div id="puc3-empreendimento-balanco" class="puc3-balanco-options" role="group" aria-label="Selecionar múltiplos empreendimentos"></div><small id="puc3-balanco-count" aria-live="polite">Anexe o Balanço para escolher os empreendimentos.</small></div><p id="puc3-balanco-preview" class="muted">Anexe o Balanço para identificar UF, nome e ID_governa na aba mais recente.</p>':'')+
  (source==='DOCAS'?'<p class="muted">A Companhia preenche o formulário, baixa um JSON e encaminha a resposta por canal institucional autorizado. Não há transmissão automática pelo site.</p><a class="btn secondary" href="formulario-docas.html" target="_blank" rel="noopener">Abrir formulário das DOCAS</a>':'')+
  '<label>Processo / referência<input id="puc3-ref-'+source+'" placeholder="'+(source==='DOCAS'?'Companhia, competência e referência da declaração':'SEI, período ou referência do relatório')+'"></label>'+
@@ -103,12 +111,69 @@ function sourceCards(){
   $('puc3-files-'+source)?.addEventListener('change',()=>refreshAttachmentStatus());
  }
  refreshAttachmentStatus();
- $('puc3-files-BALANCO').addEventListener('change',refreshBalancoPreview);
+ $('puc3-sei-search').addEventListener('input',renderSeiSelector);
+ $('puc3-sei-all').onclick=()=>{seiExcluded.clear();saveSeiSelection();renderSeiSelector();render()};
+ $('puc3-sei-clear').onclick=()=>{seiExcluded=new Set(docs().filter(d=>d.origin==='SEI').map(d=>d.id));saveSeiSelection();renderSeiSelector();render()};
+ $('puc3-files-SEI').addEventListener('change',refreshSeiZipPreview);
+ $('puc3-sei-zip-search').addEventListener('input',renderSeiZipPreview);
+ $('puc3-sei-zip-all').onclick=()=>{seiZipSelected=new Set(seiZipItems.map(x=>x.key));renderSeiZipPreview()};
+ $('puc3-sei-zip-clear').onclick=()=>{seiZipSelected.clear();renderSeiZipPreview()};
+ renderSeiSelector();
+  $('puc3-files-BALANCO').addEventListener('change',refreshBalancoPreview);
  $('puc3-uf-balanco').addEventListener('change',refreshBalancoPreview);
  $('puc3-balanco-all').addEventListener('click',()=>{balancoSelected=new Set(balancoOptions.map(o=>o.key));renderBalancoChoices()});
  $('puc3-balanco-clear').addEventListener('click',()=>{balancoSelected.clear();renderBalancoChoices()});
  $('puc3-balanco-search').addEventListener('input',renderBalancoChoices);
 }
+
+let seiZipSelected=new Set(),seiZipItems=[],seiZipRevision=0;
+function renderSeiSelector(){
+ const area=$('puc3-sei-choices'),counter=$('puc3-sei-selected-count');if(!area||!counter)return;
+ const available=docs().filter(d=>d.origin==='SEI'),valid=new Set(available.map(d=>d.id));
+ seiExcluded=new Set([...seiExcluded].filter(id=>valid.has(id)));saveSeiSelection();
+ const query=($('puc3-sei-search')?.value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+ area.replaceChildren();let shown=0;
+ for(const doc of available){
+  const caption=doc.name+(doc.container&&doc.container!=='Arquivo individual'?' · '+doc.container:'')+(doc.bmNumber?' · BM '+doc.bmNumber:'');
+  if(query&&!caption.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(query))continue;
+  const label=document.createElement('label');label.className='puc3-sei-choice';
+  const cb=document.createElement('input');cb.type='checkbox';cb.value=doc.id;cb.checked=!seiExcluded.has(doc.id);
+  cb.onchange=()=>{cb.checked?seiExcluded.delete(doc.id):seiExcluded.add(doc.id);saveSeiSelection();renderSeiSelector();render()};
+  const span=document.createElement('span');span.textContent=caption;label.append(cb,span);area.appendChild(label);shown++;
+ }
+ if(!shown)area.textContent=available.length?'Nenhum documento corresponde à pesquisa.':'Nenhum documento SEI armazenado neste navegador.';
+ counter.textContent=(available.length-seiExcluded.size)+' de '+available.length+' documento(s) selecionado(s) para o confronto.';
+}
+function renderSeiZipPreview(){
+ const area=$('puc3-sei-zip-items'),count=$('puc3-sei-zip-count');if(!area||!count)return;
+ area.replaceChildren();const q=($('puc3-sei-zip-search')?.value||'').toLowerCase().trim();let shown=0;
+ for(const item of seiZipItems){
+  if(q&&!item.title.toLowerCase().includes(q))continue;
+  const label=document.createElement('label');label.className='puc3-sei-choice';
+  const cb=document.createElement('input');cb.type='checkbox';cb.value=item.key;cb.checked=seiZipSelected.has(item.key);
+  cb.onchange=()=>{cb.checked?seiZipSelected.add(item.key):seiZipSelected.delete(item.key);renderSeiZipPreview()};
+  const span=document.createElement('span');span.textContent=item.title;label.append(cb,span);area.appendChild(label);shown++;
+ }
+ if(!shown)area.textContent=seiZipItems.length?'Nenhum documento corresponde à pesquisa.':'Anexe um ZIP para listar seus documentos internos.';
+ count.textContent=seiZipSelected.size+' de '+seiZipItems.length+' arquivo(s) internos selecionado(s) para importar.';
+}
+async function refreshSeiZipPreview(){
+ const generation=++seiZipRevision,files=[...($('puc3-files-SEI')?.files||[])],count=$('puc3-sei-zip-count');
+ seiZipItems=[];seiZipSelected.clear();renderSeiZipPreview();
+ const zipFiles=files.filter(f=>/\.zip$/i.test(f.name));if(!zipFiles.length)return;
+ if(count)count.textContent='Lendo documentos internos do ZIP...';
+ try{
+  if(!window.PUCDocEngine?.unpack)throw Error('Leitor ZIP não inicializado');
+  const entries=[];
+  for(const file of zipFiles){
+   const unpacked=await window.PUCDocEngine.unpack(file);
+   for(const item of unpacked)entries.push({key:file.name+'\u0001'+item.container+'\u0001'+item.name,title:file.name+' / '+item.name+(item.container?' · '+item.container:''),file:file.name,item});
+  }
+  if(generation!==seiZipRevision)return;
+  seiZipItems=entries;seiZipSelected=new Set(entries.map(x=>x.key));renderSeiZipPreview();
+ }catch(e){if(generation===seiZipRevision&&count)count.textContent='Falha ao listar o ZIP: '+e.message}
+}
+
 function refreshAttachmentStatus(){
  for(const source of sources){
   const label=$('puc3-attachment-'+source);
@@ -179,7 +244,13 @@ async function importFiles(source){
    targetFiles=filtered;filterMessage=' | '+(uf?'UF '+uf:'Todas as UFs')+' | '+count+' empreendimento(s)'+' | seleção de '+empreendimentoIds.length+' empreendimento(s) da aba mais recente';
   }
   if(source==='DOCAS')for(const file of files){if(!/\.json$/i.test(file.name))throw Error('A declaração das DOCAS deve ser JSON exportado do formulário.');let record;try{record=JSON.parse(await file.text())}catch(e){throw Error(file.name+': JSON inválido')}if(record.schema!=='BI_PUC_DOCAS_V1'||!record.cadastro?.empreendimento||!record.cadastro?.uf||!record.cadastro?.competencia)throw Error(file.name+': declaração sem identificação, UF ou competência')}
-  const n=await lib().ingest(targetFiles,source,project,ref+filterMessage);
+  let seiChoice=null;
+  if(source==='SEI'&&files.some(f=>/\.zip$/i.test(f.name))){
+   if(!seiZipItems.length)throw Error('A lista do ZIP não está pronta. Aguarde o carregamento dos documentos internos.');
+   if(!seiZipSelected.size)throw Error('Selecione pelo menos um arquivo interno do ZIP.');
+   seiChoice=new Set(seiZipSelected);
+  }
+  const n=await lib().ingest(targetFiles,source,project,ref+filterMessage,seiChoice);
   // Mantém a seleção do arquivo após analisar; no recarregamento, exibe o anexo preservado no IndexedDB.
   refreshAttachmentStatus();
   if(project)selected.add(project);
@@ -348,7 +419,7 @@ function initReportPage(){
  $('puc3-report-html-btn').onclick=()=>download(new Blob([reportHtml()],{type:'text/html;charset=utf-8'}),'RELATORIO_DOCUMENTAL_PUC_SEI_BALANCO_DOCAS.html');
 }
 
-function render(){refreshAttachmentStatus();renderFiles();renderFindings();if($('puc3-result')?.dataset?.generated==='1')audit();window.PUCCorrelacao?.refresh?.()}
+function render(){refreshAttachmentStatus();renderSeiSelector();renderFiles();renderFindings();if($('puc3-result')?.dataset?.generated==='1')audit();window.PUCCorrelacao?.refresh?.()}
 function simplifyDocuments(){
  const page=$('documentos');if(!page)return;
  const help=document.createElement('div');help.className='panel';help.innerHTML='<h2>Importação principal: Confronto das três fontes</h2><p class="muted">Para comparar dados entre <strong>SEI, Balanço e DOCAS</strong>, anexe os documentos na aba Confronto das Fontes. A biblioteca abaixo permanece disponível para consulta, reanálise e exclusão dos arquivos.</p><button type="button" class="btn" id="puc3-open-compare">Abrir Confronto das Fontes · SEI × Balanço × DOCAS</button>';
