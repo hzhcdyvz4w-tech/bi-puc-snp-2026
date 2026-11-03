@@ -74,21 +74,54 @@ async function deleteBatch(mode){
 function bmRows(){const el=E('puc-bm-list');if(!el)return;const arr=stored.filter(isBM);el.innerHTML=arr.length?arr.map(x=>'<tr><td>'+escape(x.ref||'Processo não identificado')+'</td><td>'+escape(x.project||'Sem PUC vinculada')+'</td><td>'+escape(x.bm?.number||'Nº não identificado')+'</td><td>'+escape(x.bm?.period||'Competência não identificada')+'</td><td>'+escape(x.name)+'</td><td>'+escape(String(x.candidates.length))+' candidato(s), não conferido(s)</td><td><button type="button" class="btn secondary" data-bm-open="'+escape(x.id)+'">Conferir</button></td></tr>').join(''):'<tr><td colspan="7">Nenhum BM identificado. Confirme se o ZIP foi importado na Biblioteca e use Reanalisar anexos; PDFs digitalizados ou XLS antigos podem precisar de tratamento externo.</td></tr>';el.querySelectorAll('[data-bm-open]').forEach(b=>b.onclick=()=>{view(b.dataset.bmOpen);E('puc-library-detail')?.scrollIntoView({behavior:'smooth'})})}
 
 function isBM(x){return !!x.bmManual||x.bmStatus==='BM IDENTIFICADO'||x.bmStatus==='BM PROVÁVEL'||classification(x)==='BM IDENTIFICADO'||classification(x)==='BM PROVÁVEL'}
+function displaySEIReference(raw){
+ const ref=String(raw||'').replace(/\s*\|\s*\d+\s+documento\(s\)\s+selecionado\(s\)/gi,'').trim();
+ return ref||'Processo SEI não informado';
+}
+function bmProjectOptions(){
+ const projects=(()=>{try{return JSON.parse(E('embedded-data')?.textContent||'{}').projetos||[]}catch(e){return []}})();
+ return projects.map(p=>({id:p.id||p.codigo||'',label:(p.id||p.codigo||'')+' · '+(p.nome||p.empreendimento||p.objeto||p.descricao||'')})).filter(p=>p.id);
+}
+async function assignBMContext(ids,project,reference){
+ const unique=[...new Set(ids)].filter(Boolean);
+ if(!unique.length)throw Error('Nenhum BM selecionado para vinculação.');
+ if(!project)throw Error('Selecione a PUC que consta no processo.');
+ if(!String(reference||'').trim())throw Error('Informe o número do processo SEI antes de vincular os BMs.');
+ let updated=0;
+ for(const id of unique){
+  const doc=stored.find(x=>x.id===id);
+  if(!doc||doc.origin!=='SEI'||!isBM(doc))continue;
+  doc.project=project;doc.ref=String(reference).trim();
+  await transact('readwrite',st=>st.put(doc));updated++;
+ }
+ await reload();return updated;
+}
+
 function bmFiltered(){
  const project=E('cmp-project')?.value||'',process=E('puc-bm-filter-process')?.value.trim().toLowerCase()||'';
- return stored.filter(x=>isBM(x)&&(!project||!x.project||x.project===project)&&(!process||((x.ref||'')+' '+(x.container||'')).toLowerCase().includes(process)));
+ return stored.filter(x=>isBM(x)&&(!project||x.project===project)&&(!process||((x.ref||'')+' '+(x.container||'')).toLowerCase().includes(process)));
 }
 function refreshBMConfront(){
  const body=E('puc-bm-confront-rows');if(!body)return;const list=bmFiltered();
- body.innerHTML=list.length?list.map(x=>'<tr><td>'+escape(x.project||'PUC não vinculada')+'</td><td>'+escape(x.ref||'Processo não informado')+'</td><td>'+escape(x.bm?.number||bmNumber(x)||'Não identificado')+'</td><td>'+escape(x.bm?.period||bmCompetence(x)||'Não identificada')+'</td><td>'+escape(x.name)+'</td><td>'+escape(x.candidates.map(c=>c.type+': '+c.values.join(', ')).join('; ')||'Sem valor estruturado')+'</td><td><button type="button" class="btn secondary" data-bm-compare="'+escape(x.id)+'">Conferir BM</button></td></tr>').join(''):'<tr><td colspan="7">Não foram encontrados BMs vinculados ao filtro. Verifique os documentos e o vínculo PUC/processo.</td></tr>';
+ body.innerHTML=list.length?list.map(x=>'<tr><td>'+escape(x.project||'PUC não vinculada')+'</td><td>'+escape(displaySEIReference(x.ref))+'</td><td>'+escape(x.bm?.number||bmNumber(x)||'Não identificado')+'</td><td>'+escape(x.bm?.period||bmCompetence(x)||'Não identificada')+'</td><td>'+escape(x.name)+'</td><td>'+escape(x.candidates.map(c=>c.type+': '+c.values.join(', ')).join('; ')||'Sem valor estruturado')+'</td><td><button type="button" class="btn secondary" data-bm-compare="'+escape(x.id)+'">Conferir BM</button></td></tr>').join(''):'<tr><td colspan="7">Não foram encontrados BMs vinculados ao filtro. Verifique os documentos e o vínculo PUC/processo.</td></tr>';
  body.querySelectorAll('[data-bm-compare]').forEach(b=>b.onclick=()=>{const item=stored.find(x=>x.id===b.dataset.bmCompare);if(!item)return;document.querySelector('[data-page="documentos"]')?.click();view(item.id);E('puc-library-detail')?.scrollIntoView({behavior:'smooth'})});
  E('puc-bm-confront-count').textContent=list.length+' BM(s) identificados — candidatos não validados';
 }
 function setupBMConfront(){
  const cmp=E('comparacao');if(!cmp)return;
- const panel=document.createElement('div');panel.className='panel';panel.id='puc-bm-confront';panel.innerHTML='<h2>Boletins de medição relacionados ao confronto</h2><p class="muted">Exibe <strong>somente documentos reconhecidos como BMs</strong> e vinculados à PUC selecionada. Filtre também pelo processo. Valores extraídos são candidatos, não entram automaticamente nos indicadores nem constituem prova de pagamento ou execução física.</p><div class="filters"><label>Filtrar processo SEI <input id="puc-bm-filter-process" placeholder="Número ou referência" style="width:220px;max-width:100%"></label><button type="button" class="btn secondary" id="puc-bm-show-all">Mostrar BMs de todas as PUCs</button><button type="button" class="btn secondary" id="puc-bm-go-docs">Anexar / gerenciar documentos</button></div><div class="statusline" id="puc-bm-confront-count"></div><div class="scroll"><table class="data-table"><thead><tr><th>PUC</th><th>Processo</th><th>BM nº</th><th>Competência</th><th>Documento</th><th>Valores candidatos</th><th>Ação</th></tr></thead><tbody id="puc-bm-confront-rows"></tbody></table></div>';
+ const panel=document.createElement('div');panel.className='panel';panel.id='puc-bm-confront';panel.innerHTML='<h2>Boletins de medição relacionados ao confronto</h2><p class="muted">Exibe <strong>somente documentos reconhecidos como BMs</strong> e vinculados à PUC selecionada. Filtre também pelo processo. Valores extraídos são candidatos, não entram automaticamente nos indicadores nem constituem prova de pagamento ou execução física.</p><div class="filters"><label>Filtrar processo SEI <input id="puc-bm-filter-process" placeholder="Número ou referência" style="width:220px;max-width:100%"></label><button type="button" class="btn secondary" id="puc-bm-show-all">Mostrar BMs de todas as PUCs</button><button type="button" class="btn secondary" id="puc-bm-go-docs">Anexar / gerenciar documentos</button></div><div class="puc-bm-association" style="padding:12px;border:1px solid #d5e3ec;border-radius:8px;margin:12px 0;display:flex;align-items:end;gap:9px;flex-wrap:wrap"><label>PUC comprovada nos documentos <select id="puc-bm-assoc-project"><option value="">Selecionar empreendimento</option></select></label><label>Processo SEI <input id="puc-bm-assoc-process" placeholder="Ex.: 50020.001577/2025-18"></label><button type="button" class="btn secondary" id="puc-bm-assoc-save">Vincular BMs exibidos à PUC/processo (após conferir)</button><small>Não valida medições ou valores. Utilize somente para boletins do mesmo empreendimento e processo.</small></div><div class="statusline" id="puc-bm-confront-count"></div><div class="scroll"><table class="data-table"><thead><tr><th>PUC</th><th>Processo</th><th>BM nº</th><th>Competência</th><th>Documento</th><th>Valores candidatos</th><th>Ação</th></tr></thead><tbody id="puc-bm-confront-rows"></tbody></table></div>';
  cmp.appendChild(panel);
- E('cmp-project')?.addEventListener('change',refreshBMConfront);
+ const assoc=E('puc-bm-assoc-project');
+ bmProjectOptions().forEach(p=>{const opt=document.createElement('option');opt.value=p.id;opt.textContent=p.label;assoc.appendChild(opt)});
+ E('puc-bm-assoc-save').onclick=async()=>{
+  const project=assoc.value,ref=E('puc-bm-assoc-process').value.trim(),targets=bmFiltered();
+  if(!project||!ref){alert('Selecione a PUC e informe o processo SEI para confirmar a vinculação.');return}
+  if(!targets.length){alert('Nenhum BM está visível para vincular. Utilize “Mostrar BMs de todas as PUCs” se necessário.');return}
+  if(!confirm('Confirmou nos documentos que os '+targets.length+' BMs exibidos pertencem à '+project+' e ao processo '+ref+'? Esta operação NÃO valida valores nem medições.'))return;
+  try{const n=await assignBMContext(targets.map(x=>x.id),project,ref);status(n+' BM(s) vinculado(s) ao processo '+ref+'; valores continuam pendentes de conferência.')}
+  catch(e){status('Falha na vinculação: '+e.message)}
+ };
+  E('cmp-project')?.addEventListener('change',refreshBMConfront);
  E('puc-bm-filter-process').addEventListener('input',refreshBMConfront);
  E('puc-bm-show-all').onclick=()=>{E('cmp-project').value='';E('cmp-project').dispatchEvent(new Event('change'));refreshBMConfront()};
  E('puc-bm-go-docs').onclick=()=>document.querySelector('[data-page="documentos"]')?.click();
@@ -175,7 +208,7 @@ async function saveFinding(docId,finding){const item=stored.find(d=>d.id===docId
  else {find.id=crypto.randomUUID();item.findings.push(find)}
  await transact('readwrite',st=>st.put(item));await reload();return find}
 async function deleteFinding(docId,findingId){const item=stored.find(d=>d.id===docId);if(!item)return;item.findings=(item.findings||[]).filter(x=>x.id!==findingId);await transact('readwrite',st=>st.put(item));await reload()}
-window.PUCDocLibrary={list:()=>stored.map(x=>({id:x.id,name:x.name,container:x.container,origin:x.origin,project:x.project,ref:x.ref,category:x.category,bmStatus:x.bmStatus,bmNumber:x.bm?.number||'',bmPeriod:x.bm?.period||'',quality:x.quality,candidates:x.candidates||[],findings:x.findings||[],text:x.text||'',hash:x.hash})),ingest:async(files,origin,project,ref,selectedZipEntries=null)=>{if(!db)throw Error('Banco documental não inicializado');return ingest(files,origin,project,ref,selectedZipEntries)},saveFinding,deleteFinding,getLastIngestReport:()=>({...lastIngestReport,errors:[...lastIngestReport.errors]}),refresh:reload};
+window.PUCDocLibrary={list:()=>stored.map(x=>({id:x.id,name:x.name,container:x.container,origin:x.origin,project:x.project,ref:x.ref,category:x.category,bmStatus:x.bmStatus,bmNumber:x.bm?.number||'',bmPeriod:x.bm?.period||'',quality:x.quality,candidates:x.candidates||[],findings:x.findings||[],text:x.text||'',hash:x.hash})),ingest:async(files,origin,project,ref,selectedZipEntries=null)=>{if(!db)throw Error('Banco documental não inicializado');return ingest(files,origin,project,ref,selectedZipEntries)},saveFinding,deleteFinding,assignBMContext,getLastIngestReport:()=>({...lastIngestReport,errors:[...lastIngestReport.errors]}),refresh:reload};
 
 async function init(){try{db=await openDB();setup();await reload();window.PUCDocLibrary.storageReady=true}catch(err){const msg='Não foi possível inicializar a biblioteca local: '+err.message;window.PUCDocLibrary.storageError=msg;status(msg);if(!E('puc-library-status')){const notice=document.createElement('p');notice.id='puc-library-error';notice.className='notice';notice.textContent=msg;E('documentos')?.insertBefore(notice,E('documentos').firstChild)}console.error(msg,err)}}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
