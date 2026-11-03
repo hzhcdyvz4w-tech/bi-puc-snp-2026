@@ -34,6 +34,50 @@
   const list=(doc.candidates||[]).filter(c=>c.type===type).flatMap(c=>c.values||[]);
   return list.length===1?list[0]:null;
  }
+
+ // Uma obra pode atender várias PUCs. A ligação textual é apenas hipótese; valores são do contrato global.
+ const workNorm=x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+ const stemRules=[
+  ['ARMAZENS',/\bARMAZ(?:EM|ENS)\b/,/\bARMAZ(?:EM|ENS)\b/],
+  ['GALPOES',/\bGALP(?:AO|OES)\b/,/\bGALP(?:AO|OES)\b/],
+  ['SOLAR',/\b(?:SOLAR|FOTOVOLTAIC[AO])\b/,/\b(?:SOLAR|FOTOVOLTAIC[AO])\b/],
+  ['DOLPHINS',/\bDOLPHINS?\b/,/\bDOLPHINS?\b/],
+  ['DEFENSAS',/\bDEFENSAS?\b/,/\bDEFENSAS?\b/],
+  ['DRAGAGEM',/\bDRAGAGEM\b/,/\bDRAGAGEM\b/],
+  ['FERROVIA',/\bFERROVIARI[OA]\b/,/\bFERROVIARI[OA]\b/]
+ ];
+ function suggestWorkProjects(work,ps){
+  const title=workNorm(work);if(!title)return [];
+  return ps.filter(p=>{
+   const name=workNorm(p.empreendimento),uf=workNorm(p.uf);
+   const stateTerms={RN:/\b(?:RN|NATAL|RIO GRANDE DO NORTE)\b/,RJ:/\b(?:RJ|RIO DE JANEIRO|ITAGUAI|GAMBOA)\b/,PE:/\b(?:PE|SUAPE|PERNAMBUCO|TATUOCA)\b/,PA:/\b(?:PA|VILA DO CONDE)\b/};
+   if(stateTerms[uf]&&!stateTerms[uf].test(title))return false;
+   const hits=stemRules.filter(x=>x[1].test(name)&&x[2].test(title));
+   if(!hits.length)return false;
+   if(hits.some(x=>['ARMAZENS','GALPOES','SOLAR','DOLPHINS','FERROVIA'].includes(x[0])))return true;
+   const specific=workNorm(p.empreendimento).split(' ').filter(x=>x.length>=6&&!/^(?:RECUPERACAO|MELHORIA|ESTRUTURAL|CONSTRUCAO|IMPLANTACAO|AMPLIACAO|MODERNIZACAO|INSTALACOES|PROJETOS|EXECUTIVOS|CANAL|ACESSO|PORTO|NATAL|DRAGAGEM|DEFENSAS|TERMINAL)$/.test(x));
+   return hits.length>=2||specific.some(x=>title.includes(x));
+  }).map(p=>({id:p.id,empreendimento:p.empreendimento,uf:p.uf,relation:'Sugestão textual — não homologada'}));
+ }
+ const bmIsSelected=d=>{
+  if(d.origin!=='SEI'||!/BM IDENTIFICADO|BM PROVÁVEL/.test(d.bmStatus||''))return false;
+  try{return !new Set(JSON.parse(localStorage.getItem('BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1')||'[]')).has(d.id)}
+  catch(e){return true}
+ };
+ function buildWorkGroups({pucs=[],documentos=[]}={}){
+  const groups=new Map();
+  for(const doc of documentos.filter(bmIsSelected)){
+   const work=String(doc.workName||'').trim();if(!work)continue;
+   const key=workNorm(work)+'|'+workNorm(doc.ref||'');
+   if(!groups.has(key))groups.set(key,{key,work,ref:doc.ref||'',projects:suggestWorkProjects(work,pucs),bms:[]});
+   const value=type=>getCandidate(doc,type);
+   groups.get(key).bms.push({id:doc.id,document:doc.name,number:doc.bmNumber||'',period:doc.bmPeriod||'',
+    amount:value('Valor da Medição (BM)'),contract:value('Valor do Contrato (BM)'),cumulative:value('Valor Acumulado (BM)'),balance:value('Saldo do Contrato (BM)'),
+    pct:value('Valor da Medição (%) BM'),pctAcc:value('Valor Acumulado (%) BM'),pctBalance:value('Saldo do Contrato (%) BM'),quality:doc.quality||''});
+  }
+  return [...groups.values()].sort((a,b)=>a.work.localeCompare(b.work,'pt-BR'));
+ }
+
  function build({balancos=[],pucs=[],orcamento=[],documentos=[]}={}){
   const distinct=new Map();
   for(const r of balancos){
@@ -44,7 +88,7 @@
   }
   const all=[...distinct.values()].map(row=>{
    const mapping=matchProject(row,pucs),project=mapping.project,identity=String(row.id||'').trim(),uf=states(row.uf);
-   const relatedBM=documentos.filter(d=>d.origin==='SEI'&&project&&d.project===project.id&&(/BM IDENTIFICADO|BM PROVÁVEL/.test(d.bmStatus||'')||(d.findings||[]).some(f=>f.indicator==='medicao_bm')));
+   const relatedBM=documentos.filter(d=>bmIsSelected(d)&&project&&d.project===project.id&&(/BM IDENTIFICADO|BM PROVÁVEL/.test(d.bmStatus||'')||(d.findings||[]).some(f=>f.indicator==='medicao_bm')));
    const bms=relatedBM.map(d=>{
     let amount=getCandidate(d,'Valor da Medição (BM)');
     let cumulative=getCandidate(d,'Valor Acumulado (BM)');
@@ -71,7 +115,8 @@
     if(finance.length)return finance;
     return monetary(data.cadastro?.valor_global)!==null?[{value:data.cadastro.valor_global,nature:'Valor global declarado (não é BM)',document:d.name,verified:!!data.conferidoSNP}]:[];
    });
-   return {id:identity,uf:row.uf,empreendimento:row.empreendimento,project:project?.id||'',link:mapping.type,
+   const references=project?buildWorkGroups({pucs,documentos}).filter(g=>g.projects.some(p=>p.id===project.id)).map(g=>({work:g.work,shared:g.projects.length>1})):[];
+   return {id:identity,uf:row.uf,empreendimento:row.empreendimento,project:project?.id||'',link:mapping.type,workReferences:references,
     balanco:{value:row.valor_global,nature:'Valor do investimento/empreendimento no Balanço',file:row.arquivo||'',competencia:row.data_referencia||'',hasValue:monetary(row.valor_global)!==null},
     bms,siop:ss.map(s=>({value:s.empenhado,nature:'Empenhado pela União · ação '+(s.acao||'')+'/PO '+(s.po||''),file:s.arquivo_fonte||'',cutoff:s.data_referencia||'',warning:'Associação SIOP temática, não homologada'})),docas};
   });
@@ -122,6 +167,6 @@
   document.addEventListener('puc-documents-updated',render);
   render();
  }
- w.PUCQuadroValores={build,parseMoney:monetary,render,reportSection};
+ w.PUCQuadroValores={build,buildWorkGroups,suggestWorkProjects,parseMoney:monetary,render,reportSection};
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })(window);
