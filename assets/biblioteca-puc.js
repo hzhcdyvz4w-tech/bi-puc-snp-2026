@@ -46,7 +46,7 @@ async function extract(f){return engine().unpack(f)}
 async function fileText(item){return engine().read(item)}
 async function reanalyse(onlySEIBMs=false){
  let changed=0,problems=[];const button=E(onlySEIBMs?'puc-bm-reanalyse':'puc-reanalyse');if(button)button.disabled=true;
- const queue=onlySEIBMs?stored.filter(d=>d.origin==='SEI'&&isBM(d)):[...stored];
+ const queue=onlySEIBMs?stored.filter(d=>{if(d.origin!=='SEI'||!isBM(d))return false;try{return !new Set(JSON.parse(localStorage.getItem('BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1')||'[]')).has(d.id)}catch(e){return true}}):[...stored];
  try{for(const d of queue){if(!d.blob)continue;
   try{const result=await fileText({name:d.name,blob:d.blob});d.text=result.text;d.quality=result.quality;updateEntry(d);await transact('readwrite',s=>s.put(d));changed++;
    if(changed%5===0)status('Reanalisando documentos: '+changed+'/'+queue.length);
