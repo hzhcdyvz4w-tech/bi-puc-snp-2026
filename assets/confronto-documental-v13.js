@@ -252,7 +252,7 @@ function refreshAttachmentStatus(){
   // Evita exibir centenas de nomes de arquivos no painel de anexacao.
   const count=pending.length;
   if(count){
-   const zipCount=pending.filter(f=>/\\.zip$/i.test(f.name)).length;
+   const zipCount=pending.filter(f=>/\.zip$/i.test(f.name)).length;
    label.textContent=count+' arquivo(s) selecionado(s) para análise'+(zipCount?' · '+zipCount+' ZIP(s)':'')+(stored.length?' · '+stored.length+' documento(s) já armazenado(s)':'')+'. Use a seleção acima para escolher o que será importado.';
   }else if(stored.length){
    label.textContent=stored.length+' documento(s) armazenado(s) na biblioteca local deste navegador. Selecione outro arquivo somente para atualizar.';
