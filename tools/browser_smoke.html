@@ -28,6 +28,12 @@
   assert(compare.contains(d().getElementById('puc3-compare-project-picker')),'Seletor opcional disponível no Confronto');
   assert(!!d().getElementById('pucq-panel')&&!!d().getElementById('pucq-table-body'),'Quadro de valores por ID_governa, UF e quatro fontes inicializado');
   assert(d().querySelector('#pucq-panel thead').textContent.includes('Valor BM')&&d().querySelector('#pucq-panel thead').textContent.includes('Valor do Balanço')&&d().querySelector('#pucq-panel thead').textContent.includes('Valor do SIOP')&&d().querySelector('#pucq-panel thead').textContent.includes('Valor Informado pelas DOCAS'),'Quatro colunas financeiras disponíveis');
+  d().querySelector('#nav [data-page="fichas"]').click();
+  assert(!!d().querySelector('#fichas .ficha-curve-controls'),'Fichas com seleção mínima de empreendimento e contrato');
+  assert(d().querySelector('#fichas .ficha-curve-controls').contains(d().getElementById('ficha-project')),'Seletor de empreendimento visível na interface da Curva S');
+  assert(d().getElementById('ficha-source-panel').hidden&&d().getElementById('ficha-balanco-review').hidden&&d().getElementById('ficha-planned-review').hidden,'Uploads e filtros secundários removidos da página Fichas');
+  assert(!d().getElementById('ficha-bms-conferencia').open&&!!d().getElementById('ficha-print-area'),'Conferência BM recolhida e ficha/gráfico disponíveis');
+  assert(!!w.PUCFichasBM?.selectedSEIDocs,'Fichas conectadas à seleção da biblioteca documental SEI');
   d().querySelector('#nav [data-page="documentos"]').click();frame.style.width='375px';await sleep(250);
   const mobileColumns=w.getComputedStyle(uploads).gridTemplateColumns.trim().split(/\s+/).length;
   assert(mobileColumns===1,'Responsividade: três fontes em coluna única no celular',w.getComputedStyle(uploads).gridTemplateColumns);
