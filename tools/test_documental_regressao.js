@@ -17,7 +17,7 @@ test('Despacho que apenas menciona BM não vira BM',()=>assert.equal(engine.bmCl
 test('Número e competência do BM',()=>{assert.equal(engine.bmNumber('BM_05.pdf','Boletim de Medição nº 05'),'05');assert.equal(engine.bmPeriod('BM_05.pdf','Competência 09/2026'),'2026-09')});
 test('Números de BM em anexos exportados do SEI',()=>{
  for(const [file,number] of [['[065]-10870234_Anexo_BM06_2.pdf','06'],['[064]-10870212_Anexo_BM06_1.pdf','06'],['[018]-10369072_Anexo_2_BM02.pdf','02'],['[010]-10270106_Anexo_4_BM1.pdf','1']])assert.equal(engine.bmNumber(file,''),number,file);
- assert.equal(engine.bmNumber('[145]-11961894_Nota.pdf',''),'Documento sem BM não recebe número');
+ assert.equal(engine.bmNumber('[145]-11961894_Nota.pdf',''),'','Documento sem BM não recebe número');
  assert.equal(engine.bmPeriod('Anexo_BM06.pdf',''),'Sem competência explícita, não inventar mês');
 });
 test('Relação documental mantém seleção do usuário e não inclui quantidade no processo',()=>{
