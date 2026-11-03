@@ -32,7 +32,7 @@ function renderChecks(){
 const SEI_EXCLUSIONS_KEY='BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1';
 let seiExcluded=new Set();
 try{seiExcluded=new Set(JSON.parse(localStorage.getItem(SEI_EXCLUSIONS_KEY)||'[]'))}catch(e){seiExcluded=new Set()}
-function saveSeiSelection(){try{localStorage.setItem(SEI_EXCLUSIONS_KEY,JSON.stringify([...seiExcluded]))}catch(e){}}
+function saveSeiSelection(){try{localStorage.setItem(SEI_EXCLUSIONS_KEY,JSON.stringify([...seiExcluded]))}catch(e){}document.dispatchEvent(new CustomEvent('puc-sei-selection-updated'))}
 function seiIncluded(d){return d.origin!=='SEI'||!seiExcluded.has(d.id)}
 function filesForReview(){
  return docs().filter(d=>sources.includes(d.origin)&&seiIncluded(d)&&(!selected.size||!d.project||selected.has(d.project)||(d.findings||[]).some(f=>selected.has(f.project))));
