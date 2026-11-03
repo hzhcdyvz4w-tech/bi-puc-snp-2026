@@ -78,7 +78,7 @@
   const css=document.createElement('style');css.textContent=
    '#puc3-central-files .puc3-uploads{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}'+
    '#puc3-central-files input[type=file]{display:block!important;width:100%}'+
-   'input[type=file]:not(#puc3-files-SEI):not(#puc3-files-BALANCO):not(#puc3-files-SIOP){display:none!important}'+
+   'input[type=file]:not(#puc3-files-SEI):not(#puc3-files-BALANCO):not(#puc3-files-DOCAS){display:none!important}'+
    '#upload-file,#puc3-advanced-imports,#ficha-extract-bms,#puc-lib-save{display:none!important}'+
    '.panel[hidden],label[hidden],details[hidden],button[hidden]{display:none!important}'+
    '@media(max-width:850px){#puc3-central-files .puc3-uploads{grid-template-columns:1fr}}';
