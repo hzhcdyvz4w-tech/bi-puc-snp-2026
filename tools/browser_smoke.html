@@ -87,6 +87,14 @@
   assert(d().querySelectorAll('#puc3-sei-choices input[type=checkbox]').length===2,'Dois documentos SEI armazenados podem ser selecionados');
   const storedChoice=d().querySelector('#puc3-sei-choices input[type=checkbox]');storedChoice.click();
   assert(d().getElementById('puc3-sei-selected-count').textContent.startsWith('1 de 2'),'Desmarcar documento SEI preservado altera a seleção do confronto');
+  const seiLabel=d().querySelector('#puc3-sei-choices label.puc3-sei-choice');
+  const seiBox=seiLabel?.querySelector('input[type=checkbox]');
+  assert(!!seiBox&&Math.round(seiBox.getBoundingClientRect().width)<=20,'Checkbox SEI permanece compacto e alinhado');
+  assert(w.getComputedStyle(seiLabel).gridTemplateColumns.split(' ').length===2,'Linha de seleção SEI com duas colunas');
+  const balLabel=d().querySelector('#puc3-empreendimento-balanco label.puc3-balanco-choice');
+  const balBox=balLabel?.querySelector('input[type=checkbox]');
+  assert(!!balBox&&Math.round(balBox.getBoundingClientRect().width)<=20,'Checkbox Balanço permanece compacto');
+
   d().getElementById('puc3-sei-all').click();
   assert(d().getElementById('puc3-sei-selected-count').textContent.startsWith('2 de 2'),'Selecionar todos restaura documentos SEI');
   const addCSV=async(source,name,body)=>{
