@@ -105,7 +105,7 @@ function bmFiltered(){
 function refreshBMConfront(){
  const body=E('puc-bm-confront-rows');if(!body)return;const list=bmFiltered();
  body.innerHTML=list.length?list.map(x=>'<tr><td>'+escape(x.project||'PUC não vinculada')+'</td><td>'+escape(displaySEIReference(x.ref))+'</td><td>'+escape(x.bm?.number||bmNumber(x)||'Não identificado')+'</td><td>'+escape(x.bm?.period||bmCompetence(x)||'Não identificada')+'</td><td>'+escape(x.name)+'</td><td>'+escape(x.candidates.map(c=>c.type+': '+c.values.join(', ')).join('; ')||'Sem valor estruturado')+'</td><td><button type="button" class="btn secondary" data-bm-compare="'+escape(x.id)+'">Conferir BM</button></td></tr>').join(''):'<tr><td colspan="7">Não foram encontrados BMs vinculados ao filtro. Verifique os documentos e o vínculo PUC/processo.</td></tr>';
- body.querySelectorAll('[data-bm-compare]').forEach(b=>b.onclick=()=>{const item=stored.find(x=>x.id===b.dataset.bmCompare);if(!item)return;document.querySelector('[data-page="documentos"]')?.click();view(item.id);E('puc-library-detail')?.scrollIntoView({behavior:'smooth'})});
+ body.querySelectorAll('[data-bm-compare]').forEach(b=>b.onclick=()=>{const item=stored.find(x=>x.id===b.dataset.bmCompare);if(!item)return;if(window.PUC3ReviewDoc?.(item.id))return;document.querySelector('[data-page="documentos"]')?.click();view(item.id);E('puc-library-detail')?.scrollIntoView({behavior:'smooth'})});
  E('puc-bm-confront-count').textContent=list.length+' BM(s) identificados — candidatos não validados';
 }
 function setupBMConfront(){
