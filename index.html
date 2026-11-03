@@ -91,6 +91,11 @@ body .grid2{gap:18px}
 .puc-footer-identity>strong{color:#183d60;font-size:14px}
 .puc-footer-team{border-top:1px solid #dbe4eb;margin-top:9px;padding-top:9px}
 .puc-footer-team strong{font-size:12px;color:#264b69}
+.puc-footer-developers{display:flex;flex-wrap:wrap;column-gap:18px;row-gap:2px;align-items:baseline;max-width:520px}
+.puc-footer-developers span{display:inline-block;white-space:normal;line-height:1.4}
+.puc-footer-developers span:last-child{flex-basis:100%}
+@media(max-width:490px){.puc-footer-developers{display:flex;flex-direction:column;gap:3px}.puc-footer-developers span:last-child{flex-basis:auto}}
+
 .puc-footer-technical{text-align:right;align-items:flex-end;padding-top:21px}
 .puc-footer-technical span{max-width:680px}
 .puc-institutional-footer strong{font-weight:700}
@@ -153,11 +158,13 @@ body .grid2{gap:18px}
    <strong>BI Executivo PUC — Secretaria Nacional de Portos</strong>
    <span>SNP / MPOR · Apoio ao acompanhamento executivo dos investimentos PUC</span>
    <span>© 2026 BI Executivo PUC. Todos os direitos reservados.</span>
-   <div class="puc-footer-team">
+   <div class="puc-footer-team" aria-label="Desenvolvedores do sistema">
     <strong>Desenvolvedores do sistema:</strong>
-    <span>Francisco Dias Nascimento Filho — SNPTA</span>
-    <span>Laércio Matheus — COOAD</span>
-    <span>Victor Prijopranoto — COOAD</span>
+    <div class="puc-footer-developers">
+     <span>Francisco Dias Nascimento Filho - SNPTA</span>
+     <span>Laércio Matheus - COOAD</span>
+     <span>Victor Prijopranoto - COOAD</span>
+    </div>
    </div>
   </div>
   <div class="puc-footer-technical">
