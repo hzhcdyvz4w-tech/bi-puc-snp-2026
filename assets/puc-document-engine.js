@@ -98,6 +98,55 @@ function bmHeaderFromPDFItems(items){
  }
  return {lines:found,visualLines};
 }
+
+function bmWorkName(text){
+ const lines=String(text||'').split(/\n/).map(x=>x.trim()).filter(Boolean);
+ for(let i=0;i<Math.min(180,lines.length);i++){
+  const raw=lines[i];
+  const match=raw.match(/(?:^|\s)(?:OBRA|OBJETO\s+DA\s+OBRA)\s*:\s*(.{12,500})/i);
+  if(match){
+   let name=match[1].replace(/\s+(?:EMPRESA|CLIENTE|BDI|FONTES)\s*:.*/i,'').trim();
+   if(name.length>=12)return name.slice(0,450);
+  }
+ }
+ return '';
+}
+/* Somente totais de uma tabela de medição com colunas declaradas.
+   Valores de itens, subtotais e linhas de serviços não constituem o total do BM. */
+function bmTotalsFromPDFItems(items){
+ const parts=(items||[]).filter(x=>String(x.str||'').trim()&&x.transform&&Number.isFinite(x.transform[4])&&Number.isFinite(x.transform[5]))
+  .map(x=>({str:String(x.str).trim(),x:x.transform[4],y:x.transform[5],width:Number(x.width||0)}));
+ const rows=[];
+ for(const p of parts){let r=rows.find(z=>Math.abs(z.y-p.y)<3.2);if(!r){r={y:p.y,parts:[]};rows.push(r)}r.parts.push(p)}
+ rows.forEach(r=>{r.parts.sort((a,b)=>a.x-b.x);r.text=r.parts.map(p=>p.str).join(' ')});
+ rows.sort((a,b)=>b.y-a.y);
+ const norm=z=>String(z||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+ const money=/\b\d{1,3}(?:\.\d{3})+,\d{2}\b|\b\d+,\d{2}\b/;
+ for(let i=0;i<Math.min(130,rows.length);i++){
+  const hdr=norm(rows[i].text);
+  if(!/MEDIC(?:AO|OES)/.test(hdr)||!/(?:ACUMULADO|TOTAL)/.test(hdr))continue;
+  const below=rows.slice(i+1,i+65);
+  const total=below.find(r=>/\b(?:TOTAL\s+GERAL|TOTAL\s+DA\s+OBRA|TOTAL\s+DO\s+CONTRATO)\b/.test(norm(r.text))&&money.test(r.text));
+  if(!total)continue;
+  const xs=rows[i].parts.filter(p=>/MEDIC|ACUMUL|SALDO/i.test(norm(p.str)));
+  // Require at least two numeric headings at distinct x positions, otherwise ambiguous.
+  if(xs.length<2)continue;
+  const result=[];
+  const names=[['Valor da Medição (BM)',/MEDIC(?:AO|OES)/],['Valor Acumulado (BM)',/ACUMULADO/],['Saldo do Contrato (BM)',/SALDO/]];
+  const cols=names.map(([key,re])=>({key,header:xs.find(p=>re.test(norm(p.str)))})).filter(x=>x.header).sort((a,b)=>a.header.x-b.header.x);
+  if(cols.length<2)continue;
+  for(let j=0;j<cols.length;j++){
+   const c=cols[j],left=j===0?(cols.length>1?cols[0].header.x-(cols[1].header.x-cols[0].header.x)/2:-Infinity):(cols[j-1].header.x+c.header.x)/2;
+   const right=j===cols.length-1?Infinity:(c.header.x+cols[j+1].header.x)/2;
+   const tokens=total.parts.filter(p=>p.x>=left&&p.x<right).map(p=>p.str).join(' ');
+   const m=tokens.match(money);
+   if(m)result.push(c.key+': R$ '+m[0]);
+  }
+  if(result.length>=2)return result;
+ }
+ return [];
+}
+
 function indicators(text){
  const out=[],t=String(text||'');
  const summaryPatterns=[
@@ -201,7 +250,7 @@ async function read(item){
  if(ext==='pdf'){
   if(!w.pdfjsLib){let txt=basicPDF(new Uint8Array(await blob.arrayBuffer()));return {text:txt,quality:txt?'PDF BÁSICO — LEITURA PARCIAL, CONFERIR':'PDF NÃO EXTRAÍDO: PDF.js indisponível ou PDF digitalizado'}};
   try{let pdf=await w.pdfjsLib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise,lines=[];let cap=Math.min(70,pdf.numPages);
-   for(let p=1;p<=cap;p++){let page=await pdf.getPage(p);let content=await page.getTextContent();const layout=bmHeaderFromPDFItems(content.items);lines.push('PÁGINA '+p+'\n'+layout.lines.join('\n')+'\n'+layout.visualLines.join('\n'))}
+   for(let p=1;p<=cap;p++){let page=await pdf.getPage(p);let content=await page.getTextContent();const layout=bmHeaderFromPDFItems(content.items),totals=layout.lines.length?[]:bmTotalsFromPDFItems(content.items);lines.push('PÁGINA '+p+'\n'+layout.lines.join('\n')+'\n'+totals.join('\n')+'\n'+layout.visualLines.join('\n'))}
    const text=lines.join('\n').slice(0,300000);
    const quality=text.replace(/PÁGINA \d+/g,'').trim()?'TEXTO EXTRAÍDO (PDF'+(pdf.numPages>cap?'; LEITURA PARCIAL '+cap+'/'+pdf.numPages+' PÁGINAS':'')+')':'PDF SEM TEXTO — OCR NECESSÁRIO';
    await pdf.destroy();return {text,quality};
@@ -209,5 +258,5 @@ async function read(item){
  }
  return {text:'',quality:ext==='xls'?'XLS LEGADO: ANEXADO, LEITURA NÃO DISPONÍVEL':'FORMATO ANEXADO, SEM LEITURA TEXTUAL'};
 }
-w.PUCDocEngine={extension,bmClass,bmNumber,bmPeriod,indicators,bmHeaderFromPDFItems,unpack,read,cleanHTML};
+w.PUCDocEngine={extension,bmClass,bmNumber,bmPeriod,indicators,bmHeaderFromPDFItems,bmTotalsFromPDFItems,bmWorkName,unpack,read,cleanHTML};
 })(window);
