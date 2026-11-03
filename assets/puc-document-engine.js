@@ -101,13 +101,13 @@ function bmHeaderFromPDFItems(items){
 function indicators(text){
  const out=[],t=String(text||'');
  const summaryPatterns=[
- ['Valor do Contrato (BM)',/VALOR DO CONTRATO \(BM\): R\$\s*(\d[\d.]*,\d{2})/g],
- ['Valor da Medição (BM)',/VALOR DA MEDIÇÃO \(BM\): R\$\s*(\d[\d.]*,\d{2})/g],
- ['Valor Acumulado (BM)',/VALOR ACUMULADO \(BM\): R\$\s*(\d[\d.]*,\d{2})/g],
- ['Saldo do Contrato (BM)',/SALDO DO CONTRATO \(BM\): R\$\s*(\d[\d.]*,\d{2})/g],
- ['Valor da Medição (%) BM',/VALOR DA MEDIÇÃO \(%\) BM: (\d{1,3}(?:,\d{1,3})?)%/g],
- ['Valor Acumulado (%) BM',/VALOR ACUMULADO \(%\) BM: (\d{1,3}(?:,\d{1,3})?)%/g],
- ['Saldo do Contrato (%) BM',/SALDO DO CONTRATO \(%\) BM: (\d{1,3}(?:,\d{1,3})?)%/g]
+ ['Valor do Contrato (BM)',/VALOR DO CONTRATO \(BM\): R\$\s*(\d[\d.]*,\d{2})/gi],
+ ['Valor da Medição (BM)',/VALOR DA MEDIÇÃO \(BM\): R\$\s*(\d[\d.]*,\d{2})/gi],
+ ['Valor Acumulado (BM)',/VALOR ACUMULADO \(BM\): R\$\s*(\d[\d.]*,\d{2})/gi],
+ ['Saldo do Contrato (BM)',/SALDO DO CONTRATO \(BM\): R\$\s*(\d[\d.]*,\d{2})/gi],
+ ['Valor da Medição (%) BM',/VALOR DA MEDIÇÃO \(%\) BM: (\d{1,3}(?:,\d{1,3})?)%/gi],
+ ['Valor Acumulado (%) BM',/VALOR ACUMULADO \(%\) BM: (\d{1,3}(?:,\d{1,3})?)%/gi],
+ ['Saldo do Contrato (%) BM',/SALDO DO CONTRATO \(%\) BM: (\d{1,3}(?:,\d{1,3})?)%/gi]
  ];
  for(const [type,rx] of summaryPatterns){
   let m;while((m=rx.exec(t))&&out.length<50){
