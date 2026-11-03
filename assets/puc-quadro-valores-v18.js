@@ -205,6 +205,7 @@
   $('pucq-uf').onchange=e=>{currentUF=e.target.value;render()};
   $('pucq-search').oninput=e=>{currentSearch=e.target.value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();render()};
   document.addEventListener('puc-documents-updated',render);
+  document.addEventListener('puc-sei-selection-updated',render);
   render();
  }
  w.PUCQuadroValores={build,buildWorkGroups,suggestWorkProjects,parseMoney:monetary,render,reportSection};
