@@ -17,6 +17,73 @@
 @media print{header,nav,#geral,#siop,#projetos,#comparacao,#documentos,#docas,.section-header button,.filters,.notice.subtle,#report-summary,footer,.hide-print{display:none!important}body{background:#fff!important;color:#151c28!important}main.wrap{padding:0!important;margin:0!important;max-width:none!important}#relatorio,#relatorio .panel{display:block!important;border:0!important;margin:0;padding:0!important;box-shadow:none!important}#relatorio .panel>.section-header{display:none}#critical-report{font-size:10pt}.critical-report .r-section{break-inside:avoid;border:1px solid #ccc}.critical-report table{min-width:0!important;font-size:8pt}.report-print-only{display:block}.critical-report .wrap-table{overflow:visible}}
 </style>
 <link rel="stylesheet" href="assets/ficha-bm.css"/>
+<style id="bi-puc-layout-ampliado-v1">
+/* Interface ampliada sem alterar dados, formulários ou lógica do BI. */
+:root{font-size:16px}
+body{overflow-x:hidden}
+body .wrap,body header .heading{max-width:1680px;width:100%;margin-inline:auto}
+body .wrap{padding:24px clamp(18px,2.4vw,42px) 45px}
+body header .heading{padding:26px clamp(18px,2.4vw,42px)}
+body header .heading h1{font-size:clamp(25px,2.2vw,34px);line-height:1.15}
+body header .heading p{font-size:15px;line-height:1.5}
+body .nav{gap:10px;margin-bottom:22px}
+body .nav button{font-size:14px;padding:12px 17px;min-height:43px}
+body .panel{padding:clamp(18px,1.5vw,26px);margin-top:20px}
+body .panel h2{font-size:clamp(19px,1.5vw,23px);line-height:1.25}
+body .panel h3{font-size:16px;line-height:1.35}
+body .muted,body .statusline,body .notice{font-size:14px;line-height:1.6}
+body .metric{padding:18px}
+body .metric small{font-size:14px}
+body .metric b{font-size:clamp(24px,2vw,31px)}
+body .filters{gap:12px}
+body .filters input,body .filters select,body .formgrid input,body .formgrid select,body .formgrid textarea{font-size:14px;min-height:43px}
+body .btn{font-size:14px;padding:11px 16px;min-height:41px}
+body .data-table{font-size:14px}
+body .data-table th{font-size:13px}
+body .data-table th,body .data-table td{padding:12px 13px}
+body .cards{gap:14px}
+body .grid2{gap:18px}
+#puc3-central-files .puc3-uploads{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:18px!important}
+#puc3-central-files .puc3-source{min-width:0!important;padding:17px!important;border-radius:12px!important}
+#puc3-central-files .puc3-source>h3{font-size:17px!important}
+#puc3-central-files .puc3-source>label{font-size:14px!important;line-height:1.45!important}
+#puc3-central-files .puc3-source input:not([type=checkbox]),#puc3-central-files .puc3-source select{min-width:0!important;max-width:100%!important;font-size:14px!important}
+#puc3-central-files .puc3-balanco-multi,#puc3-central-files .puc3-sei-selector,#puc3-central-files .puc3-sei-zip{padding:13px!important}
+#puc3-central-files .puc3-balanco-options,#puc3-central-files .puc3-sei-choices{max-height:330px!important;overflow-x:hidden!important;overflow-y:auto!important}
+#puc3-central-files label.puc3-balanco-choice,#puc3-central-files label.puc3-sei-choice{grid-template-columns:19px minmax(0,1fr)!important;padding:10px 8px!important;font-size:13px!important;line-height:1.5!important}
+#puc3-central-files .puc3-attachment-status{font-size:13px!important;line-height:1.5}
+#puc3-central-files .puc3-balanco-actions button,#puc3-central-files .puc3-sei-actions button{font-size:12px!important}
+#puc3-central-files .puc3-source small{font-size:12px!important;line-height:1.5}
+@media(min-width:1051px) and (max-width:1400px){
+ #puc3-central-files .puc3-uploads{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+@media(max-width:1050px){
+ #puc3-central-files .puc3-uploads{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ body .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+ body .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:850px){
+ #puc3-central-files .puc3-uploads{grid-template-columns:minmax(0,1fr)!important}
+ body .wrap{padding:16px 12px 28px}
+ body .panel{padding:16px}
+ body .nav button{padding:10px 12px}
+}
+@media(max-width:580px){
+ body .metrics,body .cards,body .grid2,body .formgrid{grid-template-columns:minmax(0,1fr)!important}
+ body .heading h1{font-size:23px}
+ body .nav{gap:6px}
+ body .nav button{font-size:12px;padding:10px 11px}
+ body .panel h2{font-size:19px}
+ body .data-table{font-size:12px}
+ #puc3-central-files .puc3-source{padding:12px!important}
+ #puc3-central-files .puc3-balanco-options,#puc3-central-files .puc3-sei-choices{max-height:240px!important}
+}
+@media print{
+ body .wrap,body header .heading{max-width:none!important;width:auto!important;padding:0!important}
+ body .panel{padding:9px!important}
+ body .nav{display:none!important}
+}
+</style>
 </head>
 <body>
 <header><div class="heading"><div><h1>BI Executivo · Projetos PUC</h1><p>Secretaria Nacional de Portos · MPOR | Acompanhamento de investimentos 2026</p></div><div class="mini-label">Base SIOP 2026 · carteira referencial</div></div></header>
