@@ -1,0 +1,126 @@
+/* BI PUC — quadro indicativo das quatro fontes por ID_governa, UF e empreendimento.
+   Não soma contratos, medições, ações SIOP ou declarações distintas.
+   Não transforma associação textual em vínculo financeiro confirmado. */
+(function(w){
+ 'use strict';
+ const $=id=>document.getElementById(id);
+ const escape=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const norm=x=>String(x??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+ const states=x=>String(x??'').toUpperCase().split(/[,;\/]/).map(z=>z.trim()).filter(Boolean);
+ const monetary=x=>{
+  if(x===null||x===undefined||String(x).trim()==='')return null;
+  if(typeof x==='number')return Number.isFinite(x)?x:null;
+  let z=String(x).replace(/R\$/ig,'').replace(/\s/g,'').replace(/^\+/,'');
+  if(!/^[0-9.,]+$/.test(z))return null;
+  if(z.includes(',')&&z.includes('.'))z=z.lastIndexOf(',')>z.lastIndexOf('.')?z.replace(/\./g,'').replace(',','.'):z.replace(/,/g,'');
+  else if(z.includes(','))z=z.replace(/\./g,'').replace(',','.');
+  else if(/^(\d{1,3}\.)+\d{3}$/.test(z))z=z.replace(/\./g,'');
+  const n=Number(z);return Number.isFinite(n)?n:null;
+ };
+ const reais=x=>{const n=monetary(x);return n===null?'—':n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'})};
+ const projects=()=>{try{return JSON.parse($('embedded-data')?.textContent||'{}').projetos||[]}catch(e){return []}};
+ const siop=()=>{try{return JSON.parse($('embedded-data')?.textContent||'{}').siop||[]}catch(e){return []}};
+ const sourceDocs=()=>w.PUCDocLibrary?.list?.()||[];
+ const balances=()=>w.PUCCorrelacao?.balancoRows?.()||[];
+ function matchProject(row,ps){
+  const rowUF=states(row.uf);
+  const explicit=ps.filter(p=>/^\d+$/.test(String(p.id_governa||''))&&String(p.id_governa).trim()===String(row.id||'').trim()&&rowUF.includes(String(p.uf||'').toUpperCase()));
+  if(explicit.length===1)return {project:explicit[0],type:'ID_governa cadastrado'};
+  if(explicit.length>1)return {project:null,type:'ID_governa duplicado — revisar'};
+  const exact=ps.filter(p=>norm(p.empreendimento)===norm(row.empreendimento)&&rowUF.includes(String(p.uf||'').toUpperCase()));
+  return exact.length===1?{project:exact[0],type:'Nome/UF coincidentes — vínculo preliminar'}:{project:null,type:exact.length>1?'Empreendimento ambíguo':'Sem PUC confirmada'};
+ }
+ function getCandidate(doc,type){
+  const list=(doc.candidates||[]).filter(c=>c.type===type).flatMap(c=>c.values||[]);
+  return list.length===1?list[0]:null;
+ }
+ function build({balancos=[],pucs=[],orcamento=[],documentos=[]}={}){
+  const distinct=new Map();
+  for(const r of balancos){
+   if(!r?.empreendimento||!r?.uf)continue;
+   const key=String(r.id||'')+'|'+norm(r.uf)+'|'+norm(r.empreendimento);
+   // Preserve the latest available row per identifier; duplicates are not additive.
+   if(!distinct.has(key))distinct.set(key,r);
+  }
+  const all=[...distinct.values()].map(row=>{
+   const mapping=matchProject(row,pucs),project=mapping.project,identity=String(row.id||'').trim(),uf=states(row.uf);
+   const relatedBM=documentos.filter(d=>d.origin==='SEI'&&project&&d.project===project.id&&(/BM IDENTIFICADO|BM PROVÁVEL/.test(d.bmStatus||'')||(d.findings||[]).some(f=>f.indicator==='medicao_bm')));
+   const bms=relatedBM.map(d=>{
+    let amount=getCandidate(d,'Valor da Medição (BM)');
+    let cumulative=getCandidate(d,'Valor Acumulado (BM)');
+    let pct=getCandidate(d,'Valor da Medição (%) BM');
+    let pctAcc=getCandidate(d,'Valor Acumulado (%) BM');
+    const verified=(d.findings||[]).filter(f=>f.verified&&f.indicator==='medicao_bm'&&f.project===project.id);
+    if(amount===null&&verified.length===1)amount=verified[0].value;
+    return {document:d.name,bm:d.bmNumber||'',amount,acc:cumulative,pct,pctAcc,quality:d.quality||'',ref:d.ref||'',verified:verified.length>0};
+   });
+   const ss=project?orcamento.filter(s=>s.id_puc===project.id):[];
+   const docas=documentos.filter(d=>{
+    if(d.origin!=='DOCAS')return false;
+    let data;try{data=JSON.parse(d.text||'{}')}catch(e){return false}
+    if(data.schema!=='BI_PUC_DOCAS_V1')return false;
+    const cadastro=data.cadastro||{};
+    const stateMatch=uf.includes(String(cadastro.uf||'').toUpperCase());
+    return stateMatch&&((identity&&String(cadastro.id_governa||'').trim()===identity)||
+     (!cadastro.id_governa&&norm(cadastro.empreendimento)===norm(row.empreendimento)));
+   }).flatMap(d=>{
+    let data;try{data=JSON.parse(d.text||'{}')}catch(e){return []}
+    const contracts=(data.grupos?.contratos||[]).filter(c=>monetary(c.medido)!==null).map(c=>({value:c.medido,nature:'Medido declarado no contrato '+(c.numero||'não informado'),document:d.name,verified:!!data.conferidoSNP}));
+    if(contracts.length)return contracts;
+    const finance=(data.grupos?.financeiro||[]).filter(f=>monetary(f.pago)!==null).map(f=>({value:f.pago,nature:'Pagamento PUC declarado (não é BM)',document:d.name,verified:!!data.conferidoSNP}));
+    if(finance.length)return finance;
+    return monetary(data.cadastro?.valor_global)!==null?[{value:data.cadastro.valor_global,nature:'Valor global declarado (não é BM)',document:d.name,verified:!!data.conferidoSNP}]:[];
+   });
+   return {id:identity,uf:row.uf,empreendimento:row.empreendimento,project:project?.id||'',link:mapping.type,
+    balanco:{value:row.valor_global,nature:'Valor do investimento/empreendimento no Balanço',file:row.arquivo||'',competencia:row.data_referencia||'',hasValue:monetary(row.valor_global)!==null},
+    bms,siop:ss.map(s=>({value:s.empenhado,nature:'Empenhado pela União · ação '+(s.acao||'')+'/PO '+(s.po||''),file:s.arquivo_fonte||'',cutoff:s.data_referencia||'',warning:'Associação SIOP temática, não homologada'})),docas};
+  });
+  all.sort((a,b)=>states(a.uf)[0]?.localeCompare(states(b.uf)[0]||'')||a.empreendimento.localeCompare(b.empreendimento,'pt-BR'));
+  return all;
+ }
+ function cell(items,type){
+  if(type==='balanco'){
+   if(!items.hasValue)return '<span class="pucq-empty">Sem valor extraído</span>';
+   return '<strong>'+escape(reais(items.value))+'</strong><small>'+escape(items.nature)+'</small><small>'+escape(items.file)+'</small>';
+  }
+  if(!items.length)return '<span class="pucq-empty">Sem dado vinculado</span>';
+  return items.slice(0,8).map(item=>{
+   const value=type==='bm'?item.amount:item.value;
+   let sub=type==='bm'?'BM '+(item.bm||'nº pendente')+' · '+item.document:item.nature;
+   let extra=type==='bm'?(item.pct?'Medição '+item.pct:'')+(item.acc!==null&&item.acc!==undefined?' · Acumulado '+reais(item.acc):'')+(item.pctAcc?' ('+item.pctAcc+')':''):'';
+   return '<div class="pucq-amount"><strong>'+escape(reais(value))+'</strong><small>'+escape(sub)+'</small>'+(extra?'<small>'+escape(extra)+'</small>':'')+(type==='bm'&&!item.verified?'<small>Candidato não conferido</small>':'')+'</div>';
+  }).join('')+(items.length>8?'<small>Mais '+(items.length-8)+' registro(s); não somados</small>':'');
+ }
+ let currentUF='',currentSearch='';
+ function render(){
+  const place=$('pucq-table-body'),counter=$('pucq-count');if(!place)return;
+  const rows=build({balancos:balances(),pucs:projects(),orcamento:siop(),documentos:sourceDocs()});
+  const ufs=[...new Set(rows.flatMap(r=>states(r.uf)))].sort();
+  const select=$('pucq-uf');if(select){
+   const choice=currentUF;
+   select.innerHTML='<option value="">Todas as UFs</option>'+ufs.map(uf=>'<option value="'+escape(uf)+'">'+escape(uf)+'</option>').join('');
+   select.value=choice&&ufs.includes(choice)?choice:'';
+  }
+  const visible=rows.filter(r=>(!currentUF||states(r.uf).includes(currentUF))&&(!currentSearch||(r.id+' '+r.empreendimento+' '+r.uf).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(currentSearch)));
+  place.innerHTML=visible.length?visible.map(r=>'<tr><td><strong>'+escape(r.id||'Não informado')+'</strong></td><td>'+escape(r.uf)+'</td><td><strong>'+escape(r.empreendimento)+'</strong><small>'+escape(r.project||'PUC não vinculada')+' · '+escape(r.link)+'</small></td><td>'+cell(r.bms,'bm')+'</td><td>'+cell(r.balanco,'balanco')+'</td><td>'+cell(r.siop,'siop')+'</td><td>'+cell(r.docas,'docas')+'</td></tr>').join(''):'<tr><td colspan="7">Nenhum empreendimento identificado para os filtros. Importe o Balanço em XLSX/CSV e confira a UF e o ID_governa.</td></tr>';
+  if(counter){const orphan=sourceDocs().filter(d=>d.origin==='SEI'&&/BM IDENTIFICADO|BM PROVÁVEL/.test(d.bmStatus||'')&&!d.project).length;counter.textContent=visible.length+' de '+rows.length+' empreendimento(s) · '+orphan+' BM(s) SEI ainda sem PUC vinculada. Valores de naturezas diferentes não são comparados automaticamente.'}
+ }
+ function reportSection(projectId){
+  const rows=build({balancos:balances(),pucs:projects(),orcamento:siop(),documentos:sourceDocs()}).filter(r=>r.project===projectId);
+  if(!rows.length)return '<h3>Quadro das quatro fontes por ID_governa e UF</h3><p>Não há vínculo confirmado entre este projeto e uma linha do Balanço. Não atribuir valores de outras obras.</p>';
+  return '<h3>Valores por ID_governa e UF (fontes distintas; sem equivalência automática)</h3><table><thead><tr><th>ID_governa</th><th>UF</th><th>Empreendimento</th><th>Valor BM</th><th>Valor do Balanço</th><th>Valor do SIOP</th><th>Valor Informado pelas DOCAS</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+escape(r.id)+'</td><td>'+escape(r.uf)+'</td><td>'+escape(r.empreendimento)+'</td><td>'+cell(r.bms,'bm')+'</td><td>'+cell(r.balanco,'balanco')+'</td><td>'+cell(r.siop,'siop')+'</td><td>'+cell(r.docas,'docas')+'</td></tr>').join('')+'</tbody></table>';
+ }
+ function init(){
+  const main=$('puc3-main');if(!main||$('pucq-panel'))return;
+  const panel=document.createElement('section');panel.id='pucq-panel';panel.className='pucq-panel';
+  panel.innerHTML='<h3>Quadro de valores por ID_governa, UF e empreendimento</h3><p class="muted">Fontes independentes. <strong>Valor BM</strong> = medição contratual; <strong>Balanço</strong> = valor global do empreendimento; <strong>SIOP</strong> = empenho da União (vínculo preliminar); <strong>DOCAS</strong> = valor declarado conforme sua natureza. Sem correspondência documental, não há soma nem divergência automática.</p><div class="pucq-controls"><label>UF <select id="pucq-uf"><option value="">Todas as UFs</option></select></label><label>Localizar ID ou empreendimento <input id="pucq-search" type="search" placeholder="ID_governa ou nome"></label></div><p id="pucq-count" class="muted"></p><div class="scroll pucq-scroll"><table class="data-table pucq-table"><thead><tr><th>ID_governa</th><th>UF</th><th>Nome do empreendimento</th><th>Valor BM</th><th>Valor do Balanço</th><th>Valor do SIOP</th><th>Valor Informado pelas DOCAS</th></tr></thead><tbody id="pucq-table-body"></tbody></table></div>';
+  const after=$('puc3-document-list');if(after)after.insertAdjacentElement('afterend',panel);else main.appendChild(panel);
+  const css=document.createElement('style');css.textContent='.pucq-panel{margin:20px 0;padding:16px 0;border-block:1px solid #dce6ec}.pucq-controls{display:flex;flex-wrap:wrap;gap:15px;margin:14px 0}.pucq-controls label{display:flex;flex-direction:column;gap:5px;font-size:13px}.pucq-controls select,.pucq-controls input{min-width:160px;padding:9px;border:1px solid #cedae4;border-radius:7px}.pucq-table{min-width:1180px!important}.pucq-table th,.pucq-table td{vertical-align:top;min-width:112px}.pucq-table td:nth-child(3){min-width:245px}.pucq-table td small{display:block;color:#607b8c;font-size:11px;margin-top:4px;overflow-wrap:anywhere}.pucq-amount{padding:4px 0 8px;border-bottom:1px dotted #d5e1e8}.pucq-amount strong{white-space:nowrap}.pucq-empty{color:#718493;font-style:italic}.pucq-scroll{overflow-x:auto}';document.head.appendChild(css);
+  $('pucq-uf').onchange=e=>{currentUF=e.target.value;render()};
+  $('pucq-search').oninput=e=>{currentSearch=e.target.value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();render()};
+  document.addEventListener('puc-documents-updated',render);
+  render();
+ }
+ w.PUCQuadroValores={build,parseMoney:monetary,render,reportSection};
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
+})(window);
