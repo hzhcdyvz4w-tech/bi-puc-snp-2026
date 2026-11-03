@@ -99,6 +99,7 @@ function updateProjects(){const co=$f('ficha-company'),p=$f('ficha-project'),pre
 }
 function openProject(id){const p=data.projetos.find(x=>x.id===id);if(!p)return;nav('fichas');$f('ficha-company').value=p.empresa;updateProjects();$f('ficha-project').value=id;selectedId=id;updateContractsOnly();loadBalanceForm();renderRows();drawSheet();}
 function sourcePanel(open=true,source='sei'){
+ if(open&&$f('fichas')?.classList.contains('ficha-grafico-enxuto')){document.querySelector('#nav [data-page="documentos"]')?.click();return}
  const panel=$f('ficha-source-panel'),btn=$f('ficha-toggle-sources');if(!panel||!btn)return;
  panel.hidden=!open;btn.setAttribute('aria-expanded',String(open));btn.classList.toggle('is-open',open);
  if(open){const card=panel.querySelector('#ficha-src-'+(source==='balanco'?'bal':source==='bm'?'bm':source==='plan'?'plan':'sei'))?.closest('.ficha-source-card');
