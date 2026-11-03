@@ -22,6 +22,12 @@ const safeNum=(v,min=0,max=1e14)=>Number.isFinite(Number(v))&&v!==''&&v!==null&&
 const txt=(s,limit=120)=>String(s??'').slice(0,limit);
 let bmRows=[],balances={},planned={},selectedId='',importLog=[],lastZipFile='',balanceCandidates=[];
 const capFiles=350,capCandidates=120,capPdfPages=10,capPdfBytes=24*1024*1024;
+const seiActive=row=>{
+ if(!row.sourceDocId)return true;
+ try{return !new Set(JSON.parse(localStorage.getItem('BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1')||'[]')).has(row.sourceDocId)}
+ catch(e){return true}
+};
+
 const recognizedBM=n=>/(?:^|[^A-Z\d])BM[\s_.\-]*(?:N[°ºO\-.\s]*)?\d{1,4}(?:\b|[^A-Z\d])|BOLETIM[\s_.\-]*DE[\s_.\-]*MEDI|RELATORIO[\s_.\-]*DE[\s_.\-]*MEDIC/i.test(normal(n));
 const bmBody=t=>/BOLETIM\s+(?:DE\s+)?MEDI[CÇ][AÃ]O|\bBM\s*(?:N[º°.]*)?\s*\d{1,4}\b|RELAT[OÓ]RIO\s+(?:DE\s+)?MEDI[CÇ][AÃ]O/i.test(t);
 const labelValue=(text,patterns,amount=false)=>{
@@ -86,7 +92,7 @@ function ui(){
 function updateProjects(){const co=$f('ficha-company'),p=$f('ficha-project'),prev=selectedId;
  option(co,data.projetos.map(x=>x.empresa));const rows=data.projetos.filter(x=>!co.value||x.empresa===co.value);const prior=p.value;
  option(p,rows.map(x=>x.id),id=>{const x=data.projetos.find(p=>p.id===id);return `${x.id} · ${x.empreendimento}`});if(rows.some(x=>x.id===prior))p.value=prior;else if(rows.some(x=>x.id===prev))p.value=prev;else p.value='';
- const id=p.value;selectedId=id;const contratos=[...new Set(bmRows.filter(x=>x.project===id&&x.contract&&x.status!=='ignorado').map(x=>x.contract))];const contract=$f('ficha-contract');const old=contract.value;
+ const id=p.value;selectedId=id;const contratos=[...new Set(bmRows.filter(x=>x.project===id&&x.contract&&x.status!=='ignorado'&&seiActive(x)).map(x=>x.contract))];const contract=$f('ficha-contract');const old=contract.value;
  contract.innerHTML='<option value="">'+(contratos.length>1?'Selecione um contrato para curva S':'Todos / contrato único')+'</option>';for(const c of contratos){const o=document.createElement('option');o.value=c;o.textContent=c;contract.appendChild(o)}contract.value=contratos.includes(old)?old:(contratos.length===1?contratos[0]:'');
  renderRows();loadBalanceForm();drawSheet();
 }
@@ -99,11 +105,11 @@ function sourcePanel(open=true,source='sei'){
    // Não deslocar o usuário ao abrir pelo botão superior. Chamadas externas podem focar o painel.
  }
 }
-function sourceCounts(){const id=$f('ficha-project')?.value||'';const badge=$f('ficha-upload-badge');if(!badge)return;const rows=bmRows.filter(x=>x.project===id&&x.status!=='ignorado');badge.textContent=id?`${rows.length} BM(s) · ${rows.filter(x=>x.status==='confirmado').length} conferido(s) · ${balances[id]?'Balanço registrado':'Balanço pendente'}`:'Selecione o empreendimento';}
+function sourceCounts(){const id=$f('ficha-project')?.value||'';const badge=$f('ficha-upload-badge');if(!badge)return;const rows=bmRows.filter(x=>x.project===id&&x.status!=='ignorado'&&seiActive(x));badge.textContent=id?`${rows.length} BM(s) · ${rows.filter(x=>x.status==='confirmado').length} conferido(s) · ${balances[id]?'Balanço registrado':'Balanço pendente'}`:'Selecione o empreendimento';}
 function gotoSection(id){const el=$f(id);if(!el)return;el.scrollIntoView({behavior:'smooth',block:'start'});el.querySelector('input,select,button')?.focus({preventScroll:true});}
 
-function updateContractsOnly(){const id=$f('ficha-project').value,cs=[...new Set(bmRows.filter(x=>x.project===id&&x.contract&&x.status!=='ignorado').map(x=>x.contract))];const el=$f('ficha-contract'),old=el.value;el.innerHTML='<option value="">'+(cs.length>1?'Escolha um contrato para a curva S':'Todos / contrato único')+'</option>';for(const v of cs){const o=document.createElement('option');o.value=v;o.textContent=v;el.appendChild(o)}el.value=cs.includes(old)?old:(cs.length===1?cs[0]:'');}
-function eligible(id){return bmRows.filter(x=>x.project===id&&x.status!=='ignorado');}
+function updateContractsOnly(){const id=$f('ficha-project').value,cs=[...new Set(bmRows.filter(x=>x.project===id&&x.contract&&x.status!=='ignorado'&&seiActive(x)).map(x=>x.contract))];const el=$f('ficha-contract'),old=el.value;el.innerHTML='<option value="">'+(cs.length>1?'Escolha um contrato para a curva S':'Todos / contrato único')+'</option>';for(const v of cs){const o=document.createElement('option');o.value=v;o.textContent=v;el.appendChild(o)}el.value=cs.includes(old)?old:(cs.length===1?cs[0]:'');}
+function eligible(id){return bmRows.filter(x=>x.project===id&&x.status!=='ignorado'&&seiActive(x));}
 function renderRows(){const id=$f('ficha-project').value,rows=eligible(id);$f('ficha-bm-count').textContent=`${rows.length} BM(s) identificado(s) · ${rows.filter(x=>x.status==='confirmado').length} conferido(s)`;
  $f('ficha-bms-rows').innerHTML=rows.map(x=>`<tr data-bmrow="${ef(x.id)}"><td><b>BM ${ef(x.number||'s/n')}</b><span class="bm-evidence" title="${ef(x.evidence)}">${ef(txt(x.evidence,110))}</span>${x.warning?`<span class="ficha-flag">${ef(x.warning)}</span>`:''}</td><td><input data-bmfield="date" aria-label="Data BM ${ef(x.number)}" type="date" value="${ef(x.date)}" /></td><td><input data-bmfield="contract" aria-label="Contrato BM ${ef(x.number)}" value="${ef(x.contract)}" /></td><td><input data-bmfield="physical" aria-label="Físico acumulado BM ${ef(x.number)}" inputmode="decimal" placeholder="—" value="${ef(x.physical??'')}" /></td><td><input data-bmfield="measured" aria-label="Medição período BM ${ef(x.number)}" inputmode="decimal" placeholder="—" value="${ef(x.measured??'')}" /></td><td><input data-bmfield="cumulative" aria-label="Medição acumulada BM ${ef(x.number)}" inputmode="decimal" placeholder="—" value="${ef(x.cumulative??'')}" /></td><td><span class="status-tag ${x.status==='confirmado'?'ok':'wait'}">${x.status==='confirmado'?'Conferido pelo operador':'A conferir'}</span></td><td><div class="bm-op"><button type="button" class="btn" data-bmconfirm="${ef(x.id)}">Conferir</button><button type="button" class="btn secondary" data-bmremove="${ef(x.id)}">Ignorar</button></div></td></tr>`).join('')||'<tr><td colspan="8" class="empty">Nenhum BM identificado neste empreendimento.</td></tr>';
 }
@@ -206,7 +212,7 @@ async function importPlan(file){if(!file)return;try{if(!selectedId)throw Error('
  planned[selectedId]=points;$f('ficha-planned-status').textContent=`${points.length} ponto(s) previstos importados. Usar somente se o cronograma estiver aprovado e vigente.`;drawSheet();
  }catch(e){$f('ficha-planned-status').textContent='Cronograma não aplicado: '+e.message}finally{$f('ficha-planned-file').value=''}}
 function monthLabel(m){return m?m.slice(5,7)+'/'+m.slice(2,4):'—'}
-function physicalSeries(id,contract){const confirmed=bmRows.filter(x=>x.project===id&&x.status==='confirmado'&&x.physical!==null&&validDate(x.date));const contracts=[...new Set(confirmed.map(x=>x.contract||'SEM CONTRATO'))];
+function physicalSeries(id,contract){const confirmed=bmRows.filter(x=>x.project===id&&x.status==='confirmado'&&seiActive(x)&&x.physical!==null&&validDate(x.date));const contracts=[...new Set(confirmed.map(x=>x.contract||'SEM CONTRATO'))];
  if(contracts.length>1&&!contract)return {points:[],warnings:['Há BMs de múltiplos contratos. Escolha um contrato no filtro: percentuais de contratos diferentes não podem ser somados.'],multi:true};
  const used=confirmed.filter(x=>!contract||x.contract===contract).sort((a,b)=>a.date.localeCompare(b.date)||String(a.number).localeCompare(String(b.number),'pt-BR',{numeric:true}));
  let warnings=[],seen=new Set(),points=[];
@@ -234,7 +240,7 @@ function progressStatus(b,p,curve){let warnings=[...curve.warnings];const ready=
  return {latest,consumed,variance,match,warnings};
 }
 function sheetFor(id){const p=data.projetos.find(x=>x.id===id);if(!p)return '<div class="empty">Selecione um empreendimento.</div>';
- const b=balances[id]||{},contract=$f('ficha-contract').value,actual=physicalSeries(id,contract),plan=planned[id]||[],progress=progressStatus(b,p,actual),confirmed=bmRows.filter(x=>x.project===id&&x.status==='confirmado'&&(!contract||x.contract===contract)).sort((a,b)=>a.date.localeCompare(b.date));
+ const b=balances[id]||{},contract=$f('ficha-contract').value,actual=physicalSeries(id,contract),plan=planned[id]||[],progress=progressStatus(b,p,actual),confirmed=bmRows.filter(x=>x.project===id&&x.status==='confirmado'&&seiActive(x)&&(!contract||x.contract===contract)).sort((a,b)=>a.date.localeCompare(b.date));
  const latest=progress.latest,meas=confirmed.filter(x=>x.measured!==null),sumMed=meas.reduce((s,r)=>s+r.measured,0),lastAcum=[...confirmed].reverse().find(x=>x.cumulative!==null);
  const global=b.global??null,fin=b.financial??null,physical=b.physical??null;
  const now=new Date().toLocaleDateString('pt-BR'),warningRows=progress.warnings.map(w=>`<span class="ficha-flag">${ef(w)}</span>`).join('');
@@ -251,7 +257,7 @@ function sheetFor(id){const p=data.projetos.find(x=>x.id===id);if(!p)return '<di
  <h3 class="ficha-subheading">Pendências e alertas de consistência</h3>${warningRows?`<div>${warningRows}</div>`:'<p class="ficha-comment">Sem conflitos detectados nos registros disponíveis. Não equivale a regularidade ou completude documental.</p>'}<p class="ficha-comment">${!b.evidence?'PENDÊNCIA: anexar e validar Balanço com valor global, execução física/financeira e vigência. ':''}${!actual.points.length?'PENDÊNCIA: histórico físico acumulado de BMs do mesmo contrato não está completo. ':''}${!plan.length?'PENDÊNCIA: cronograma físico previsto por competência para confrontar Curva S. ':''}A consulta SIOP 2 disponibilizada não contém percentual de execução física.</p>
  <div class="ficha-foot">Documento auxiliar gerado localmente. Evidências SEI e Balanço devem ser conferidas no processo oficial; referência e valores digitados não certificam conteúdo, conclusão jurídica ou homologação da SNP. Site GitHub Pages público: nenhum PDF/ZIP é enviado automaticamente.</div>`;
 }
-function drawSheet(){sourceCounts();const el=$f('ficha-print-area');if(!el)return;const id=$f('ficha-project').value;selectedId=id;el.innerHTML=sheetFor(id);$f('ficha-top-status').textContent=id?`Projeto: ${id} · BMs incluídos: ${bmRows.filter(x=>x.project===id&&x.status!=='ignorado').length} · Atenção: dados internos permanecem apenas no navegador.`:'Selecione um empreendimento. Não há vinculação automática de novos SEI ao SIOP sem conferência.';}
+function drawSheet(){sourceCounts();const el=$f('ficha-print-area');if(!el)return;const id=$f('ficha-project').value;selectedId=id;el.innerHTML=sheetFor(id);$f('ficha-top-status').textContent=id?`Projeto: ${id} · BMs incluídos: ${bmRows.filter(x=>x.project===id&&x.status!=='ignorado'&&seiActive(x)).length} · Atenção: dados internos permanecem apenas no navegador.`:'Selecione um empreendimento. Não há vinculação automática de novos SEI ao SIOP sem conferência.';}
 function exportSession(){const payload={schema:'PUC_FICHAS_BM_V8',created_at:new Date().toISOString(),bmRows,balances,planned,warning:'DOCUMENTO CONTÉM DADOS INSTITUCIONAIS. Guardar em meio autorizado. Nunca publicar em GitHub público.'};const link=document.createElement('a'),url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));link.href=url;link.download='PUC_FICHAS_BM_SESSAO_PRIVADA.json';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 async function restoreSession(file){if(!file)return;try{const t=JSON.parse(await file.text());if(t.schema!=='PUC_FICHAS_BM_V8'||!Array.isArray(t.bmRows)||t.bmRows.length>10000)throw Error('Formato ou quantidade incompatível');const ids=new Set(data.projetos.map(p=>p.id));const rows=t.bmRows.filter(x=>ids.has(x.project)).map(x=>({...x,id:txt(x.id,80),number:txt(x.number,40),date:validDate(x.date)?x.date:'',physical:safeNum(x.physical,0,100),measured:safeNum(x.measured,0),cumulative:safeNum(x.cumulative,0),evidence:txt(x.evidence,700),contract:txt(x.contract,120),status:x.status==='confirmado'?'confirmado':x.status==='ignorado'?'ignorado':'pendente'}));bmRows=rows;balances=Object.fromEntries(Object.entries(t.balances||{}).filter(([k])=>ids.has(k)));planned=Object.fromEntries(Object.entries(t.planned||{}).filter(([k])=>ids.has(k)));updateContractsOnly();loadBalanceForm();renderRows();drawSheet();$f('ficha-extraction-status').textContent=`Sessão restaurada com ${rows.length} BMs. Confirme novamente os documentos de origem antes de concluir.`}
  catch(e){$f('ficha-extraction-status').textContent='Restauração recusada: '+e.message}finally{$f('ficha-restore-session').value=''}}
@@ -260,7 +266,7 @@ function syncConfront(){
  if(typeof normalizeRecord!=='function'||!Array.isArray(observations)){alert('Módulo de confronto não disponível.');return}
  let staged=[],errors=[],count=0,scount=0;
  const add=(source,indicator,value,cutoff,contract,evidence,verified,aggregation='ACUMULADO',note='')=>{if(value===null||blank(value)||!validDate(cutoff))return;try{staged.push(normalizeRecord({id_puc:selectedId,source,indicator,value,period:ym(cutoff),cutoff,contract,object_ref:contract?'CONTRATO':'GLOBAL_PROJETO',evidence,verified,aggregation,note}))}catch(e){errors.push(e.message)}};
- for(const x of bmRows.filter(v=>v.project===selectedId&&v.status==='confirmado'&&validDate(v.date))){
+ for(const x of bmRows.filter(v=>v.project===selectedId&&v.status==='confirmado'&&seiActive(v)&&validDate(v.date))){
   add('SEI','execucao_fisica',x.physical,x.date,x.contract,x.evidence,true,'ACUMULADO',`BM ${x.number}: físico acumulado`);
   add('SEI','medicao_bm',x.measured,x.date,x.contract,x.evidence,true,'MENSAL',`BM ${x.number}: valor medido neste período`);
   add('SEI','medicao_bm',x.cumulative,x.date,x.contract,x.evidence,true,'ACUMULADO',`BM ${x.number}: valor medido acumulado`);
