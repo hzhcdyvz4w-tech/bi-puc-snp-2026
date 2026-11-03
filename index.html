@@ -84,6 +84,19 @@ body .grid2{gap:18px}
  body .nav{display:none!important}
 }
 </style>
+<style id="puc-footer-institucional-css">
+.puc-institutional-footer{background:#f8fafc;border-top:1px solid #d7e2e9;padding:25px clamp(18px,2.4vw,42px);color:#45627a;font-size:12px;line-height:1.5}
+.puc-footer-inner{max-width:1680px;margin:0 auto;display:grid;grid-template-columns:minmax(290px,1fr) minmax(330px,1.4fr);align-items:start;gap:28px}
+.puc-footer-identity,.puc-footer-technical,.puc-footer-team{display:flex;flex-direction:column;gap:4px}
+.puc-footer-identity>strong{color:#183d60;font-size:14px}
+.puc-footer-team{border-top:1px solid #dbe4eb;margin-top:9px;padding-top:9px}
+.puc-footer-team strong{font-size:12px;color:#264b69}
+.puc-footer-technical{text-align:right;align-items:flex-end;padding-top:21px}
+.puc-footer-technical span{max-width:680px}
+.puc-institutional-footer strong{font-weight:700}
+@media(max-width:800px){.puc-footer-inner{grid-template-columns:minmax(0,1fr);gap:18px}.puc-footer-technical{text-align:left;align-items:flex-start;padding-top:0}}
+@media print{.puc-institutional-footer{padding:8px!important;font-size:9pt}.puc-footer-inner{gap:8px;grid-template-columns:1fr 1fr}}
+</style>
 </head>
 <body>
 <header><div class="heading"><div><h1>BI Executivo · Projetos PUC</h1><p>Secretaria Nacional de Portos · MPOR | Acompanhamento de investimentos 2026</p></div><div class="mini-label">Base SIOP 2026 · carteira referencial</div></div></header>
@@ -134,7 +147,26 @@ body .grid2{gap:18px}
 <div class="statusline" id="schedule-feedback" role="status"></div>
 </div><h3 style="margin-top:18px">Inventário desta sessão</h3><div class="scroll"><table class="data-table"><thead><tr><th>Origem</th><th>Nome</th><th>Projeto</th><th>Referência</th><th>Resumo</th><th>Tratamento</th></tr></thead><tbody id="inventory-rows"><tr><td class="empty" colspan="6">Nenhum arquivo anexado nesta sessão.</td></tr></tbody></table></div></div>
 <div class="panel"><h2>Fluxo de alimentação das fontes</h2><div class="note-grid"><div><strong>1 · SIOP</strong>Base de consulta já integrada e atualização por upload XLSX de mesmo leiaute. API automática ainda não configurada; para próximas atualizações, repetir a consulta com as dimensões Ano, Órgão, UO, Programa, Ação, PO, GND, RP e valores orçamentários.</div><div><strong>2 · SEI</strong>PDF/ZIP e número de processo; inventário local. Sem extração automática de fatos financeiros.</div><div><strong>3 · Balanço</strong>Recebimento externo, com identificação de aba e período para posterior DE/PARA.</div><div><strong>4 · Docas</strong>Formulários e comprovantes por investimento, com validação humana antes do confronto.</div><div><strong>5 · Comparação</strong>Chave: ação + PO + projeto + indicador + período + unidade + evidência.</div><div><strong>6 · Homologação SNP</strong>Achados e pendências não equivalem a conclusões de irregularidade.</div></div></div></section>
-</main><footer class="foot">BI PUC V6 · 28/10/2026 · Confronto auditável habilitado · SIOP e carteira referencial publicados · Atualização da consulta por novo XLSX · API SIOP e backend não conectados · Anexos locais não são enviados ao GitHub</footer>
+</main><footer class="puc-institutional-footer" aria-label="Informações institucionais do BI PUC">
+ <div class="puc-footer-inner">
+  <div class="puc-footer-identity">
+   <strong>BI Executivo PUC — Secretaria Nacional de Portos</strong>
+   <span>SNP / MPOR · Apoio ao acompanhamento executivo dos investimentos PUC</span>
+   <span>© 2026 BI Executivo PUC. Todos os direitos reservados.</span>
+   <div class="puc-footer-team">
+    <strong>Desenvolvedores do sistema:</strong>
+    <span>Francisco Dias Nascimento Filho — SNPTA</span>
+    <span>Laércio Matheus — COOAD</span>
+    <span>Victor Prijopranoto — COOAD</span>
+   </div>
+  </div>
+  <div class="puc-footer-technical">
+   <span><strong>Fontes referenciais:</strong> Base SIOP 2026 · Matriz Documental PUC 2026 · Balanço · SEI (BMs) · Informações das DOCAS</span>
+   <span><strong>Tratamento documental:</strong> anexos e evidências mantidos localmente no navegador; não enviados automaticamente ao GitHub</span>
+   <span><strong>Conciliação:</strong> resultados sujeitos à conferência documental e homologação da SNP</span>
+  </div>
+ </div>
+</footer>
 <script>/*!
 
 JSZip v3.10.1 - A JavaScript class for generating and reading zip files
@@ -444,7 +476,7 @@ init();initV7();
 <script src="assets/minuta-email.js?v=10"></script>
 <script src="assets/puc-document-engine.js?v=17"></script>
 <script src="assets/biblioteca-puc.js?v=19"></script>
-<script src="assets/confronto-documental-v13.js?v=28"></script>
+<script src="assets/confronto-documental-v13.js?v=29"></script>
 <script src="assets/centralizar-documentos-v16.js?v=18"></script>
 <script src="assets/puc-diagnostico.js?v=17"></script>
 <script src="assets/puc-correlacao-v17.js?v=2"></script>
