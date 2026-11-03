@@ -84,6 +84,12 @@
   const entries=w.PUCDocLibrary.list().filter(x=>x.origin==='SEI');
   assert(entries.some(x=>x.bmStatus==='BM IDENTIFICADO')&&entries.some(x=>x.bmStatus==='BM MENCIONADO'),'BM distinguido de despacho');
   assert(!entries.some(x=>x.name.includes('Relatorio_Nao_Selecionado')),'Arquivo interno desmarcado não foi importado');
+  const syntheticBM=entries.find(x=>x.bmStatus==='BM IDENTIFICADO');
+  assert(syntheticBM?.bmNumber==='05','BM nº 05 identificado no ZIP sintético');
+  const linked=await w.PUCDocLibrary.assignBMContext([syntheticBM.id],'PUC-01','50020.001577/2025-18');
+  assert(linked===1,'Vinculação explícita do BM ao empreendimento e processo');
+  const linkedBM=w.PUCDocLibrary.list().find(x=>x.id===syntheticBM.id);
+  assert(linkedBM.project==='PUC-01'&&linkedBM.ref==='50020.001577/2025-18','PUC e processo SEI persistidos sem quantidade de arquivos no identificador');
   assert(d().querySelectorAll('#puc3-sei-choices input[type=checkbox]').length===2,'Dois documentos SEI armazenados podem ser selecionados');
   const storedChoice=d().querySelector('#puc3-sei-choices input[type=checkbox]');storedChoice.click();
   assert(d().getElementById('puc3-sei-selected-count').textContent.startsWith('1 de 2'),'Desmarcar documento SEI preservado altera a seleção do confronto');
