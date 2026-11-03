@@ -93,6 +93,7 @@
   assert(w.PUC3ReviewDoc(syntheticBM.id),'Abrir revisão auditável diretamente do BM');
   assert(!d().getElementById('puc3-review').hidden&&d().getElementById('puc3-find-bm').value==='05','Formulário de revisão preenche o número do BM já identificado');
   assert(d().getElementById('puc3-find-project').value==='PUC-01','Formulário de revisão utiliza PUC vinculada');
+  d().querySelector('#nav [data-page="documentos"]').click(); // Retorna ao painel de anexos antes de verificar medidas visuais dos checkboxes.
   assert(d().querySelectorAll('#puc3-sei-choices input[type=checkbox]').length===2,'Dois documentos SEI armazenados podem ser selecionados');
   const storedChoice=d().querySelector('#puc3-sei-choices input[type=checkbox]');storedChoice.click();
   assert(d().getElementById('puc3-sei-selected-count').textContent.startsWith('1 de 2'),'Desmarcar documento SEI preservado altera a seleção do confronto');
