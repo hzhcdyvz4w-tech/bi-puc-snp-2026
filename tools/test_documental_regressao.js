@@ -70,6 +70,45 @@ test('Valores financeiros de BM não são inventados sem quadro contratual ident
  const result=engine.bmHeaderFromPDFItems([{str:'R$ 149.864,28',transform:[1,0,0,1,240,670],width:95}]);
  assert.equal(result.lines.length,0);
 });
+
+test('Nome composto de obra extraído do BM sem inventar título quando ausente',()=>{
+ const text='PÁGINA 1\nOBRA: REFORMA E RECUPERAÇÃO DOS ARMAZÉNS 1 E 2, DOS GALPÕES 1 E 2 E IMPLANTAÇÃO DE USINA FOTOVOLTAICA NO PORTO DE NATAL - RN\nBOLETIM DE MEDIÇÃO 01';
+ assert.match(win.PUCDocEngine.bmWorkName(text),/ARMAZÉNS 1 E 2/);
+ assert.equal(win.PUCDocEngine.bmWorkName('BOLETIM DE MEDIÇÃO 01\nSEM TÍTULO'), '');
+});
+test('Agrupamento de BM global em subdivisões, sem rateio, por nome da obra',()=>{
+ const pucs=[
+  {id:'PUC-01',uf:'RN',empreendimento:'Energia Solar - Natal / RN'},
+  {id:'PUC-02',uf:'RN',empreendimento:'Recuperação estrutural dos Armazéns nº 1 e 2 - Natal / RN'},
+  {id:'PUC-03',uf:'RN',empreendimento:'Recuperação estrutural dos Galpões nº 1 e 2 - Natal / RN'},
+  {id:'PUC-10',uf:'RN',empreendimento:'Dragagem do Porto de Natal/RN'}
+ ];
+ const work='REFORMA DOS ARMAZÉNS 1 E 2, DOS GALPÕES 1 E 2 E IMPLANTAÇÃO DE USINA FOTOVOLTAICA NO PORTO DE NATAL - RN';
+ const docs=[
+  {id:'a',origin:'SEI',workName:work,ref:'50020.001577/2025-18',name:'Anexo_BM01_1.pdf',bmNumber:'01',bmStatus:'BM IDENTIFICADO',candidates:[{type:'Valor da Medição (BM)',values:['149.864,28']}]},
+  {id:'b',origin:'SEI',workName:work,ref:'50020.001577/2025-18',name:'Anexo_BM01_2.pdf',bmNumber:'01',bmStatus:'BM IDENTIFICADO',candidates:[{type:'Valor da Medição (BM)',values:['149.864,28']}]}
+ ];
+ const grouped=vwin.PUCQuadroValores.buildWorkGroups({pucs,documentos:docs});
+ assert.equal(grouped.length,1);
+ assert.deepEqual(grouped[0].projects.map(p=>p.id).sort(),['PUC-01','PUC-02','PUC-03']);
+ assert.equal(grouped[0].bms.length,2);
+ assert.equal(grouped[0].bms[0].amount,'149.864,28');
+ assert.ok(!vwin.PUCQuadroValores.build({pucs,documentos:docs}).length,'Sem Balanço não inventar linhas ou rateios');
+});
+test('Total da tabela de BM só é extraído em linha de total com cabeçalho explícito',()=>{
+ const items=[
+  {str:'MEDIÇÃO (R$)',transform:[1,0,0,1,420,550],width:80},
+  {str:'ACUMULADO (R$)',transform:[1,0,0,1,610,550],width:110},
+  {str:'TOTAL GERAL',transform:[1,0,0,1,50,500],width:80},
+  {str:'149.864,28',transform:[1,0,0,1,430,500],width:85},
+  {str:'149.864,28',transform:[1,0,0,1,640,500],width:85}
+ ];
+ const result=win.PUCDocEngine.bmTotalsFromPDFItems(items);
+ assert.ok(result.some(x=>x.includes('Valor da Medição (BM)')));
+ assert.ok(result.some(x=>x.includes('Valor Acumulado (BM)')));
+ assert.equal(win.PUCDocEngine.bmTotalsFromPDFItems(items.filter(x=>x.str!=='TOTAL GERAL')).length,0);
+});
+
 test('Número e competência do BM',()=>{assert.equal(engine.bmNumber('BM_05.pdf','Boletim de Medição nº 05'),'05');assert.equal(engine.bmPeriod('BM_05.pdf','Competência 09/2026'),'2026-09')});
 test('Números de BM em anexos exportados do SEI',()=>{
  for(const [file,number] of [['[065]-10870234_Anexo_BM06_2.pdf','06'],['[064]-10870212_Anexo_BM06_1.pdf','06'],['[018]-10369072_Anexo_2_BM02.pdf','02'],['[010]-10270106_Anexo_4_BM1.pdf','1']])assert.equal(engine.bmNumber(file,''),number,file);
