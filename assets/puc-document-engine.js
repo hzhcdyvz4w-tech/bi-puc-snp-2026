@@ -106,6 +106,15 @@ function bmWorkName(text){
   const match=raw.match(/(?:^|\s)(?:OBRA|OBJETO\s+DA\s+OBRA)\s*:\s*(.{12,500})/i);
   if(match){
    let name=match[1].replace(/\s+(?:EMPRESA|CLIENTE|BDI|FONTES)\s*:.*/i,'').trim();
+   // Títulos extensos de obras costumam quebrar a linha no cabeçalho exportado do PDF.
+   // Anexa somente a continuação imediata, interrompendo ao encontrar outro campo/cabeçalho.
+   for(let k=i+1;k<=Math.min(i+2,lines.length-1)&&name.length<450;k++){
+    const cont=lines[k];
+    if(/^(?:EMPRESA|CLIENTE|FONTES|BDI|CONTRATO|CNPJ|VALOR|BOLETIM|PÁGINA|PAGINA|ITEM|CÓDIGO|CODIGO|FONTE|DESCRIÇÃO|DESCRICAO|SERVIÇOS|SERVICOS)\b/i.test(cont))break;
+    if(cont.length>125||/:/.test(cont)||/\d{1,3}(?:\.\d{3})*,\d{2}/.test(cont))break;
+    if(/^(?:DE|DO|DA|DOS|DAS|NO|NA|EM|E)\b/i.test(cont)||name.endsWith('PORTO'))name+=' '+cont;
+    else break;
+   }
    if(name.length>=12)return name.slice(0,450);
   }
  }
