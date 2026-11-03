@@ -43,6 +43,22 @@
   assert(await until(()=>d().getElementById('puc-selftest-results').textContent.includes('XLSX dentro do ZIP SEI')),'Autodiagnóstico executado com XLSX');
   const diagnosis=d().getElementById('puc-selftest-results').textContent;
   assert(diagnosis.includes('✓ DOCX dentro do ZIP SEI')&&diagnosis.includes('✓ XLSX dentro do ZIP SEI'),'Leitura de DOCX e XLSX internos ao ZIP');
+  // XLSX sintético com duas competências: a extração deve escolher Outubro e respeitar UF composta.
+  const plan=new w.JSZip(),ns='http://schemas.openxmlformats.org/spreadsheetml/2006/main',relNS='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  plan.file('xl/workbook.xml','<?xml version="1.0"?><workbook xmlns="'+ns+'" xmlns:r="'+relNS+'"><sheets><sheet name="Setembro - 2026" sheetId="1" r:id="rId1"/><sheet name="Outubro - 2026" sheetId="2" r:id="rId2"/></sheets></workbook>');
+  plan.file('xl/_rels/workbook.xml.rels','<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/></Relationships>');
+  const cell=(address,value)=>'<c r="'+address+'" t="inlineStr"><is><t>'+value+'</t></is></c>';
+  const row=(n,data)=>'<row r="'+n+'">'+Object.entries(data).map(([col,val])=>cell(col+n,val)).join('')+'</row>';
+  const workbookSheet=(data)=>'<?xml version="1.0"?><worksheet xmlns="'+ns+'"><sheetData>'+row(2,{A:'ID_governa',B:'Nome do Empreendimento',AG:'UF'})+data.map((r,i)=>row(i+3,r)).join('')+'</sheetData></worksheet>';
+  plan.file('xl/worksheets/sheet1.xml',workbookSheet([{A:'111',B:'Registro antigo setembro',AG:'RN'}]));
+  plan.file('xl/worksheets/sheet2.xml',workbookSheet([{A:'2434',B:'Energia Solar Natal',AG:'RN, PE'},{A:'9999',B:'Dragagem Paranaguá',AG:'PR'}]));
+  const balanceTest=new w.File([await plan.generateAsync({type:'blob'})],'BALANCO_SINTETICO_2026.xlsx',{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const balInput=d().getElementById('puc3-files-BALANCO'),balDt=new w.DataTransfer();balDt.items.add(balanceTest);balInput.files=balDt.files;balInput.dispatchEvent(new w.Event('change'));
+  assert(await until(()=>d().getElementById('puc3-empreendimento-balanco').options.length===3),'Balanço: seleciona aba Outubro, ignorando registro de Setembro',d().getElementById('puc3-balanco-preview').textContent);
+  const state=d().getElementById('puc3-uf-balanco');state.value='RN';state.dispatchEvent(new w.Event('change'));
+  assert(await until(()=>d().getElementById('puc3-empreendimento-balanco').options.length===2),'Balanço: filtro RN inclui empreendimento multiestadual',d().getElementById('puc3-balanco-preview').textContent);
+  assert(d().getElementById('puc3-empreendimento-balanco').options[1].textContent.includes('2434'),'Balanço: preserva ID_governa e nome do empreendimento');
+  state.value='';state.dispatchEvent(new w.Event('change'));
   const zip=new w.JSZip();
   zip.file('BM_05_Medicao.html','<html><body><h1>Boletim de Medição nº 05</h1><p>Competência: 09/2026</p><p>Valor medido no período: R$ 1.234,56</p></body></html>');
   zip.file('Despacho_323.html','<html><body>Despacho que menciona Boletim de Medição 05.</body></html>');
