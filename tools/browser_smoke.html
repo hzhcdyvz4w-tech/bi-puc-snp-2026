@@ -24,12 +24,15 @@
   const other=[...d().querySelectorAll('input[type=file]')].filter(el=>!central.contains(el)&&w.getComputedStyle(el).display!=='none'&&w.getComputedStyle(el.closest('label')||el).display!=='none'&&!el.closest('[hidden]'));
   assert(other.length===0,'Nenhum outro campo de anexo visível',String(other.length));
   assert(d().querySelectorAll('#puc3-projects input[type=checkbox]').length===12,'12 PUCs selecionáveis');
+  assert(!central.contains(d().getElementById('puc3-projects'))&&!central.contains(d().getElementById('puc3-search')),'Seção de seleção removida de Documentos');
+  assert(compare.contains(d().getElementById('puc3-compare-project-picker')),'Seletor opcional disponível no Confronto');
   d().querySelector('#nav [data-page="documentos"]').click();frame.style.width='375px';await sleep(250);
   const mobileColumns=w.getComputedStyle(uploads).gridTemplateColumns.trim().split(/\s+/).length;
   assert(mobileColumns===1,'Responsividade: três fontes em coluna única no celular',w.getComputedStyle(uploads).gridTemplateColumns);
   frame.style.width='1400px';await sleep(150);
+  assert(d().getElementById('puc3-selected').textContent.startsWith('12 PUC'),'Todos os projetos habilitados por padrão');
   const first=d().querySelector('#puc3-projects input[value="PUC-01"]');first.click();
-  assert(d().getElementById('puc3-selected').textContent.startsWith('1 PUC'),'Seleção individual');
+  assert(d().getElementById('puc3-selected').textContent.startsWith('11 PUC'),'Seleção individual no Confronto');
   d().getElementById('puc3-all').click();
   assert(d().getElementById('puc3-selected').textContent.startsWith('12 PUC'),'Seleção de todas');
   d().getElementById('puc3-clear').click();
