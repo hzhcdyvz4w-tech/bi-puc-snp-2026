@@ -335,7 +335,7 @@ async function importFiles(source){
 }
 function lineFor(d){
  const quality=d.quality||'Documento anterior — reanalisar',bm=/^(?:BM IDENTIFICADO|BM PROVÁVEL)/.test(d.bmStatus||'');
- const findings=(d.findings||[]).length, candidates=(d.candidates||[]).slice(0,4).map(c=>c.type+': '+(c.values||[]).join(', ')).join('; ');
+ const findings=(d.findings||[]).length, candidates=(d.candidates||[]).slice(0,bm?9:4).map(c=>c.type+': '+(c.values||[]).join(', ')).join('; ');
  return '<tr><td><strong>'+esc(d.origin)+'</strong><br>'+esc(d.project||'Carteira / sem vínculo')+'</td><td>'+esc(d.name)+'<small>'+esc(d.container||'Arquivo individual')+'</small></td><td>'+esc(bm?'BM '+(d.bmNumber||'nº a confirmar')+(d.bmPeriod?' · '+d.bmPeriod:' · competência a conferir'):d.bmStatus||'Não classificado')+'</td><td>'+esc(candidates||'Nenhum valor extraído')+'</td><td>'+esc(quality)+'<small>'+findings+' achado(s) revisado(s)</small></td><td><button type="button" class="btn secondary" data-review="'+esc(d.id)+'">Revisar</button></td></tr>'
 }
 function renderFiles(){
