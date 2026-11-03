@@ -248,11 +248,14 @@ function refreshAttachmentStatus(){
   if(!label)continue;
   const stored=docs().filter(d=>d.origin===source);
   const pending=[...($('puc3-files-'+source)?.files||[])];
-  if(pending.length){
-   label.textContent='Selecionado para análise: '+pending.map(f=>f.name).join(' · ')+(stored.length?' | '+stored.length+' documento(s) já armazenado(s)':'');
+  // Resumo sem nomes: o detalhamento permanece nas listas de selecao e na biblioteca documental.
+  // Evita exibir centenas de nomes de arquivos no painel de anexacao.
+  const count=pending.length;
+  if(count){
+   const zipCount=pending.filter(f=>/\\.zip$/i.test(f.name)).length;
+   label.textContent=count+' arquivo(s) selecionado(s) para análise'+(zipCount?' · '+zipCount+' ZIP(s)':'')+(stored.length?' · '+stored.length+' documento(s) já armazenado(s)':'')+'. Use a seleção acima para escolher o que será importado.';
   }else if(stored.length){
-   const recent=stored[0];
-   label.textContent='Anexo preservado na biblioteca local: '+(recent.container&&recent.container!=='Arquivo individual'?recent.container:recent.name)+' · '+stored.length+' documento(s) armazenado(s). Selecione outro arquivo somente para atualizar.';
+   label.textContent=stored.length+' documento(s) armazenado(s) na biblioteca local deste navegador. Selecione outro arquivo somente para atualizar.';
   }else{
    label.textContent='Nenhum documento desta fonte armazenado neste navegador.';
   }
