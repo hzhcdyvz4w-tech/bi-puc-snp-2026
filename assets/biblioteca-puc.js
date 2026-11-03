@@ -10,7 +10,7 @@ const engine=()=>window.PUCDocEngine;
 function bmNumber(x){return engine()?.bmNumber(x.name,x.text)||''}
 function bmCompetence(x){return engine()?.bmPeriod(x.name,x.text)||''}
 function classification(x){return engine()?.bmClass(x.name,x.text)||'SEM INDICAÇÃO DE BM'}
-function updateEntry(x){x.text=String(x.text||'');x.candidates=engine()?.indicators(x.text)||[];
+function updateEntry(x){if(x.origin==='SEI')x.ref=String(x.ref||'').replace(/\s*\|\s*\d+\s+documento\(s\)\s+selecionado\(s\)/gi,'').trim();x.text=String(x.text||'');x.candidates=engine()?.indicators(x.text)||[];
  x.bmStatus=x.bmManual?'BM IDENTIFICADO (MANUAL)':classification(x);
  if(x.bmManual||x.bmStatus==='BM IDENTIFICADO'||x.bmStatus==='BM PROVÁVEL'){
   x.category='BM / medição';x.bm={number:bmNumber(x),period:bmCompetence(x),candidates:x.candidates,status:'PENDENTE DE CONFERÊNCIA'}
