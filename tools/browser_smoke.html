@@ -153,9 +153,10 @@
   assert(await until(()=>!d().getElementById('puc3-sei-scan-bm').disabled&&d().getElementById('puc3-sei-zip-items').querySelectorAll('input').length===2),'Pesquisa identifica BM pelo conteúdo de arquivos avulsos',d().getElementById('puc3-sei-zip-count').textContent);
   assert(d().getElementById('puc3-sei-zip-items').textContent.includes('BM PROVÁVEL')||d().getElementById('puc3-sei-zip-items').textContent.includes('BM IDENTIFICADO'),'BM identificado/provável após leitura');
   d().getElementById('puc3-sei-zip-search').value='';d().getElementById('puc3-sei-zip-search').dispatchEvent(new w.Event('input'));
-  for(const label of d().querySelectorAll('#puc3-sei-zip-items label')){
-   if(!label.textContent.includes('[101]-Planilha.html'))label.querySelector('input').click();
-  }
+  d().getElementById('puc3-sei-zip-clear').click();
+  const bmSelected=[...d().querySelectorAll('#puc3-sei-zip-items label')].find(x=>x.textContent.includes('[101]-Planilha.html'));
+  assert(!!bmSelected,'Arquivo identificado como BM disponível na lista múltipla');
+  bmSelected.querySelector('input').click();
   assert(d().getElementById('puc3-sei-zip-count').textContent.startsWith('1 de 3'),'Seleção mantém somente o BM confirmado para importação');
   d().getElementById('puc3-ref-SEI').value='SEI-TESTE-AVULSO';
   d().querySelector('[data-import="SEI"]').click();
