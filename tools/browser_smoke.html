@@ -70,13 +70,25 @@
   const zip=new w.JSZip();
   zip.file('BM_05_Medicao.html','<html><body><h1>Boletim de Medição nº 05</h1><p>Competência: 09/2026</p><p>Valor medido no período: R$ 1.234,56</p></body></html>');
   zip.file('Despacho_323.html','<html><body>Despacho que menciona Boletim de Medição 05.</body></html>');
+  zip.file('Relatorio_Nao_Selecionado.txt','Anexo teste que não deve ser importado.');
   const file=new w.File([await zip.generateAsync({type:'blob'})],'PROCESSO_TESTE_SEI.zip',{type:'application/zip'});
   const input=d().getElementById('puc3-files-SEI'),dt=new w.DataTransfer();dt.items.add(file);input.files=dt.files;
+  input.dispatchEvent(new w.Event('change'));
+  assert(await until(()=>d().querySelectorAll('#puc3-sei-zip-items input[type=checkbox]').length===3),'Prévia de três documentos internos no ZIP');
+  const notSelected=[...d().querySelectorAll('#puc3-sei-zip-items .puc3-sei-choice')].find(x=>x.textContent.includes('Relatorio_Nao_Selecionado.txt'));
+  assert(!!notSelected,'Documento interno individual selecionável');notSelected.querySelector('input').click();
+  assert(d().getElementById('puc3-sei-zip-count').textContent.startsWith('2 de 3'),'Seleção múltipla de dois entre três documentos internos');
   d().getElementById('puc3-ref-SEI').value='SEI-TESTE-NAO-OFICIAL';
   d().querySelector('[data-import="SEI"]').click();
   assert(await until(()=>w.PUCDocLibrary.list().filter(x=>x.origin==='SEI').length===2),'ZIP SEI com dois documentos registrado',d().getElementById('puc3-status').textContent);
   const entries=w.PUCDocLibrary.list().filter(x=>x.origin==='SEI');
   assert(entries.some(x=>x.bmStatus==='BM IDENTIFICADO')&&entries.some(x=>x.bmStatus==='BM MENCIONADO'),'BM distinguido de despacho');
+  assert(!entries.some(x=>x.name.includes('Relatorio_Nao_Selecionado')),'Arquivo interno desmarcado não foi importado');
+  assert(d().querySelectorAll('#puc3-sei-choices input[type=checkbox]').length===2,'Dois documentos SEI armazenados podem ser selecionados');
+  const storedChoice=d().querySelector('#puc3-sei-choices input[type=checkbox]');storedChoice.click();
+  assert(d().getElementById('puc3-sei-selected-count').textContent.startsWith('1 de 2'),'Desmarcar documento SEI preservado altera a seleção do confronto');
+  d().getElementById('puc3-sei-all').click();
+  assert(d().getElementById('puc3-sei-selected-count').textContent.startsWith('2 de 2'),'Selecionar todos restaura documentos SEI');
   const addCSV=async(source,name,body)=>{
    const inp=d().getElementById('puc3-files-'+source),dt=new w.DataTransfer();
    dt.items.add(new w.File([body],name,{type:'text/csv'}));inp.files=dt.files;
