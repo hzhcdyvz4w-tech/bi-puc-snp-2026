@@ -74,7 +74,7 @@ async function PUCFiltrarBalancoPorUF(file,uf){
  });
  const header=data.find(row=>String(row.AG||'').trim().toUpperCase()==='UF'&&/empreendimento/i.test(String(row.B||'')));
  if(!header)throw Error('Cabeçalho UF/empreendimento não encontrado na aba '+sheetName);
- const selected=data.filter(row=>row!==header&&row.B&&String(row.AG||'').toUpperCase().split(/[,;\/]/).map(x=>x.trim()).includes(uf));
+ const selected=data.filter(row=>row!==header&&row.B&&row.AG&&(!uf||String(row.AG||'').toUpperCase().split(/[,;\/]/).map(x=>x.trim()).includes(uf)));
  const colIndex=x=>[...x].reduce((v,c)=>v*26+c.charCodeAt(0)-64,0);
  const cols=Object.keys(header).sort((a,b)=>colIndex(a)-colIndex(b));
  const csvCell=x=>{let s=String(x??'');if(/^\s*[=+@]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
@@ -94,14 +94,14 @@ async function importFiles(source){
  const button=$('puc3-uploads').querySelector('[data-import="'+source+'"]');button.disabled=true;
  try{status('Analisando '+files.length+' anexo(s) de '+source+'; arquivos internos do ZIP serão inventariados...');
   let targetFiles=files,filterMessage='';
-  if(source==='BALANCO'&&uf){
+  if(source==='BALANCO'&&uf&&files.some(file=>!/\.xlsx$/i.test(file.name)))throw Error('O filtro de UF funciona com Balanço XLSX. Para PDF ou CSV, utilize Todas as UFs.');
+  if(source==='BALANCO'&&files.every(file=>/\.xlsx$/i.test(file.name))){
    const filtered=[];let count=0;
    for(const file of files){
-    if(!/\.xlsx$/i.test(file.name))throw Error('O filtro de UF funciona com Balanço XLSX. Para PDF ou CSV, utilize Todas as UFs.');
     const result=await PUCFiltrarBalancoPorUF(file,uf);filtered.push(result.file);count+=result.count;
    }
-   if(!count)throw Error('Não foram encontrados empreendimentos para '+uf+' na aba mais recente da planilha.');
-   targetFiles=filtered;filterMessage=' | UF '+uf+' | '+count+' empreendimento(s)';
+   if(!count)throw Error('Não foram encontrados empreendimentos para '+(uf||'as UFs')+' na aba mais recente da planilha.');
+   targetFiles=filtered;filterMessage=' | '+(uf?'UF '+uf:'Todas as UFs')+' | '+count+' empreendimento(s) da aba mais recente';
   }
   const n=await lib().ingest(targetFiles,source,project,ref+filterMessage);
   $('puc3-files-'+source).value='';
