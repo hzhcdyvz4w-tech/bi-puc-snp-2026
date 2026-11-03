@@ -91,7 +91,7 @@ function ui(){
  const report=$f('relatorio')?.querySelector('.panel');if(report){const btn=document.createElement('button');btn.className='btn secondary hide-print';btn.id='ficha-from-report';btn.type='button';btn.textContent='Abrir ficha de BMs e Curva S';report.querySelector('.filters')?.appendChild(btn);btn.onclick=()=>{const id=$f('report-project').value;if(!id){alert('Selecione um empreendimento no relatório.');return}openProject(id)}}
 }
 function updateProjects(){const co=$f('ficha-company'),p=$f('ficha-project'),prev=selectedId;
- option(co,data.projetos.map(x=>x.empresa));const rows=data.projetos; // Somente seletor de empreendimento visível.const prior=p.value;
+ option(co,data.projetos.map(x=>x.empresa));const rows=data.projetos;const prior=p.value; // Seletor único; todos os empreendimentos permanecem acessíveis.
  option(p,rows.map(x=>x.id),id=>{const x=data.projetos.find(p=>p.id===id);return `${x.id} · ${x.empreendimento}`});if(rows.some(x=>x.id===prior))p.value=prior;else if(rows.some(x=>x.id===prev))p.value=prev;else p.value='';
  const id=p.value;selectedId=id;const contratos=[...new Set(bmRows.filter(x=>x.project===id&&x.contract&&x.status!=='ignorado'&&seiActive(x)).map(x=>x.contract))];const contract=$f('ficha-contract');const old=contract.value;
  contract.innerHTML='<option value="">'+(contratos.length>1?'Selecione um contrato para curva S':'Todos / contrato único')+'</option>';for(const c of contratos){const o=document.createElement('option');o.value=c;o.textContent=c;contract.appendChild(o)}contract.value=contratos.includes(old)?old:(contratos.length===1?contratos[0]:'');
