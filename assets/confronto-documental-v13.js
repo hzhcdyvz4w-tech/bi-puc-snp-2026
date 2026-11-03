@@ -34,7 +34,7 @@ function filesForReview(){
 }
 
 const PUC_BALANCO_UFS=['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
-async function PUCFiltrarBalancoPorUF(file,uf,empreendimentoId=''){
+async function PUCFiltrarBalancoPorUF(file,uf,empreendimentoIds=null){
  if(!window.JSZip)throw Error('Leitor de planilhas ZIP/XLSX indisponível.');
  const zip=await JSZip.loadAsync(await file.arrayBuffer()),parser=new DOMParser();
  const xml=async path=>{
@@ -75,7 +75,8 @@ async function PUCFiltrarBalancoPorUF(file,uf,empreendimentoId=''){
  const header=data.find(row=>String(row.AG||'').trim().toUpperCase()==='UF'&&/empreendimento/i.test(String(row.B||'')));
  if(!header)throw Error('Cabeçalho UF/empreendimento não encontrado na aba '+sheetName);
  const rows=data.filter(row=>row!==header&&row.B&&row.AG&&(!uf||String(row.AG||'').toUpperCase().split(/[,;\/]/).map(x=>x.trim()).includes(uf)));
- const selected=rows.filter(row=>!empreendimentoId||String(row.A||'')+'|'+String(row.B||'')===empreendimentoId);
+ const wanted=empreendimentoIds===null?null:new Set(empreendimentoIds);
+ const selected=rows.filter(row=>wanted===null||wanted.has(String(row.A||'')+'|'+String(row.B||'')));
  const colIndex=x=>[...x].reduce((v,c)=>v*26+c.charCodeAt(0)-64,0);
  const cols=Object.keys(header).sort((a,b)=>colIndex(a)-colIndex(b));
  const csvCell=x=>{let s=String(x??'');if(/^\s*[=+@]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
@@ -84,12 +85,13 @@ async function PUCFiltrarBalancoPorUF(file,uf,empreendimentoId=''){
  return {file:new File(['\ufeff'+csv],name,{type:'text/csv'}),count:selected.length,sheet:sheetName,registros:rows.map(row=>({id:String(row.A||''),empreendimento:String(row.B||''),uf:String(row.AG||''),municipio:String(row.AH||''),executor:String(row.AI||''),valor_global:String(row.D||''),inicio:String(row.P||''),termino:String(row.Q||''),fisico:String(row.R||''),data_referencia:String(row.K||'')}))};
 }
 
+const multiStyle=document.createElement('style');multiStyle.textContent='.puc3-balanco-multi{border:1px solid #d2dfeb;border-radius:8px;padding:9px;margin:10px 0}.puc3-balanco-multi>strong{display:block;font-size:12px;margin-bottom:8px}.puc3-balanco-actions{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.puc3-balanco-actions button{font-size:11px;padding:6px 9px}.puc3-balanco-multi input[type=search]{width:100%;margin:4px 0 8px}.puc3-balanco-options{max-height:220px;overflow:auto;border:1px solid #dce5ed;border-radius:6px;padding:5px}.puc3-balanco-choice{display:flex!important;align-items:flex-start;gap:8px;padding:7px 5px;border-bottom:1px solid #eef3f7;font-size:12px;cursor:pointer}.puc3-balanco-choice input{flex:0 0 auto;width:auto;margin-top:3px}.puc3-balanco-choice span{overflow-wrap:anywhere}.puc3-balanco-multi small{display:block;margin-top:8px}';document.head.appendChild(multiStyle);
 const persistenceStyle=document.createElement('style');
 persistenceStyle.textContent='.puc3-attachment-status{font-size:12px;line-height:1.45;margin:7px 0 10px;padding:9px 10px;border:1px solid #c7dfd3;border-radius:7px;background:#f3faf5;color:#275545;overflow-wrap:anywhere}';
 document.head.appendChild(persistenceStyle);
 function sourceCards(){
  $('puc3-uploads').innerHTML=sources.map(source=>'<div class="puc3-source"><h3>'+esc(names[source])+'</h3>'+
- (source==='BALANCO'?'<label>UF do Balanço (aba mais recente)<select id="puc3-uf-balanco"><option value="">Todas as UFs</option>'+PUC_BALANCO_UFS.map(uf=>'<option value="'+uf+'">'+uf+'</option>').join('')+'</select></label><label>Empreendimento do Balanço<select id="puc3-empreendimento-balanco"><option value="">Todos os empreendimentos da UF</option></select></label><p id="puc3-balanco-preview" class="muted">Anexe o Balanço para identificar UF, nome e ID_governa na aba mais recente.</p>':'')+
+ (source==='BALANCO'?'<label>UF do Balanço (aba mais recente)<select id="puc3-uf-balanco"><option value="">Todas as UFs</option>'+PUC_BALANCO_UFS.map(uf=>'<option value="'+uf+'">'+uf+'</option>').join('')+'</select></label><div class="puc3-balanco-multi"><strong>Empreendimentos do Balanço · seleção múltipla</strong><div class="puc3-balanco-actions"><button type="button" class="btn secondary" id="puc3-balanco-all">Selecionar todos</button><button type="button" class="btn secondary" id="puc3-balanco-clear">Limpar seleção</button></div><input type="search" id="puc3-balanco-search" placeholder="Localizar ID ou empreendimento" aria-label="Pesquisar empreendimentos do Balanço"><div id="puc3-empreendimento-balanco" class="puc3-balanco-options" role="group" aria-label="Selecionar múltiplos empreendimentos"></div><small id="puc3-balanco-count" aria-live="polite">Anexe o Balanço para escolher os empreendimentos.</small></div><p id="puc3-balanco-preview" class="muted">Anexe o Balanço para identificar UF, nome e ID_governa na aba mais recente.</p>':'')+
  (source==='DOCAS'?'<p class="muted">A Companhia preenche o formulário, baixa um JSON e encaminha a resposta por canal institucional autorizado. Não há transmissão automática pelo site.</p><a class="btn secondary" href="formulario-docas.html" target="_blank" rel="noopener">Abrir formulário das DOCAS</a>':'')+
  '<label>Processo / referência<input id="puc3-ref-'+source+'" placeholder="'+(source==='DOCAS'?'Companhia, competência e referência da declaração':'SEI, período ou referência do relatório')+'"></label>'+
  '<label>Arquivos<input type="file" multiple id="puc3-files-'+source+'" accept="'+(source==='DOCAS'?'.json':'.zip,.pdf,.xls,.xlsx,.csv,.doc,.docx,.txt,.html,.htm,.xml,.json')+'"></label>'+'<div class="puc3-attachment-status" id="puc3-attachment-'+source+'" role="status" aria-live="polite">Nenhum documento armazenado desta fonte neste navegador.</div>'+
@@ -103,6 +105,9 @@ function sourceCards(){
  refreshAttachmentStatus();
  $('puc3-files-BALANCO').addEventListener('change',refreshBalancoPreview);
  $('puc3-uf-balanco').addEventListener('change',refreshBalancoPreview);
+ $('puc3-balanco-all').addEventListener('click',()=>{balancoSelected=new Set(balancoOptions.map(o=>o.key));renderBalancoChoices()});
+ $('puc3-balanco-clear').addEventListener('click',()=>{balancoSelected.clear();renderBalancoChoices()});
+ $('puc3-balanco-search').addEventListener('input',renderBalancoChoices);
 }
 function refreshAttachmentStatus(){
  for(const source of sources){
@@ -122,20 +127,42 @@ function refreshAttachmentStatus(){
 }
 document.addEventListener('puc-documents-updated',refreshAttachmentStatus);
 
+let balancoSelected=new Set(),balancoOptions=[],balancoRequest=0;
+function renderBalancoChoices(){
+ const container=$('puc3-empreendimento-balanco');if(!container)return;
+ const search=($('puc3-balanco-search')?.value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+ container.replaceChildren();let shown=0;
+ for(const row of balancoOptions){
+  const title=(row.id?'ID '+row.id+' · ':'')+row.empreendimento+' ['+row.uf+']';
+  if(search&&!title.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(search))continue;
+  const label=document.createElement('label');label.className='puc3-balanco-choice';
+  const box=document.createElement('input');box.type='checkbox';box.value=row.key;box.checked=balancoSelected.has(row.key);
+  box.onchange=()=>{box.checked?balancoSelected.add(row.key):balancoSelected.delete(row.key);updateBalancoCount()};
+  label.appendChild(box);const txt=document.createElement('span');txt.textContent=title;label.appendChild(txt);container.appendChild(label);shown++;
+ }
+ if(!shown)container.textContent=balancoOptions.length?'Nenhum empreendimento encontrado na pesquisa.':'Anexe o arquivo XLSX para carregar a lista.';
+ updateBalancoCount();
+}
+function updateBalancoCount(){
+ const counter=$('puc3-balanco-count');if(counter)counter.textContent=balancoSelected.size+' de '+balancoOptions.length+' empreendimento(s) selecionado(s). '+(balancoSelected.size?'A importação usará apenas os marcados.':'Marque pelo menos um empreendimento para importar.');
+}
 async function refreshBalancoPreview(){
- const file=$('puc3-files-BALANCO')?.files?.[0],uf=$('puc3-uf-balanco')?.value||'',select=$('puc3-empreendimento-balanco'),label=$('puc3-balanco-preview');
- if(!select||!label)return;select.innerHTML='<option value="">Todos os empreendimentos da UF</option>';
- if(!file){label.textContent='Anexe o Balanço para localizar UF, empreendimento e ID_governa.';return}
- if(!/\.xlsx$/i.test(file.name)){label.textContent='Prévia de UF e empreendimento disponível apenas para XLSX.';return}
+ const file=$('puc3-files-BALANCO')?.files?.[0],uf=$('puc3-uf-balanco')?.value||'',label=$('puc3-balanco-preview'),request=++balancoRequest;
+ balancoOptions=[];balancoSelected.clear();renderBalancoChoices();
+ if(!label)return;
+ if(!file){label.textContent='Anexe o Balanço para identificar UF, empreendimento e ID_governa.';return}
+ if(!/\.xlsx$/i.test(file.name)){label.textContent='Seleção disponível apenas para arquivos XLSX.';return}
  try{
-  label.textContent='Lendo aba mais recente e identificando empreendimentos...';
-  const out=await PUCFiltrarBalancoPorUF(file,uf);
-  for(const row of out.registros){const option=document.createElement('option');option.value=row.id+'|'+row.empreendimento;option.textContent=(row.id?'ID '+row.id+' · ':'')+row.empreendimento+' ['+row.uf+']';select.appendChild(option)}
-  label.textContent=out.sheet+' · '+out.registros.length+' empreendimento(s) encontrados. O vínculo à PUC e às medições do SEI deve ser confirmado antes de comparar valores.';
- }catch(err){label.textContent='Erro de leitura do Balanço: '+err.message}
+  label.textContent='Lendo a aba mais recente do Balanço...';
+  const data=await PUCFiltrarBalancoPorUF(file,uf);
+  if(request!==balancoRequest)return;
+  const seen=new Set();balancoOptions=data.registros.map(r=>({...r,key:r.id+'|'+r.empreendimento})).filter(r=>{if(seen.has(r.key))return false;seen.add(r.key);return true});
+  balancoSelected=new Set(balancoOptions.map(r=>r.key));renderBalancoChoices();
+  label.textContent=data.sheet+' · '+balancoOptions.length+' empreendimento(s) disponíveis na UF. Marque aqueles que deseja importar.';
+ }catch(e){if(request===balancoRequest)label.textContent='Falha na leitura do Balanço: '+e.message}
 }
 async function importFiles(source){
- const files=[...$('puc3-files-'+source).files],project='',ref=$('puc3-ref-'+source).value.trim(),uf=source==='BALANCO'?($('puc3-uf-balanco')?.value||''):'',empreendimentoId=source==='BALANCO'?($('puc3-empreendimento-balanco')?.value||''):'';
+ const files=[...$('puc3-files-'+source).files],project='',ref=$('puc3-ref-'+source).value.trim(),uf=source==='BALANCO'?($('puc3-uf-balanco')?.value||''):'',empreendimentoIds=source==='BALANCO'?[...balancoSelected]:null;
  if(!files.length){status('Selecione ao menos um arquivo para '+source+'.');return}
  if(!lib()){status('Biblioteca documental indisponível. Recarregue a página e execute o diagnóstico.');return}
  const button=$('puc3-uploads').querySelector('[data-import="'+source+'"]');button.disabled=true;
@@ -145,10 +172,11 @@ async function importFiles(source){
   if(source==='BALANCO'&&files.every(file=>/\.xlsx$/i.test(file.name))){
    const filtered=[];let count=0;
    for(const file of files){
-    const result=await PUCFiltrarBalancoPorUF(file,uf,empreendimentoId);filtered.push(result.file);count+=result.count;
+    if(empreendimentoIds?.length===0)throw Error('Selecione pelo menos um empreendimento do Balanço.');
+    const result=await PUCFiltrarBalancoPorUF(file,uf,empreendimentoIds);filtered.push(result.file);count+=result.count;
    }
    if(!count)throw Error('Não foram encontrados empreendimentos para '+(uf||'as UFs')+' na aba mais recente da planilha.');
-   targetFiles=filtered;filterMessage=' | '+(uf?'UF '+uf:'Todas as UFs')+' | '+count+' empreendimento(s)'+(empreendimentoId?' | '+empreendimentoId:'')+' da aba mais recente';
+   targetFiles=filtered;filterMessage=' | '+(uf?'UF '+uf:'Todas as UFs')+' | '+count+' empreendimento(s)'+' | seleção de '+empreendimentoIds.length+' empreendimento(s) da aba mais recente';
   }
   if(source==='DOCAS')for(const file of files){if(!/\.json$/i.test(file.name))throw Error('A declaração das DOCAS deve ser JSON exportado do formulário.');let record;try{record=JSON.parse(await file.text())}catch(e){throw Error(file.name+': JSON inválido')}if(record.schema!=='BI_PUC_DOCAS_V1'||!record.cadastro?.empreendimento||!record.cadastro?.uf||!record.cadastro?.competencia)throw Error(file.name+': declaração sem identificação, UF ou competência')}
   const n=await lib().ingest(targetFiles,source,project,ref+filterMessage);
