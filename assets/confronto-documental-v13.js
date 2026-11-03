@@ -111,7 +111,7 @@ persistenceStyle.textContent='.puc3-attachment-status{font-size:12px;line-height
 document.head.appendChild(persistenceStyle);
 function sourceCards(){
  $('puc3-uploads').innerHTML=sources.map(source=>'<div class="puc3-source"><h3>'+esc(names[source])+'</h3>'+
- (source==='SEI'?'<div class="puc3-sei-selector"><strong>Selecionar documentos do processo SEI</strong><p class="muted">Escolha vários documentos já armazenados para o confronto. A seleção não exclui arquivos.</p><input id="puc3-sei-search" type="search" placeholder="Pesquisar nome, número ou BM" aria-label="Pesquisar arquivos do SEI"><div class="puc3-sei-actions"><button class="btn secondary" type="button" id="puc3-sei-all">Selecionar todos</button><button class="btn secondary" type="button" id="puc3-sei-clear">Limpar seleção</button></div><div id="puc3-sei-choices" class="puc3-sei-choices" role="group" aria-label="Selecionar múltiplos documentos SEI"></div><small id="puc3-sei-selected-count" aria-live="polite"></small></div><div class="puc3-sei-zip"><strong>Arquivos internos do novo ZIP</strong><p class="muted">Ao anexar um ZIP, escolha quais arquivos internos deseja incorporar. Os demais não serão importados.</p><input type="search" id="puc3-sei-zip-search" placeholder="Localizar documento dentro do ZIP"><div class="puc3-sei-actions"><button type="button" class="btn secondary" id="puc3-sei-zip-all">Selecionar todos</button><button type="button" class="btn secondary" id="puc3-sei-zip-clear">Limpar</button></div><div id="puc3-sei-zip-items" class="puc3-sei-choices" role="group" aria-label="Selecionar arquivos do ZIP"></div><small id="puc3-sei-zip-count" aria-live="polite">Selecione um ZIP para visualizar os documentos internos.</small></div>':'')+
+ (source==='SEI'?'<div class="puc3-sei-selector"><strong>Selecionar documentos do processo SEI</strong><p class="muted">Escolha vários documentos já armazenados para o confronto. A seleção não exclui arquivos.</p><input id="puc3-sei-search" type="search" placeholder="Pesquisar nome, número ou BM" aria-label="Pesquisar arquivos do SEI"><div class="puc3-sei-actions"><button class="btn secondary" type="button" id="puc3-sei-all">Selecionar todos</button><button class="btn secondary" type="button" id="puc3-sei-clear">Limpar seleção</button></div><div id="puc3-sei-choices" class="puc3-sei-choices" role="group" aria-label="Selecionar múltiplos documentos SEI"></div><small id="puc3-sei-selected-count" aria-live="polite"></small></div><div class="puc3-sei-zip"><strong>Documentos anexados para análise · seleção múltipla</strong><p class="muted">Selecione arquivos individuais ou documentos internos do ZIP. Pesquise pelo nome ou identifique BMs pelo conteúdo antes de analisar.</p><input type="search" id="puc3-sei-zip-search" placeholder="Pesquisar documento, número ou BM"><button type="button" class="btn secondary" id="puc3-sei-scan-bm">Identificar possíveis BMs pelo conteúdo</button><div class="puc3-sei-actions"><button type="button" class="btn secondary" id="puc3-sei-zip-all">Selecionar todos</button><button type="button" class="btn secondary" id="puc3-sei-zip-clear">Limpar</button></div><div id="puc3-sei-zip-items" class="puc3-sei-choices" role="group" aria-label="Selecionar arquivos do ZIP"></div><small id="puc3-sei-zip-count" aria-live="polite">Anexe documentos ou ZIP para selecionar os arquivos.</small></div>':'')+
  (source==='BALANCO'?'<label>UF do Balanço (aba mais recente)<select id="puc3-uf-balanco"><option value="">Todas as UFs</option>'+PUC_BALANCO_UFS.map(uf=>'<option value="'+uf+'">'+uf+'</option>').join('')+'</select></label><div class="puc3-balanco-multi"><strong>Empreendimentos do Balanço · seleção múltipla</strong><div class="puc3-balanco-actions"><button type="button" class="btn secondary" id="puc3-balanco-all">Selecionar todos</button><button type="button" class="btn secondary" id="puc3-balanco-clear">Limpar seleção</button></div><input type="search" id="puc3-balanco-search" placeholder="Localizar ID ou empreendimento" aria-label="Pesquisar empreendimentos do Balanço"><div id="puc3-empreendimento-balanco" class="puc3-balanco-options" role="group" aria-label="Selecionar múltiplos empreendimentos"></div><small id="puc3-balanco-count" aria-live="polite">Anexe o Balanço para escolher os empreendimentos.</small></div><p id="puc3-balanco-preview" class="muted">Anexe o Balanço para identificar UF, nome e ID_governa na aba mais recente.</p>':'')+
  (source==='DOCAS'?'<p class="muted">A Companhia preenche o formulário, baixa um JSON e encaminha a resposta por canal institucional autorizado. Não há transmissão automática pelo site.</p><a class="btn secondary" href="formulario-docas.html" target="_blank" rel="noopener">Abrir formulário das DOCAS</a>':'')+
  '<label>Processo / referência<input id="puc3-ref-'+source+'" placeholder="'+(source==='DOCAS'?'Companhia, competência e referência da declaração':'SEI, período ou referência do relatório')+'"></label>'+
@@ -131,6 +131,7 @@ function sourceCards(){
  $('puc3-sei-zip-search').addEventListener('input',renderSeiZipPreview);
  $('puc3-sei-zip-all').onclick=()=>{seiZipSelected=new Set(seiZipItems.map(x=>x.key));renderSeiZipPreview()};
  $('puc3-sei-zip-clear').onclick=()=>{seiZipSelected.clear();renderSeiZipPreview()};
+ $('puc3-sei-scan-bm').onclick=scanPendingSeiBMs;
  renderSeiSelector();
   $('puc3-files-BALANCO').addEventListener('change',refreshBalancoPreview);
  $('puc3-uf-balanco').addEventListener('change',refreshBalancoPreview);
@@ -139,52 +140,83 @@ function sourceCards(){
  $('puc3-balanco-search').addEventListener('input',renderBalancoChoices);
 }
 
-let seiZipSelected=new Set(),seiZipItems=[],seiZipRevision=0;
-function renderSeiSelector(){
- const area=$('puc3-sei-choices'),counter=$('puc3-sei-selected-count');if(!area||!counter)return;
- const available=docs().filter(d=>d.origin==='SEI'),valid=new Set(available.map(d=>d.id));
- seiExcluded=new Set([...seiExcluded].filter(id=>valid.has(id)));saveSeiSelection();
- const query=($('puc3-sei-search')?.value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
- area.replaceChildren();let shown=0;
- for(const doc of available){
-  const caption=doc.name+(doc.container&&doc.container!=='Arquivo individual'?' · '+doc.container:'')+(doc.bmNumber?' · BM '+doc.bmNumber:'');
-  if(query&&!caption.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(query))continue;
-  const label=document.createElement('label');label.className='puc3-sei-choice';
-  const cb=document.createElement('input');cb.type='checkbox';cb.value=doc.id;cb.checked=!seiExcluded.has(doc.id);
-  cb.onchange=()=>{cb.checked?seiExcluded.delete(doc.id):seiExcluded.add(doc.id);saveSeiSelection();renderSeiSelector();render()};
-  const span=document.createElement('span');span.textContent=caption;label.append(cb,span);area.appendChild(label);shown++;
- }
- if(!shown)area.textContent=available.length?'Nenhum documento corresponde à pesquisa.':'Nenhum documento SEI armazenado neste navegador.';
- counter.textContent=(available.length-seiExcluded.size)+' de '+available.length+' documento(s) selecionado(s) para o confronto.';
+let seiZipSelected=new Set(),seiZipItems=[],seiZipRevision=0,seiZipReady=false;
+function seiNameMatch(item,q){
+ const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+ if(!q)return true;
+ const positive=item.bmStatus&&item.bmStatus!=='SEM INDICAÇÃO DE BM';
+ return norm(item.title).includes(q)||(positive&&(norm(item.bmStatus).includes(q)||q==='bm'||q==='medicao'))||(item.bmNumber&&norm('BM '+item.bmNumber).includes(q));
 }
 function renderSeiZipPreview(){
  const area=$('puc3-sei-zip-items'),count=$('puc3-sei-zip-count');if(!area||!count)return;
- area.replaceChildren();const q=($('puc3-sei-zip-search')?.value||'').toLowerCase().trim();let shown=0;
+ area.replaceChildren();const q=($('puc3-sei-zip-search')?.value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+ let shown=0;
  for(const item of seiZipItems){
-  if(q&&!item.title.toLowerCase().includes(q))continue;
+  if(!seiNameMatch(item,q))continue;
   const label=document.createElement('label');label.className='puc3-sei-choice';
   const cb=document.createElement('input');cb.type='checkbox';cb.value=item.key;cb.checked=seiZipSelected.has(item.key);
   cb.onchange=()=>{cb.checked?seiZipSelected.add(item.key):seiZipSelected.delete(item.key);renderSeiZipPreview()};
-  const span=document.createElement('span');span.textContent=item.title;label.append(cb,span);area.appendChild(label);shown++;
+  const span=document.createElement('span');
+  span.textContent=item.title+(item.bmStatus&&item.bmStatus!=='SEM INDICAÇÃO DE BM'?' · '+item.bmStatus:'')+(item.bmNumber?' nº '+item.bmNumber:'');
+  label.append(cb,span);area.appendChild(label);shown++;
  }
- if(!shown)area.textContent=seiZipItems.length?'Nenhum documento corresponde à pesquisa.':'Anexe um ZIP para listar seus documentos internos.';
- count.textContent=seiZipSelected.size+' de '+seiZipItems.length+' arquivo(s) internos selecionado(s) para importar.';
+ if(!shown)area.textContent=seiZipItems.length?(q?'Nenhum documento corresponde à pesquisa. Use “Identificar possíveis BMs pelo conteúdo” para examinar arquivos sem indicação no nome.':'Nenhum arquivo corresponde aos critérios.'):'Anexe arquivos individuais ou ZIP para visualizar os documentos.';
+ const positive=seiZipItems.filter(x=>x.bmStatus&&x.bmStatus!=='SEM INDICAÇÃO DE BM').length;
+ count.textContent=seiZipSelected.size+' de '+seiZipItems.length+' documento(s) selecionado(s) para importar; '+shown+' visível(is)'+(positive?' · '+positive+' possível(is) BM(s) identificado(s).':' · BMs por conteúdo ainda não conferidos.');
 }
 async function refreshSeiZipPreview(){
  const generation=++seiZipRevision,files=[...($('puc3-files-SEI')?.files||[])],count=$('puc3-sei-zip-count');
- seiZipItems=[];seiZipSelected.clear();renderSeiZipPreview();
- const zipFiles=files.filter(f=>/\.zip$/i.test(f.name));if(!zipFiles.length)return;
- if(count)count.textContent='Lendo documentos internos do ZIP...';
+ seiZipItems=[];seiZipSelected.clear();seiZipReady=false;
+ const eng=window.PUCDocEngine;
+ // Arquivos enviados diretamente aparecem imediatamente, sem precisar de ZIP.
+ files.forEach((file,index)=>{
+  if(/\.zip$/i.test(file.name))return;
+  const bmStatus=eng?.bmClass?.(file.name,'')||'SEM INDICAÇÃO DE BM';
+  seiZipItems.push({key:'avulso:'+index,title:file.name,fileIndex:index,item:{name:file.name,blob:file},bmStatus,bmNumber:eng?.bmNumber?.(file.name,'')||''});
+ });
+ seiZipSelected=new Set(seiZipItems.map(x=>x.key));renderSeiZipPreview();
+ const zipFiles=files.filter(f=>/\.zip$/i.test(f.name));
+ if(!zipFiles.length){seiZipReady=true;return}
+ if(count)count.textContent='Lendo arquivos individuais e conteúdo interno do ZIP...';
  try{
-  if(!window.PUCDocEngine?.unpack)throw Error('Leitor ZIP não inicializado');
+  if(!eng?.unpack)throw Error('Leitor ZIP não inicializado');
   const entries=[];
   for(const file of zipFiles){
-   const unpacked=await window.PUCDocEngine.unpack(file);
-   for(const item of unpacked)entries.push({key:file.name+'\u0001'+item.container+'\u0001'+item.name,title:file.name+' / '+item.name+(item.container?' · '+item.container:''),file:file.name,item});
+   const unpacked=await eng.unpack(file);
+   for(const item of unpacked){
+    const key=file.name+'\u0001'+item.container+'\u0001'+item.name;
+    const bmStatus=eng.bmClass?.(item.name,'')||'SEM INDICAÇÃO DE BM';
+    entries.push({key,title:file.name+' / '+item.name+(item.container?' · '+item.container:''),file:file.name,item,bmStatus,bmNumber:eng.bmNumber?.(item.name,'')||''});
+   }
   }
   if(generation!==seiZipRevision)return;
-  seiZipItems=entries;seiZipSelected=new Set(entries.map(x=>x.key));renderSeiZipPreview();
- }catch(e){if(generation===seiZipRevision&&count)count.textContent='Falha ao listar o ZIP: '+e.message}
+  seiZipItems.push(...entries);entries.forEach(x=>seiZipSelected.add(x.key));seiZipReady=true;renderSeiZipPreview();
+ }catch(e){if(generation===seiZipRevision){seiZipReady=false;if(count)count.textContent='Erro ao ler o ZIP: '+e.message+' — escolha outro arquivo antes de importar.'}}
+}
+async function scanPendingSeiBMs(){
+ const button=$('puc3-sei-scan-bm'),count=$('puc3-sei-zip-count'),generation=seiZipRevision;
+ if(!seiZipReady||!seiZipItems.length){status('Selecione arquivos e aguarde a listagem antes de identificar BMs.');return}
+ const engine=window.PUCDocEngine;if(!engine?.read||!engine?.bmClass){status('Leitor de documentos indisponível.');return}
+ button.disabled=true;let checked=0,errors=0;
+ try{
+  for(const record of seiZipItems){
+   if(generation!==seiZipRevision)break;
+   if(record.scanned)continue;
+   try{
+    const result=await engine.read(record.item);
+    record.bmStatus=engine.bmClass(record.item.name,result.text||'');
+    record.bmNumber=engine.bmNumber?.(record.item.name,result.text||'')||'';
+    record.scanned=true;
+   }catch(e){errors++;record.scanned=true}
+   checked++;
+   if(checked%5===0&&count)count.textContent='Verificando conteúdo para possíveis BMs: '+checked+' de '+seiZipItems.length+' arquivo(s)...';
+  }
+  if(generation===seiZipRevision){
+   $('puc3-sei-zip-search').value='BM';
+   renderSeiZipPreview();
+   status('Exame preliminar de '+checked+' documento(s) concluído. '+errors+' arquivo(s) sem leitura. BM identificado/provável/mencionado não equivale a medição validada.');
+  }
+ }finally{button.disabled=false}
 }
 
 function refreshAttachmentStatus(){
@@ -258,10 +290,13 @@ async function importFiles(source){
   }
   if(source==='DOCAS')for(const file of files){if(!/\.json$/i.test(file.name))throw Error('A declaração das DOCAS deve ser JSON exportado do formulário.');let record;try{record=JSON.parse(await file.text())}catch(e){throw Error(file.name+': JSON inválido')}if(record.schema!=='BI_PUC_DOCAS_V1'||!record.cadastro?.empreendimento||!record.cadastro?.uf||!record.cadastro?.competencia)throw Error(file.name+': declaração sem identificação, UF ou competência')}
   let seiChoice=null;
-  if(source==='SEI'&&files.some(f=>/\.zip$/i.test(f.name))){
-   if(!seiZipItems.length)throw Error('A lista do ZIP não está pronta. Aguarde o carregamento dos documentos internos.');
-   if(!seiZipSelected.size)throw Error('Selecione pelo menos um arquivo interno do ZIP.');
+  if(source==='SEI'){
+   if(!seiZipReady)throw Error('A seleção dos documentos ainda não terminou de carregar ou houve falha na leitura do ZIP.');
+   if(!seiZipSelected.size)throw Error('Selecione pelo menos um documento SEI antes da análise.');
+   // A seleção restringe arquivos soltos e entradas ZIP; os não marcados não são incorporados.
+   targetFiles=files.filter((file,index)=>/\.zip$/i.test(file.name)?seiZipItems.some(x=>x.file===file.name&&seiZipSelected.has(x.key)):seiZipSelected.has('avulso:'+index));
    seiChoice=new Set(seiZipSelected);
+   filterMessage+=' | '+seiZipSelected.size+' documento(s) selecionado(s)';
   }
   const n=await lib().ingest(targetFiles,source,project,ref+filterMessage,seiChoice);
   // Mantém a seleção do arquivo após analisar; no recarregamento, exibe o anexo preservado no IndexedDB.
