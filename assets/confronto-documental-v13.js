@@ -294,7 +294,7 @@ function initReportPage(){
  $('puc3-report-html-btn').onclick=()=>download(new Blob([reportHtml()],{type:'text/html;charset=utf-8'}),'RELATORIO_DOCUMENTAL_PUC_SEI_BALANCO_DOCAS.html');
 }
 
-function render(){renderFiles();renderFindings();if($('puc3-result')?.dataset?.generated==='1')audit()}
+function render(){renderFiles();renderFindings();if($('puc3-result')?.dataset?.generated==='1')audit();window.PUCCorrelacao?.refresh?.()}
 function simplifyDocuments(){
  const page=$('documentos');if(!page)return;
  const help=document.createElement('div');help.className='panel';help.innerHTML='<h2>Importação principal: Confronto das três fontes</h2><p class="muted">Para comparar dados entre <strong>SEI, Balanço e DOCAS</strong>, anexe os documentos na aba Confronto das Fontes. A biblioteca abaixo permanece disponível para consulta, reanálise e exclusão dos arquivos.</p><button type="button" class="btn" id="puc3-open-compare">Abrir Confronto das Fontes · SEI × Balanço × DOCAS</button>';
