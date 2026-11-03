@@ -18,14 +18,14 @@ test('Número e competência do BM',()=>{assert.equal(engine.bmNumber('BM_05.pdf
 test('Execução financeira percentual não vira reais',()=>{const v=engine.indicators('Execução financeira: 55,3%');assert.equal(v.length,1);assert.equal(v[0].type,'Execução financeira (%)')});
 test('Execução financeira monetária explícita',()=>{const v=engine.indicators('Execução financeira: R$ 1.234.567,89');assert.equal(v.length,1);assert.equal(v[0].type,'Execução financeira (R$ candidato)')});
 test('Arquivos e seleção PUC centralizados em Documentos',()=>{assert.ok(centralCode.includes('central.appendChild(header)'));assert.ok(centralCode.includes('central.appendChild(select)'));assert.ok(centralCode.includes('central.appendChild(uploads)'));assert.ok(centralCode.includes('docs.insertBefore(central,docs.firstElementChild)'))});
-test('Apenas três origens no confronto documental',()=>assert.ok(compareCode.includes("const sources=['SEI','BALANCO','SIOP']")));
+test('Apenas três origens no confronto documental',()=>assert.ok(compareCode.includes("const sources=['SEI','BALANCO','DOCAS']")));
 test('Importação distinta por origem e confirmação da transação IndexedDB',()=>{assert.ok(libraryCode.includes('x.origin===origin'));assert.ok(libraryCode.includes('tx.oncomplete=()=>resolve(result)'))});
 test('Carteira de 12 PUCs sem duplicidade',()=>{const raw=html.match(/<script id="embedded-data" type="application\/json">([\s\S]*?)<\/script>/);assert.ok(raw);const p=JSON.parse(raw[1]).projetos;assert.equal(p.length,12);assert.equal(new Set(p.map(x=>x.id)).size,12)});
 const from=compareCode.indexOf('function audit(){'),to=compareCode.indexOf('\nfunction exportReport()',from);
 assert.ok(from>=0&&to>from,'Função audit não localizada');
 const auditSource=compareCode.slice(from,to).replace('lastPairs=pairs;','setPairs(pairs);');
 const els={'puc3-result':{innerHTML:'',dataset:{}}},$=id=>els[id];
-const sources=['SEI','BALANCO','SIOP'],projects=[{id:'PUC-01',empreendimento:'Teste sintético'}];
+const sources=['SEI','BALANCO','DOCAS'],projects=[{id:'PUC-01',empreendimento:'Teste sintético'}];
 const units={medicao_bm:'R$',execucao_fisica:'%'},label={medicao_bm:'Valor medido',execucao_fisica:'Físico'};
 const selected=new Set(['PUC-01']),rows=[],filesForReview=()=>[],esc=x=>String(x),val=x=>String(x),status=()=>{};
 let pairs=[];
@@ -37,8 +37,8 @@ pairTest('Valor diferente: divergência','DIVERGÊNCIA',{...base,source:'SEI'},{
 pairTest('Número de BM diferente: não comparável','NÃO COMPARÁVEL',{...base,source:'SEI'},{...base,source:'BALANCO',bmNumber:'06'});
 pairTest('Data de corte diferente: não comparável','NÃO COMPARÁVEL',{...base,source:'SEI'},{...base,source:'BALANCO',cutoff:'2026-10-01'});
 pairTest('Sem conferência: não comparável','NÃO COMPARÁVEL',{...base,source:'SEI',verified:false},{...base,source:'BALANCO'});
-pairTest('BM não pode ser confrontado com SIOP','NÃO COMPARÁVEL',{...base,source:'SEI'},{...base,source:'SIOP'});
-pairTest('DOCAS antiga não integra as três fontes',null,{...base,source:'SEI'},{...base,source:'DOCAS'});
+pairTest('SIOP anexado não integra o confronto',null,{...base,source:'SEI'},{...base,source:'SIOP'});
+pairTest('DOCAS agora integra o confronto auditável','CORRESPONDÊNCIA',{...base,source:'SEI'},{...base,source:'DOCAS'});
 pairTest('Indicadores distintos não geram par',null,{...base,source:'SEI'},{...base,source:'BALANCO',indicator:'execucao_fisica'});
 test('Sem PUC selecionada não gera conclusão',()=>{selected.clear();rows.splice(0,rows.length,{...base,source:'SEI'},{...base,source:'BALANCO'});assert.equal(audit().pairs.length,0);selected.add('PUC-01')});
 console.log('Resultado:',passed,'aprovados;',failed,'falhas');
