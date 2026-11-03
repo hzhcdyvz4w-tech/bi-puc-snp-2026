@@ -35,7 +35,7 @@
   const oldPanelText=$('puc-library')?.querySelector('h2');
   if(oldPanelText)oldPanelText.textContent='Biblioteca documental — arquivos já registrados';
   const sourceCards=$('ficha-source-panel')?.querySelectorAll('.ficha-source-card');sourceCards?.forEach(card=>{const p=card.querySelector('p');if(p)p.textContent='Anexação exclusiva na aba Documentos. Utilize esta seção para consultar dados já registrados, conferir boletins e baixar modelos.'});
-  const goDocas=$('docas-import-sources');if(goDocas){goDocas.textContent='Abrir Documentos · SEI, Balanço e SIOP';goDocas.addEventListener('click',e=>{e.stopImmediatePropagation();e.preventDefault();toDocuments()},true)}
+  const goDocas=$('docas-import-sources');if(goDocas){goDocas.textContent='Abrir Documentos · SEI, Balanço e DOCAS';goDocas.addEventListener('click',e=>{e.stopImmediatePropagation();e.preventDefault();toDocuments()},true)}
   $('fichas')?.addEventListener('click',e=>{const btn=e.target.closest('[data-open-ficha-sources]');if(!btn)return;e.stopImmediatePropagation();e.preventDefault();toDocuments()},true);
   for(const btn of document.querySelectorAll('#fichas [data-open-ficha-sources]'))btn.textContent='Anexar na aba Documentos';
   const syncBtn=$('ficha-sync-confront');if(syncBtn){syncBtn.textContent='Registrar no confronto auxiliar (legado)';syncBtn.title='Integra apenas o confronto auxiliar anterior; o confronto documental das três fontes exige achados revisados na aba Confronto das Fontes.'}
@@ -47,12 +47,18 @@
   if($('puc3-central-files'))return;
   // Elementos originais são realocados: callbacks, selecao e importacao permanecem os mesmos.
   const central=document.createElement('div');central.id='puc3-central-files';central.className='panel';
-  central.innerHTML='<h2>Documentos das PUCs · SEI (BMs), Balanço e SIOP</h2><p class="muted">Único local para anexar as fontes. Selecione uma ou várias PUCs para acompanhamento, associe os arquivos à PUC correspondente quando possível e importe cada fonte. Os anexos ficam neste navegador. A análise dos resultados é feita em <strong>Confronto das fontes</strong>.</p><h3>1 · Selecionar PUCs</h3>';
+  central.innerHTML='<h2>Documentos das PUCs · SEI (BMs), Balanço e DOCAS</h2><p class="muted">Anexe os processos SEI, os Balanços e os formulários das DOCAS. Os documentos ficam armazenados localmente neste navegador. A análise dos resultados é realizada no menu <strong>Confronto das fontes</strong>.</p>';
   const header=search.closest('.filters');
-  const uploadTitle=document.createElement('h3');uploadTitle.textContent='2 · Anexar os arquivos das três fontes';
-  central.appendChild(header);central.appendChild(select);central.appendChild(uploadTitle);central.appendChild(uploads);central.appendChild(message);
+  const uploadTitle=document.createElement('h3');uploadTitle.textContent='1 · Anexar documentos';
+  central.appendChild(uploadTitle);central.appendChild(uploads);central.appendChild(message);
+  // O seletor de PUCs é necessário para delimitar a auditoria, mas não faz parte da tela Documentos.
+  // Ele foi transferido ao Confronto das fontes em uma seção recolhida.
+  const projectPicker=document.createElement('details');projectPicker.id='puc3-compare-project-picker';projectPicker.className='panel';
+  const summary=document.createElement('summary');summary.textContent='Selecionar empreendimentos para confronto (opcional)';projectPicker.appendChild(summary);
+  projectPicker.appendChild(header);projectPicker.appendChild(select);
+  cmp.insertBefore(projectPicker,main);
   const footer=document.createElement('div');footer.className='two-actions';
-  footer.innerHTML='<button type="button" class="btn" id="puc3-docs-compare">Ir para o confronto dos documentos</button><small class="muted">SEI: processos e BMs (inclusive ZIP). Balanço: planilha/relatório. SIOP: consulta anexada, não a base ilustrativa.</small>';
+  footer.innerHTML='<button type="button" class="btn" id="puc3-docs-compare">Ir para o confronto dos documentos</button><small class="muted">SEI: processos e BMs (inclusive ZIP). Balanço: planilha/relatório. DOCAS: declaração JSON emitida pelo formulário; a base SIOP de referência permanece em sua página.</small>';
   central.appendChild(footer);
   docs.insertBefore(central,docs.firstElementChild);
   $('puc3-docs-compare').onclick=()=>{document.querySelector('#nav [data-page="comparacao"]')?.click();main.scrollIntoView({behavior:'smooth',block:'start'})};
@@ -61,14 +67,16 @@
   const intro=main.querySelector(':scope > p.muted');
   if(intro)intro.innerHTML='Os documentos são anexados exclusivamente na aba <strong>Documentos</strong>. Esta aba apresenta os achados por arquivo, o confronto dos indicadores conferidos e o relatório documental, sem utilizar automaticamente os números SIOP de referência.';
   const forward=document.createElement('div');forward.id='puc3-compare-source-link';forward.className='two-actions';
-  forward.innerHTML='<button type="button" class="btn secondary" id="puc3-back-to-docs">Abrir Documentos · SEI, Balanço e SIOP</button><span class="muted" id="puc3-compare-selected">PUCs selecionadas em Documentos</span>';
-  const compareStatus=document.createElement('p');compareStatus.id='puc3-compare-status';compareStatus.className='statusline';compareStatus.setAttribute('role','status');compareStatus.textContent='Revise os achados e selecione as PUCs em Documentos antes de confrontar.';
+  forward.innerHTML='<button type="button" class="btn secondary" id="puc3-back-to-docs">Abrir Documentos · SEI, Balanço e SIOP</button><span class="muted" id="puc3-compare-selected">PUCs selecionadas para confronto</span>';
+  const compareStatus=document.createElement('p');compareStatus.id='puc3-compare-status';compareStatus.className='statusline';compareStatus.setAttribute('role','status');compareStatus.textContent='Revise os achados. Caso necessário, delimite os empreendimentos no seletor opcional do Confronto.';
   if(intro)intro.insertAdjacentElement('afterend',forward);else main.insertBefore(forward,main.firstChild);
   forward.insertAdjacentElement('afterend',compareStatus);
   $('puc3-back-to-docs').onclick=toDocuments;
   const counter=$('puc3-selected');
   const sync=()=>{$('puc3-compare-selected').textContent=counter?.textContent||'PUCs selecionadas em Documentos'};
   if(counter){const m=new MutationObserver(sync);m.observe(counter,{childList:true,subtree:true,characterData:true});sync()}
+  // Exibe todos os projetos no confronto por padrão, sem exigir seleção prévia em Documentos.
+  $('puc3-all')?.click();
   const headings=[...main.querySelectorAll(':scope > h3')];
   for(const title of headings){
    title.textContent=title.textContent.replace(/^2\s*·/, '1 ·').replace(/^3\s*·/, '2 ·').replace(/^4\s*·/, '3 ·');
