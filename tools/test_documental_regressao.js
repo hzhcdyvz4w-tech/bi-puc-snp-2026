@@ -11,6 +11,38 @@ const html=read('index.html');
 let passed=0,failed=0;
 function test(name,fn){try{fn();passed++;console.log('PASS',name)}catch(e){failed++;console.error('FAIL',name,e.message)}}
 const win={};new Function('window',engineCode)(win);
+
+const valuesCode=read('assets/puc-quadro-valores-v18.js');
+const vwin={},vdoc={readyState:'loading',addEventListener(){}};
+new Function('window','document',valuesCode)(vwin,vdoc);
+test('Quadro das quatro fontes preserva ID_governa, UF e natureza de cada valor',()=>{
+ const pucs=[{id:'PUC-01',id_governa:'2434',uf:'RN',empreendimento:'Energia Solar Natal'}];
+ const docs=[
+  {origin:'SEI',name:'Anexo_BM01.pdf',project:'PUC-01',bmNumber:'01',bmStatus:'BM IDENTIFICADO',candidates:[{type:'Valor da Medição (BM)',values:['149.864,28']},{type:'Valor da Medição (%) BM',values:['1,99%']}]},
+  {origin:'DOCAS',name:'Declaracao.json',text:JSON.stringify({schema:'BI_PUC_DOCAS_V1',cadastro:{id_governa:'2434',uf:'RN'},grupos:{contratos:[{numero:'123',medido:'149.864,28'}]}})}
+ ];
+ const result=vwin.PUCQuadroValores.build({balancos:[{id:'2434',uf:'RN',empreendimento:'Energia Solar Natal',valor_global:'7.527.632,53'}],pucs,orcamento:[{id_puc:'PUC-01',empenhado:425959,acao:'00V4',po:'0003'}],documentos:docs});
+ assert.equal(result.length,1);
+ assert.equal(result[0].id,'2434');
+ assert.equal(result[0].uf,'RN');
+ assert.equal(result[0].bms[0].amount,'149.864,28');
+ assert.equal(result[0].bms[0].pct,'1,99%');
+ assert.equal(result[0].balanco.value,'7.527.632,53');
+ assert.equal(result[0].siop[0].value,425959);
+ assert.equal(result[0].docas[0].value,'149.864,28');
+});
+test('Sem vínculo por ID ou nome/UF, BM e SIOP não são atribuídos ao empreendimento',()=>{
+ const docs=[{origin:'SEI',name:'BM02.pdf',project:'PUC-01',bmStatus:'BM IDENTIFICADO',candidates:[{type:'Valor da Medição (BM)',values:['800,00']}]}];
+ const rows=vwin.PUCQuadroValores.build({balancos:[{id:'136989',uf:'RN',empreendimento:'Dragagem do Porto de Natal/RN',valor_global:'25.000.000,00'}],
+ pucs:[{id:'PUC-01',uf:'RN',empreendimento:'Energia Solar Natal',id_governa:'2434'}],orcamento:[{id_puc:'PUC-01',empenhado:1000}],documentos:docs});
+ assert.equal(rows[0].project,'');assert.equal(rows[0].bms.length,0);assert.equal(rows[0].siop.length,0);
+});
+test('Valores financeiros só aparecem quando parseáveis, sem coerção de vazio para zero',()=>{
+ assert.equal(vwin.PUCQuadroValores.parseMoney('R$ 7.527.632,53'),7527632.53);
+ assert.equal(vwin.PUCQuadroValores.parseMoney(''),null);
+ assert.equal(vwin.PUCQuadroValores.parseMoney('a conferir'),null);
+});
+
 const engine=win.PUCDocEngine;
 test('Classificação de BM efetivo',()=>assert.equal(engine.bmClass('BM_05.pdf','Boletim de Medição nº 05'),'BM IDENTIFICADO'));
 test('Despacho que apenas menciona BM não vira BM',()=>assert.equal(engine.bmClass('Despacho.pdf','Despacho menciona Boletim de Medição 05'),'BM MENCIONADO'));
