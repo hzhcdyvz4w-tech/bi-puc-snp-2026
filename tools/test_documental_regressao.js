@@ -77,6 +77,27 @@ test('Nome composto de obra extraído do BM sem inventar título quando ausente'
  assert.match(win.PUCDocEngine.bmWorkName('OBRA: REFORMA DOS ARMAZÉNS 1 E 2 E IMPLANTAÇÃO DE USINA FOTOVOLTAICA NO PORTO\nDE NATAL - RN\nEMPRESA: TESTE'),/PORTO DE NATAL - RN/);
  assert.equal(win.PUCDocEngine.bmWorkName('BOLETIM DE MEDIÇÃO 01\nSEM TÍTULO'), '');
 });
+
+test('Campo Valor BM usa referência global de BM selecionado, mesmo sem PUC vinculada',()=>{
+ const source=read('assets/puc-quadro-valores-v18.js');
+ assert.match(source,/function bmCell\(row,groups\)/);
+ assert.match(source,/bmCell\(r,groups\)/);
+ assert.match(source,/suggestWorkProjects\(g\.work,\[synthetic\]\)/);
+ assert.match(source,/puc-sei-selection-updated/);
+ const pucs=[{id:'PUC-02',uf:'RN',empreendimento:'Recuperação estrutural dos Armazéns nº 1 e 2 - Natal / RN'}];
+ const documents=[{id:'SEI-1',origin:'SEI',workName:'REFORMA DOS ARMAZÉNS 1 E 2 - NATAL RN',bmStatus:'BM IDENTIFICADO',bmNumber:'01',name:'BM01.pdf',candidates:[{type:'Valor da Medição (BM)',values:['149.864,28']}]}];
+ const groups=vwin.PUCQuadroValores.buildWorkGroups({pucs,documentos:documents});
+ assert.equal(groups[0].projects[0].id,'PUC-02');
+ assert.equal(groups[0].bms[0].amount,'149.864,28');
+ const row=vwin.PUCQuadroValores.build({pucs,documentos:documents,balancos:[{id:'X02',uf:'RN',empreendimento:'Recuperação estrutural dos Armazéns nº 1 e 2 - Natal / RN'}]})[0];
+ assert.equal(row.bms.length,0,'Sem link SEI↔PUC não imputar diretamente');
+});
+test('Seleção de BMs respeitada na reanálise, no quadro e na revisão',()=>{
+ assert.match(read('assets/biblioteca-puc.js'),/const queue=onlySEIBMs\?stored\.filter/);
+ assert.match(read('assets/biblioteca-puc.js'),/BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1/);
+ assert.match(compareCode,/puc-sei-selection-updated/);
+});
+
 test('Agrupamento de BM global em subdivisões, sem rateio, por nome da obra',()=>{
  const pucs=[
   {id:'PUC-01',uf:'RN',empreendimento:'Energia Solar - Natal / RN'},
