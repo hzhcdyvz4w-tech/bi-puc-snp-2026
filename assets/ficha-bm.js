@@ -91,7 +91,7 @@ function ui(){
  const report=$f('relatorio')?.querySelector('.panel');if(report){const btn=document.createElement('button');btn.className='btn secondary hide-print';btn.id='ficha-from-report';btn.type='button';btn.textContent='Abrir ficha de BMs e Curva S';report.querySelector('.filters')?.appendChild(btn);btn.onclick=()=>{const id=$f('report-project').value;if(!id){alert('Selecione um empreendimento no relatório.');return}openProject(id)}}
 }
 function updateProjects(){const co=$f('ficha-company'),p=$f('ficha-project'),prev=selectedId;
- option(co,data.projetos.map(x=>x.empresa));const rows=data.projetos.filter(x=>!co.value||x.empresa===co.value);const prior=p.value;
+ option(co,data.projetos.map(x=>x.empresa));const rows=data.projetos; // Somente seletor de empreendimento visível.const prior=p.value;
  option(p,rows.map(x=>x.id),id=>{const x=data.projetos.find(p=>p.id===id);return `${x.id} · ${x.empreendimento}`});if(rows.some(x=>x.id===prior))p.value=prior;else if(rows.some(x=>x.id===prev))p.value=prev;else p.value='';
  const id=p.value;selectedId=id;const contratos=[...new Set(bmRows.filter(x=>x.project===id&&x.contract&&x.status!=='ignorado'&&seiActive(x)).map(x=>x.contract))];const contract=$f('ficha-contract');const old=contract.value;
  contract.innerHTML='<option value="">'+(contratos.length>1?'Selecione um contrato para curva S':'Todos / contrato único')+'</option>';for(const c of contratos){const o=document.createElement('option');o.value=c;o.textContent=c;contract.appendChild(o)}contract.value=contratos.includes(old)?old:(contratos.length===1?contratos[0]:'');
@@ -347,9 +347,45 @@ function syncConfront(){
  if($f('report-project')&&$f('report-project').value===selectedId)showCritical();
 }
 function model(name,head){csvDownload(name,[],head)}
+
+function simplifyFichasUI(){
+ const section=$f('fichas'),intro=section?.querySelector(':scope > .panel'),result=$f('ficha-result-panel'),review=$f('ficha-review-bms');
+ if(!section||!intro||!result||!review)return;
+ section.classList.add('ficha-grafico-enxuto');
+ intro.hidden=true;
+ $f('ficha-source-panel').hidden=true;
+ $f('ficha-balanco-review').hidden=true;
+ $f('ficha-planned-review').hidden=true;
+ const selectProject=$f('ficha-project')?.closest('label'),selectContract=$f('ficha-contract')?.closest('label');
+ const controls=document.createElement('div');
+ controls.className='panel ficha-curve-controls';
+ controls.innerHTML='<div><h2>Ficha do empreendimento e Curva S</h2><p class="muted">Histórico físico dos boletins selecionados em <strong>Documentos → SEI</strong>. Percentuais financeiros não substituem execução física.</p></div><div class="ficha-curve-pickers"></div><p class="ficha-status">Os BMs precisam ser conferidos para integrar o gráfico. Anexe documentos exclusivamente na página Documentos.</p>';
+ const picker=controls.querySelector('.ficha-curve-pickers');
+ if(selectProject)picker.appendChild(selectProject);
+ if(selectContract)picker.appendChild(selectContract);
+ result.parentNode.insertBefore(controls,result);
+ result.querySelector('.ficha-lead h2').textContent='Ficha de acompanhamento e evolução das medições';
+ result.querySelector('.ficha-lead .muted').textContent='Identificação da obra, indicadores e histórico acumulado dos BMs confirmados.';
+ const print=$f('ficha-print-btn');
+ if(print){print.classList.add('hide-print');result.querySelector('.ficha-lead').appendChild(print)}
+ const details=document.createElement('details');details.id='ficha-bms-conferencia';details.className='ficha-bms-conferencia';
+ const summary=document.createElement('summary');summary.textContent='Conferir medições dos BMs selecionados (necessário para incluir pontos na curva)';
+ details.appendChild(summary);
+ while(review.firstChild)details.appendChild(review.firstChild);
+ review.appendChild(details);
+ review.querySelector('.section-header')?.setAttribute('hidden','');
+ review.querySelector('p.muted')?.setAttribute('hidden','');
+ review.querySelector('#ficha-manual-bm')?.closest('details')?.setAttribute('hidden','');
+ review.querySelector('.ficha-actions')?.setAttribute('hidden','');
+ result.insertAdjacentElement('afterend',review);
+ const style=document.createElement('style');style.id='ficha-grafico-enxuto-css';
+ style.textContent="\n #fichas.ficha-grafico-enxuto > .panel[hidden],#fichas.ficha-grafico-enxuto > .ficha-source-panel[hidden]{display:none!important}\n #fichas .ficha-curve-controls{padding:20px 24px!important;margin-bottom:15px}\n #fichas .ficha-curve-controls h2{margin:0 0 7px;font-size:23px}\n #fichas .ficha-curve-pickers{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:15px;margin-top:15px}\n #fichas .ficha-curve-pickers label{display:flex;flex-direction:column;min-width:0;gap:7px;font-size:13px;font-weight:650}\n #fichas .ficha-curve-pickers select{width:100%;min-width:0;padding:11px;font-size:14px}\n #fichas #ficha-result-panel{margin-top:12px}\n #fichas #ficha-review-bms{margin-top:15px}\n #fichas .ficha-bms-conferencia>summary{font-size:15px;font-weight:700;cursor:pointer;padding:8px 0;color:#184868}\n #fichas .ficha-bms-conferencia[open]>summary{margin-bottom:15px}\n #fichas #ficha-review-bms [hidden]{display:none!important}\n #fichas .ficha-chart{min-height:260px}\n @media(max-width:720px){#fichas .ficha-curve-pickers{grid-template-columns:minmax(0,1fr)}#fichas .ficha-curve-controls{padding:16px!important}}\n @media print{#fichas .ficha-curve-controls,#fichas #ficha-review-bms{display:none!important}}\n";
+ document.head.appendChild(style);
+}
+
 function init(){
  if(typeof data==='undefined'||typeof JSZip==='undefined'||typeof nav!=='function'||typeof csvDownload!=='function'){console.error('Fichas BM: dependências da V7 indisponíveis');return}
- ui();option($f('ficha-company'),data.projetos.map(x=>x.empresa));
+ ui();simplifyFichasUI();option($f('ficha-company'),data.projetos.map(x=>x.empresa));
  $f('ficha-toggle-sources').addEventListener('click',()=>sourcePanel($f('ficha-source-panel').hidden));
  $f('ficha-close-sources').addEventListener('click',()=>{$f('ficha-toggle-sources').focus();sourcePanel(false)});
  $f('ficha-go-bms').addEventListener('click',()=>gotoSection('ficha-review-bms'));
