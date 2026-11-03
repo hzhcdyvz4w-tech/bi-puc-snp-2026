@@ -15,6 +15,16 @@ const engine=win.PUCDocEngine;
 test('Classificação de BM efetivo',()=>assert.equal(engine.bmClass('BM_05.pdf','Boletim de Medição nº 05'),'BM IDENTIFICADO'));
 test('Despacho que apenas menciona BM não vira BM',()=>assert.equal(engine.bmClass('Despacho.pdf','Despacho menciona Boletim de Medição 05'),'BM MENCIONADO'));
 test('Número e competência do BM',()=>{assert.equal(engine.bmNumber('BM_05.pdf','Boletim de Medição nº 05'),'05');assert.equal(engine.bmPeriod('BM_05.pdf','Competência 09/2026'),'2026-09')});
+test('Números de BM em anexos exportados do SEI',()=>{
+ for(const [file,number] of [['[065]-10870234_Anexo_BM06_2.pdf','06'],['[064]-10870212_Anexo_BM06_1.pdf','06'],['[018]-10369072_Anexo_2_BM02.pdf','02'],['[010]-10270106_Anexo_4_BM1.pdf','1']])assert.equal(engine.bmNumber(file,''),number,file);
+ assert.equal(engine.bmNumber('[145]-11961894_Nota.pdf',''),'Documento sem BM não recebe número');
+ assert.equal(engine.bmPeriod('Anexo_BM06.pdf',''),'Sem competência explícita, não inventar mês');
+});
+test('Relação documental mantém seleção do usuário e não inclui quantidade no processo',()=>{
+ assert.ok(!compareCode.includes("filterMessage+=' | '+seiZipSelected.size+' documento(s) selecionado(s)'"));
+ assert.ok(libraryCode.includes('assignBMContext'));
+ assert.ok(libraryCode.includes("(!project||x.project===project)"));
+});
 test('Execução financeira percentual não vira reais',()=>{const v=engine.indicators('Execução financeira: 55,3%');assert.equal(v.length,1);assert.equal(v[0].type,'Execução financeira (%)')});
 test('Execução financeira monetária explícita',()=>{const v=engine.indicators('Execução financeira: R$ 1.234.567,89');assert.equal(v.length,1);assert.equal(v[0].type,'Execução financeira (R$ candidato)')});
 test('Documentos sem a seleção de PUCs; seletor opcional no Confronto',()=>{assert.ok(centralCode.includes('projectPicker.appendChild(header)'));assert.ok(centralCode.includes('projectPicker.appendChild(select)'));assert.ok(centralCode.includes('central.appendChild(uploads)'));assert.ok(centralCode.includes('cmp.insertBefore(projectPicker,main)'));assert.ok(centralCode.includes('docs.insertBefore(central,docs.firstElementChild)'))});
