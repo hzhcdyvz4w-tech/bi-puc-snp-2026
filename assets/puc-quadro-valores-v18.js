@@ -140,14 +140,26 @@
 
 
  function sharedBMReference(row,groups){
-  if(row.bms?.length||!row.project)return '';
-  const related=groups.filter(g=>g.projects.some(p=>p.id===row.project));
-  if(!related.length)return '';
+  const related=groups.filter(g=>{
+   if(row.project)return g.projects.some(p=>p.id===row.project);
+   const synthetic={id:'BALANCO-'+row.id,uf:states(row.uf)[0]||'',empreendimento:row.empreendimento};
+   return suggestWorkProjects(g.work,[synthetic]).length===1;
+  });
   return related.map(g=>{
-   const moneyValues=g.bms.filter(b=>b.amount!==null).map(b=>'BM '+(b.number||'?')+': '+reais(b.amount));
-   if(!moneyValues.length)return '<small class="pucq-work-ref">Obra identificada pelo nome: '+escape(g.work)+' · valores ainda não extraídos.</small>';
-   return '<div class="pucq-shared-value"><strong>Valor BM da obra global (não rateado)</strong><small>'+escape(moneyValues.join(' · '))+'</small><small>'+escape(g.work)+'</small><small>Referência textual, sem vínculo ou valor individual homologado; não somar.</small></div>';
+   const unique=new Map();
+   for(const b of g.bms){
+    const key=(b.number||b.document)+'|'+(b.period||'');
+    if(!unique.has(key)||(unique.get(key).amount===null&&b.amount!==null))unique.set(key,b);
+   }
+   const values=[...unique.values()].filter(b=>b.amount!==null).map(b=>'BM '+(b.number||'nº a conferir')+': '+reais(b.amount)+(b.pct?' ('+b.pct+')':''));
+   return '<div class="pucq-shared-value"><strong>'+(values.length?'Valor BM da obra (global, sem rateio)':'BM da obra — valor não extraído')+'</strong>'+(values.length?'<small>'+escape(values.join(' · '))+'</small>':'<small>Reanalisar PDFs selecionados ou conferir o documento.</small>')+'<small>Obra: '+escape(g.work)+'</small><small>Processo '+escape(g.ref||'não informado')+' · vínculo por nome/UF pendente de conferência. Não somar por PUC.</small></div>';
   }).join('');
+ }
+ function bmCell(row,groups){
+  const direct=(row.bms||[]).length?cell(row.bms,'bm'):'';
+  const missing=!(row.bms||[]).some(b=>b.amount!==null&&b.amount!==undefined);
+  const fallback=missing?sharedBMReference(row,groups):'';
+  return direct||fallback?direct+fallback:'<span class="pucq-empty">Sem dado vinculado</span>';
  }
  function workGroupsHTML(groups){
   if(!groups.length)return '<p class="muted">Nenhum nome de obra recuperado dos BMs selecionados. Reanalisar PDFs ou conferir documentos digitalizados.</p>';
@@ -174,13 +186,14 @@
    select.value=choice&&ufs.includes(choice)?choice:'';
   }
   const visible=rows.filter(r=>(!currentUF||states(r.uf).includes(currentUF))&&(!currentSearch||(r.id+' '+r.empreendimento+' '+r.uf).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(currentSearch)));
-  place.innerHTML=visible.length?visible.map(r=>'<tr><td><strong>'+escape(r.id||'Não informado')+'</strong></td><td>'+escape(r.uf)+'</td><td><strong>'+escape(r.empreendimento)+'</strong><small>'+escape(r.project||'PUC não vinculada')+' · '+escape(r.link)+'</small></td><td>'+cell(r.bms,'bm')+'</td><td>'+cell(r.balanco,'balanco')+'</td><td>'+cell(r.siop,'siop')+'</td><td>'+cell(r.docas,'docas')+'</td></tr>').join(''):'<tr><td colspan="7">Nenhum empreendimento identificado para os filtros. Importe o Balanço em XLSX/CSV e confira a UF e o ID_governa.</td></tr>';
+  place.innerHTML=visible.length?visible.map(r=>'<tr><td><strong>'+escape(r.id||'Não informado')+'</strong></td><td>'+escape(r.uf)+'</td><td><strong>'+escape(r.empreendimento)+'</strong><small>'+escape(r.project||'PUC não vinculada')+' · '+escape(r.link)+'</small></td><td>'+bmCell(r,groups)+'</td><td>'+cell(r.balanco,'balanco')+'</td><td>'+cell(r.siop,'siop')+'</td><td>'+cell(r.docas,'docas')+'</td></tr>').join(''):'<tr><td colspan="7">Nenhum empreendimento identificado para os filtros. Importe o Balanço em XLSX/CSV e confira a UF e o ID_governa.</td></tr>';
   if(counter){const orphan=sourceDocs().filter(d=>d.origin==='SEI'&&/BM IDENTIFICADO|BM PROVÁVEL/.test(d.bmStatus||'')&&!d.project).length;counter.textContent=visible.length+' de '+rows.length+' empreendimento(s) · '+orphan+' BM(s) SEI ainda sem PUC vinculada. Valores de naturezas diferentes não são comparados automaticamente.'}
  }
  function reportSection(projectId){
   const rows=build({balancos:balances(),pucs:projects(),orcamento:siop(),documentos:sourceDocs()}).filter(r=>r.project===projectId);
+  const groups=buildWorkGroups({pucs:projects(),documentos:sourceDocs()});
   if(!rows.length)return '<h3>Quadro das quatro fontes por ID_governa e UF</h3><p>Não há vínculo confirmado entre este projeto e uma linha do Balanço. Não atribuir valores de outras obras.</p>';
-  return '<h3>Valores por ID_governa e UF (fontes distintas; sem equivalência automática)</h3><table><thead><tr><th>ID_governa</th><th>UF</th><th>Empreendimento</th><th>Valor BM</th><th>Valor do Balanço</th><th>Valor do SIOP</th><th>Valor Informado pelas DOCAS</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+escape(r.id)+'</td><td>'+escape(r.uf)+'</td><td>'+escape(r.empreendimento)+'</td><td>'+cell(r.bms,'bm')+sharedBMReference(r,groups)+(r.workReferences?.length?'<small class="pucq-work-ref">'+r.workReferences.map(g=>escape(g.shared?'Obra conjunta (valor global no quadro consolidado; sem rateio)':'Correspondência textual com BM — vínculo pendente')+' · '+escape(g.work)).join('<br>')+'</small>':'')+'</td><td>'+cell(r.balanco,'balanco')+'</td><td>'+cell(r.siop,'siop')+'</td><td>'+cell(r.docas,'docas')+'</td></tr>').join('')+'</tbody></table>';
+  return '<h3>Valores por ID_governa e UF (fontes distintas; sem equivalência automática)</h3><table><thead><tr><th>ID_governa</th><th>UF</th><th>Empreendimento</th><th>Valor BM</th><th>Valor do Balanço</th><th>Valor do SIOP</th><th>Valor Informado pelas DOCAS</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+escape(r.id)+'</td><td>'+escape(r.uf)+'</td><td>'+escape(r.empreendimento)+'</td><td>'+bmCell(r,groups)+(r.workReferences?.length?'<small class="pucq-work-ref">'+r.workReferences.map(g=>escape(g.shared?'Obra conjunta (valor global no quadro consolidado; sem rateio)':'Correspondência textual com BM — vínculo pendente')+' · '+escape(g.work)).join('<br>')+'</small>':'')+'</td><td>'+cell(r.balanco,'balanco')+'</td><td>'+cell(r.siop,'siop')+'</td><td>'+cell(r.docas,'docas')+'</td></tr>').join('')+'</tbody></table>';
  }
  function init(){
   const main=$('puc3-main');if(!main||$('pucq-panel'))return;
