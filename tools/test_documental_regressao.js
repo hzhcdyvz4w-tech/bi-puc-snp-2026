@@ -74,6 +74,7 @@ test('Valores financeiros de BM não são inventados sem quadro contratual ident
 test('Nome composto de obra extraído do BM sem inventar título quando ausente',()=>{
  const text='PÁGINA 1\nOBRA: REFORMA E RECUPERAÇÃO DOS ARMAZÉNS 1 E 2, DOS GALPÕES 1 E 2 E IMPLANTAÇÃO DE USINA FOTOVOLTAICA NO PORTO DE NATAL - RN\nBOLETIM DE MEDIÇÃO 01';
  assert.match(win.PUCDocEngine.bmWorkName(text),/ARMAZÉNS 1 E 2/);
+ assert.match(win.PUCDocEngine.bmWorkName('OBRA: REFORMA DOS ARMAZÉNS 1 E 2 E IMPLANTAÇÃO DE USINA FOTOVOLTAICA NO PORTO\nDE NATAL - RN\nEMPRESA: TESTE'),/PORTO DE NATAL - RN/);
  assert.equal(win.PUCDocEngine.bmWorkName('BOLETIM DE MEDIÇÃO 01\nSEM TÍTULO'), '');
 });
 test('Agrupamento de BM global em subdivisões, sem rateio, por nome da obra',()=>{
