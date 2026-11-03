@@ -19,7 +19,7 @@
   const docs=d().getElementById('documentos'),compare=d().getElementById('comparacao');
   const central=d().getElementById('puc3-central-files'),uploads=d().getElementById('puc3-uploads');
   assert(docs.contains(central)&&central.contains(uploads)&&!compare.contains(uploads),'Anexos somente em Documentos');
-  const ids=['puc3-files-SEI','puc3-files-BALANCO','puc3-files-SIOP'];
+  const ids=['puc3-files-SEI','puc3-files-BALANCO','puc3-files-DOCAS'];
   assert(ids.every(id=>d().querySelectorAll('#'+id).length===1&&central.contains(d().getElementById(id))),'Três fontes com IDs únicos');
   const other=[...d().querySelectorAll('input[type=file]')].filter(el=>!central.contains(el)&&w.getComputedStyle(el).display!=='none'&&w.getComputedStyle(el.closest('label')||el).display!=='none'&&!el.closest('[hidden]'));
   assert(other.length===0,'Nenhum outro campo de anexo visível',String(other.length));
@@ -61,7 +61,10 @@
    return until(()=>w.PUCDocLibrary.list().some(x=>x.origin===source));
   };
   assert(await addCSV('BALANCO','balanco_teste.csv','Empreendimento;Execução física\nPUC-01;20%'),'Balanço sintético importado');
-  assert(await addCSV('SIOP','siop_teste.csv','Dotação atual;Empenhado\n1000;800'),'SIOP sintético importado');
+  const docasFile=new w.File([JSON.stringify({schema:'BI_PUC_DOCAS_V1',cadastro:{empreendimento:'Teste sintético',uf:'RN',competencia:'2026-09',empresa:'Companhia de teste'},grupos:{fisico:[]}})],'DOCAS_TESTE.json',{type:'application/json'});
+  const docasInput=d().getElementById('puc3-files-DOCAS'),docasTransfer=new w.DataTransfer();docasTransfer.items.add(docasFile);docasInput.files=docasTransfer.files;
+  d().querySelector('[data-import="DOCAS"]').click();
+  assert(await until(()=>w.PUCDocLibrary.list().some(x=>x.origin==='DOCAS')),'Declaração sintética DOCAS importada');
   assert(w.PUCDocLibrary.list().length===4,'Quatro documentos nas três fontes');
   const lib=w.PUCDocLibrary,all=lib.list(),bmDoc=all.find(x=>x.origin==='SEI'&&x.bmStatus==='BM IDENTIFICADO'),balDoc=all.find(x=>x.origin==='BALANCO');
   const finding={project:'PUC-01',indicator:'medicao_bm',value:1234.56,period:'2026-09',cutoff:'2026-09-30',aggregation:'MENSAL',object:'CONTRATO',contract:'123/2026',bmNumber:'05',verified:true,note:'Teste sintético de confronto'};
