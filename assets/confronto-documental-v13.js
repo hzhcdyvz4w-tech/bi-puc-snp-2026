@@ -5,7 +5,7 @@
 const $=id=>document.getElementById(id);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const projects=(()=>{try{return JSON.parse($('embedded-data')?.textContent||'{}').projetos||[]}catch(e){return []}})();
-const sources=['SEI','BALANCO','SIOP'],names={SEI:'SEI · documentos do processo',BALANCO:'Balanço · arquivo oficial',SIOP:'SIOP · consulta anexada'};
+const sources=['SEI','BALANCO','DOCAS'],names={SEI:'SEI · documentos do processo',BALANCO:'Balanço · arquivo oficial',DOCAS:'Informações das DOCAS'};
 const indicators=[
  ['dotacao_atual','Dotação atual (União)','R$'],['empenho_uniao','Empenhado (União)','R$'],['liquidacao_uniao','Liquidado (União)','R$'],['pagamento_uniao','Pago pela União','R$'],
  ['aporte_puc_recebido','PUC recebida pela companhia','R$'],['puc_aplicada','PUC aplicada pela companhia','R$'],
@@ -34,7 +34,7 @@ function filesForReview(){
 }
 
 const PUC_BALANCO_UFS=['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
-async function PUCFiltrarBalancoPorUF(file,uf){
+async function PUCFiltrarBalancoPorUF(file,uf,empreendimentoId=''){
  if(!window.JSZip)throw Error('Leitor de planilhas ZIP/XLSX indisponível.');
  const zip=await JSZip.loadAsync(await file.arrayBuffer()),parser=new DOMParser();
  const xml=async path=>{
@@ -74,21 +74,43 @@ async function PUCFiltrarBalancoPorUF(file,uf){
  });
  const header=data.find(row=>String(row.AG||'').trim().toUpperCase()==='UF'&&/empreendimento/i.test(String(row.B||'')));
  if(!header)throw Error('Cabeçalho UF/empreendimento não encontrado na aba '+sheetName);
- const selected=data.filter(row=>row!==header&&row.B&&row.AG&&(!uf||String(row.AG||'').toUpperCase().split(/[,;\/]/).map(x=>x.trim()).includes(uf)));
+ const rows=data.filter(row=>row!==header&&row.B&&row.AG&&(!uf||String(row.AG||'').toUpperCase().split(/[,;\/]/).map(x=>x.trim()).includes(uf)));
+ const selected=rows.filter(row=>!empreendimentoId||String(row.A||'')+'|'+String(row.B||'')===empreendimentoId);
  const colIndex=x=>[...x].reduce((v,c)=>v*26+c.charCodeAt(0)-64,0);
  const cols=Object.keys(header).sort((a,b)=>colIndex(a)-colIndex(b));
  const csvCell=x=>{let s=String(x??'');if(/^\s*[=+@]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
  const csv=[cols.map(k=>csvCell(header[k])).join(';'),...selected.map(row=>cols.map(k=>csvCell(row[k])).join(';'))].join('\r\n');
  const name='BALANCO_'+uf+'_'+sheetName.replace(/[^a-z0-9-]/gi,'_').slice(0,35)+'.csv';
- return {file:new File(['\ufeff'+csv],name,{type:'text/csv'}),count:selected.length};
+ return {file:new File(['\ufeff'+csv],name,{type:'text/csv'}),count:selected.length,sheet:sheetName,registros:rows.map(row=>({id:String(row.A||''),empreendimento:String(row.B||''),uf:String(row.AG||''),municipio:String(row.AH||''),executor:String(row.AI||''),valor_global:String(row.D||''),inicio:String(row.P||''),termino:String(row.Q||''),fisico:String(row.R||''),data_referencia:String(row.K||'')}))};
 }
 
 function sourceCards(){
- $('puc3-uploads').innerHTML=sources.map(source=>'<div class="puc3-source"><h3>'+esc(names[source])+'</h3>'+(source==='BALANCO'?'<label>UF do Balanço (aba mais recente)<select id="puc3-uf-balanco"><option value="">Todas as UFs</option>'+PUC_BALANCO_UFS.map(uf=>'<option value="'+uf+'">'+uf+'</option>').join('')+'</select></label>':'')+'<label>Processo / referência<input id="puc3-ref-'+source+'" placeholder="SEI, período ou referência do relatório"></label><label>Arquivos<input type="file" multiple id="puc3-files-'+source+'" accept=".zip,.pdf,.xls,.xlsx,.csv,.doc,.docx,.txt,.html,.htm,.xml,.json"></label><button class="btn" type="button" data-import="'+source+'">Analisar anexos '+source+'</button><small>'+ (source==='SEI'?'Busca possíveis BMs pelo nome e texto.':source==='BALANCO'?'Selecione a UF para importar apenas as linhas correspondentes da aba mais recente da planilha XLSX.':'A base pré-carregada não conta: anexe a consulta a confrontar.')+'</small></div>').join('');
+ $('puc3-uploads').innerHTML=sources.map(source=>'<div class="puc3-source"><h3>'+esc(names[source])+'</h3>'+
+ (source==='BALANCO'?'<label>UF do Balanço (aba mais recente)<select id="puc3-uf-balanco"><option value="">Todas as UFs</option>'+PUC_BALANCO_UFS.map(uf=>'<option value="'+uf+'">'+uf+'</option>').join('')+'</select></label><label>Empreendimento do Balanço<select id="puc3-empreendimento-balanco"><option value="">Todos os empreendimentos da UF</option></select></label><p id="puc3-balanco-preview" class="muted">Anexe o Balanço para identificar UF, nome e ID_governa na aba mais recente.</p>':'')+
+ (source==='DOCAS'?'<p class="muted">A Companhia preenche o formulário, baixa um JSON e encaminha a resposta por canal institucional autorizado. Não há transmissão automática pelo site.</p><a class="btn secondary" href="formulario-docas.html" target="_blank" rel="noopener">Abrir formulário das DOCAS</a>':'')+
+ '<label>Processo / referência<input id="puc3-ref-'+source+'" placeholder="'+(source==='DOCAS'?'Companhia, competência e referência da declaração':'SEI, período ou referência do relatório')+'"></label>'+
+ '<label>Arquivos<input type="file" multiple id="puc3-files-'+source+'" accept="'+(source==='DOCAS'?'.json':'.zip,.pdf,.xls,.xlsx,.csv,.doc,.docx,.txt,.html,.htm,.xml,.json')+'"></label>'+
+ '<button class="btn" type="button" data-import="'+source+'">Analisar anexos '+source+'</button><small>'+
+ (source==='SEI'?'Busca BMs pelo nome e conteúdo; exige revisão documental.':source==='BALANCO'?'Identifica UF, empreendimento e ID_governa antes do confronto.':'Importe a declaração JSON da Companhia; os dados exigem conferência.')+
+ '</small></div>').join('');
  $('puc3-uploads').querySelectorAll('[data-import]').forEach(b=>b.onclick=()=>importFiles(b.dataset.import));
+ $('puc3-files-BALANCO').addEventListener('change',refreshBalancoPreview);
+ $('puc3-uf-balanco').addEventListener('change',refreshBalancoPreview);
+}
+async function refreshBalancoPreview(){
+ const file=$('puc3-files-BALANCO')?.files?.[0],uf=$('puc3-uf-balanco')?.value||'',select=$('puc3-empreendimento-balanco'),label=$('puc3-balanco-preview');
+ if(!select||!label)return;select.innerHTML='<option value="">Todos os empreendimentos da UF</option>';
+ if(!file){label.textContent='Anexe o Balanço para localizar UF, empreendimento e ID_governa.';return}
+ if(!/\.xlsx$/i.test(file.name)){label.textContent='Prévia de UF e empreendimento disponível apenas para XLSX.';return}
+ try{
+  label.textContent='Lendo aba mais recente e identificando empreendimentos...';
+  const out=await PUCFiltrarBalancoPorUF(file,uf);
+  for(const row of out.registros){const option=document.createElement('option');option.value=row.id+'|'+row.empreendimento;option.textContent=(row.id?'ID '+row.id+' · ':'')+row.empreendimento+' ['+row.uf+']';select.appendChild(option)}
+  label.textContent=out.sheet+' · '+out.registros.length+' empreendimento(s) encontrados. O vínculo à PUC e às medições do SEI deve ser confirmado antes de comparar valores.';
+ }catch(err){label.textContent='Erro de leitura do Balanço: '+err.message}
 }
 async function importFiles(source){
- const files=[...$('puc3-files-'+source).files],project='',ref=$('puc3-ref-'+source).value.trim(),uf=source==='BALANCO'?($('puc3-uf-balanco')?.value||''):'';
+ const files=[...$('puc3-files-'+source).files],project='',ref=$('puc3-ref-'+source).value.trim(),uf=source==='BALANCO'?($('puc3-uf-balanco')?.value||''):'',empreendimentoId=source==='BALANCO'?($('puc3-empreendimento-balanco')?.value||''):'';
  if(!files.length){status('Selecione ao menos um arquivo para '+source+'.');return}
  if(!lib()){status('Biblioteca documental indisponível. Recarregue a página e execute o diagnóstico.');return}
  const button=$('puc3-uploads').querySelector('[data-import="'+source+'"]');button.disabled=true;
@@ -98,11 +120,12 @@ async function importFiles(source){
   if(source==='BALANCO'&&files.every(file=>/\.xlsx$/i.test(file.name))){
    const filtered=[];let count=0;
    for(const file of files){
-    const result=await PUCFiltrarBalancoPorUF(file,uf);filtered.push(result.file);count+=result.count;
+    const result=await PUCFiltrarBalancoPorUF(file,uf,empreendimentoId);filtered.push(result.file);count+=result.count;
    }
    if(!count)throw Error('Não foram encontrados empreendimentos para '+(uf||'as UFs')+' na aba mais recente da planilha.');
-   targetFiles=filtered;filterMessage=' | '+(uf?'UF '+uf:'Todas as UFs')+' | '+count+' empreendimento(s) da aba mais recente';
+   targetFiles=filtered;filterMessage=' | '+(uf?'UF '+uf:'Todas as UFs')+' | '+count+' empreendimento(s)'+(empreendimentoId?' | '+empreendimentoId:'')+' da aba mais recente';
   }
+  if(source==='DOCAS')for(const file of files){if(!/\.json$/i.test(file.name))throw Error('A declaração das DOCAS deve ser JSON exportado do formulário.');let record;try{record=JSON.parse(await file.text())}catch(e){throw Error(file.name+': JSON inválido')}if(record.schema!=='BI_PUC_DOCAS_V1'||!record.cadastro?.empreendimento||!record.cadastro?.uf||!record.cadastro?.competencia)throw Error(file.name+': declaração sem identificação, UF ou competência')}
   const n=await lib().ingest(targetFiles,source,project,ref+filterMessage);
   $('puc3-files-'+source).value='';
   if(project)selected.add(project);
@@ -120,7 +143,7 @@ function renderFiles(){
  const files=filesForReview();
  $('puc3-coverage').innerHTML=sources.map(src=>{let set=files.filter(d=>d.origin===src);return '<div class="puc3-kpi"><small>'+src+' anexado</small><strong>'+set.length+'</strong><span>'+set.filter(d=>(d.findings||[]).some(f=>f.verified)).length+' documento(s) com achados conferidos</span></div>'}).join('');
  $('puc3-doc-count').textContent=files.length+' documento(s) apresentados · '+files.filter(d=>/^BM IDENTIFICADO|^BM PROVÁVEL/.test(d.bmStatus||'')).length+' possíveis BMs';
- const body=$('puc3-files-rows');body.innerHTML=files.length?files.map(lineFor).join(''):'<tr><td colspan="6">Anexe arquivos SEI, Balanço e SIOP para iniciar. A base SIOP demonstrativa não é utilizada neste confronto.</td></tr>';
+ const body=$('puc3-files-rows');body.innerHTML=files.length?files.map(lineFor).join(''):'<tr><td colspan="6">Anexe arquivos SEI e Balanço e as declarações das DOCAS para iniciar. A base SIOP de referência continua disponível na página Base SIOP, fora desta importação documental.</td></tr>';
  body.querySelectorAll('[data-review]').forEach(x=>x.onclick=()=>review(x.dataset.review));
 }
 function renderFindings(){
@@ -265,16 +288,16 @@ function initReportPage(){
  const page=$('relatorio');if(!page)return;
  const previous=[...page.children].filter(el=>el.classList?.contains('panel'));
  const legacy=document.createElement('details');legacy.className='panel';legacy.innerHTML='<summary>Relatório anterior · SIOP referencial (consulta auxiliar)</summary><p class="muted">A estrutura anterior permanece disponível, mas não deve substituir o confronto documental das três fontes anexadas.</p>';for(const el of previous)legacy.appendChild(el);page.appendChild(legacy);
- const p=document.createElement('div');p.id='puc3-report-panel';p.className='panel';p.innerHTML='<h2>Relatório documental · SEI × Balanço × SIOP</h2><p class="muted">Usa exclusivamente os documentos anexados e os achados registrados no Confronto das Fontes, incluindo as PUCs selecionadas. O resultado só indica correspondência quando há pelo menos duas fontes com valores de mesmo indicador e contexto comprovado.</p><div class="two-actions"><button type="button" class="btn" id="puc3-report-preview-btn">Visualizar resultado documental</button><button type="button" class="btn secondary" id="puc3-report-html-btn">Baixar relatório HTML para impressão/PDF</button></div><div id="puc3-report-preview" class="statusline">Selecione PUCs e confira os achados na aba Confronto das fontes.</div>';
+ const p=document.createElement('div');p.id='puc3-report-panel';p.className='panel';p.innerHTML='<h2>Relatório documental · SEI × Balanço × DOCAS</h2><p class="muted">Usa exclusivamente os documentos anexados e os achados registrados no Confronto das Fontes, incluindo as PUCs selecionadas. O resultado só indica correspondência quando há pelo menos duas fontes com valores de mesmo indicador e contexto comprovado.</p><div class="two-actions"><button type="button" class="btn" id="puc3-report-preview-btn">Visualizar resultado documental</button><button type="button" class="btn secondary" id="puc3-report-html-btn">Baixar relatório HTML para impressão/PDF</button></div><div id="puc3-report-preview" class="statusline">Selecione PUCs e confira os achados na aba Confronto das fontes.</div>';
  page.insertBefore(p,page.firstChild);
  $('puc3-report-preview-btn').onclick=()=>{audit();$('puc3-report-preview').innerHTML=$('puc3-result').innerHTML;};
- $('puc3-report-html-btn').onclick=()=>download(new Blob([reportHtml()],{type:'text/html;charset=utf-8'}),'RELATORIO_DOCUMENTAL_PUC_SEI_BALANCO_SIOP.html');
+ $('puc3-report-html-btn').onclick=()=>download(new Blob([reportHtml()],{type:'text/html;charset=utf-8'}),'RELATORIO_DOCUMENTAL_PUC_SEI_BALANCO_DOCAS.html');
 }
 
 function render(){renderFiles();renderFindings();if($('puc3-result')?.dataset?.generated==='1')audit()}
 function simplifyDocuments(){
  const page=$('documentos');if(!page)return;
- const help=document.createElement('div');help.className='panel';help.innerHTML='<h2>Importação principal: Confronto das três fontes</h2><p class="muted">Para comparar dados entre <strong>SEI, Balanço e SIOP</strong>, anexe os documentos na aba Confronto das Fontes. A biblioteca abaixo permanece disponível para consulta, reanálise e exclusão dos arquivos.</p><button type="button" class="btn" id="puc3-open-compare">Abrir Confronto das Fontes · SEI × Balanço × SIOP</button>';
+ const help=document.createElement('div');help.className='panel';help.innerHTML='<h2>Importação principal: Confronto das três fontes</h2><p class="muted">Para comparar dados entre <strong>SEI, Balanço e DOCAS</strong>, anexe os documentos na aba Confronto das Fontes. A biblioteca abaixo permanece disponível para consulta, reanálise e exclusão dos arquivos.</p><button type="button" class="btn" id="puc3-open-compare">Abrir Confronto das Fontes · SEI × Balanço × DOCAS</button>';
  page.insertBefore(help,page.firstChild);
  $('puc3-open-compare').onclick=()=>{document.querySelector('[data-page="comparacao"]')?.click();$('puc3-main')?.scrollIntoView({behavior:'smooth',block:'start'})};
  const standard=$('load-standard-csv')?.closest('.mini-panel'),schedule=$('schedule-import-panel');
@@ -293,7 +316,7 @@ function init(){
  const detail=document.createElement('details');detail.id='puc3-legacy';detail.className='panel';detail.innerHTML='<summary>Consulta auxiliar ao SIOP referencial e registros manuais antigos (não faz parte do confronto documental)</summary><p class="muted">Esta consulta permanece disponível para compatibilidade, mas os valores da base SIOP incorporada não são tratados como evidência confrontada.</p>';
  for(const x of oldPanels)detail.appendChild(x);cmp.appendChild(detail);
  const panel=document.createElement('div');panel.id='puc3-main';panel.className='panel';panel.innerHTML=
- '<h2>Confronto documental · SEI × Balanço × SIOP</h2><p class="muted">Anexe as três fontes, selecione uma ou várias PUCs, revise os achados de cada arquivo e então confronte <strong>somente indicadores equivalentes, com período e corte comprovados</strong>. Os números SIOP pré-carregados são apenas referência e <strong>não entram nesta comparação</strong>.</p>'+
+ '<h2>Confronto documental · SEI × Balanço × DOCAS</h2><p class="muted">Anexe as três fontes, selecione uma ou várias PUCs, revise os achados de cada arquivo e então confronte <strong>somente indicadores equivalentes, com período e corte comprovados</strong>. Os dados da Base SIOP não entram automaticamente nesta comparação documental.</p>'+
  '<div class="filters"><input id="puc3-search" placeholder="Buscar PUC / empreendimento" aria-label="Filtrar PUCs"><button type="button" id="puc3-all" class="btn secondary">Selecionar todas</button><button type="button" id="puc3-clear" class="btn secondary">Limpar</button><span id="puc3-selected" class="muted"></span></div><div id="puc3-projects" class="puc3-projects"></div>'+
  '<h3>1 · Anexar fontes documentais</h3><div class="puc3-uploads" id="puc3-uploads"></div><p id="puc3-status" class="statusline" role="status">Selecione PUCs e anexe os arquivos das três fontes.</p>'+
  '<details id="puc3-document-list" class="puc3-inventory-collapsed"><summary>Consultar e revisar documentos SEI / Balanço / SIOP (opcional)</summary><p class="muted">A relação detalhada permanece oculta por padrão. A análise dos arquivos e seus achados continuam disponíveis para conferência, sem integrar a impressão do relatório.</p><h3>Documentos extraídos</h3><div id="puc3-coverage" class="puc3-coverage"></div><p class="muted" id="puc3-doc-count"></p><div class="scroll"><table class="data-table"><thead><tr><th>Fonte / PUC</th><th>Documento</th><th>BM</th><th>Valores candidatos</th><th>Leitura e revisão</th><th>Ação</th></tr></thead><tbody id="puc3-files-rows"></tbody></table></div>'+
@@ -310,7 +333,7 @@ function init(){
  $('puc3-review-close').onclick=()=>$('puc3-review').hidden=true;
  $('puc3-run').onclick=audit;
  $('puc3-csv').onclick=()=>csv(lastRows.map(f=>({puc:f.project,fonte:f.source,documento:f.document,referencia:f.reference||'',indicador:label[f.indicator]||f.indicator,valor:f.value,unidade:units[f.indicator],competencia:f.period,data_corte:f.cutoff,objeto:f.object,contrato:f.contract,numero_bm:f.bmNumber,apuracao:f.aggregation,conferido:f.verified?'SIM':'NÃO',observacao:f.note})),'PUC_ACHADOS_DOCUMENTAIS_SEI_BALANCO_SIOP.csv');
- $('puc3-report').onclick=()=>download(new Blob([reportHtml()],{type:'text/html;charset=utf-8'}),'RELATORIO_DOCUMENTAL_PUC_SEI_BALANCO_SIOP.html');
+ $('puc3-report').onclick=()=>download(new Blob([reportHtml()],{type:'text/html;charset=utf-8'}),'RELATORIO_DOCUMENTAL_PUC_SEI_BALANCO_DOCAS.html');
  document.addEventListener('puc-documents-updated',render);
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
