@@ -388,6 +388,14 @@ function review(id,fid){
  $('puc3-candidates').querySelectorAll('[data-candidate]').forEach(x=>x.onclick=()=>chooseCandidate(Number(x.dataset.candidate)));
  $('puc3-review').scrollIntoView({behavior:'smooth',block:'start'});
 }
+window.PUC3ReviewDoc=function(id){
+ const doc=docs().find(x=>x.id===id);
+ if(!doc)return false;
+ document.querySelector('#nav [data-page="comparacao"]')?.click();
+ const detail=$('puc3-document-list');if(detail)detail.open=true;
+ review(id);
+ return true;
+};
 function numericInput(raw){let x=String(raw??'').trim().replace(/^R\$\s*/,'').replace(/\s*%$/,'').replace(/\s/g,'');if(!x)return NaN;
  if(x.includes(',')&&x.includes('.'))x=x.lastIndexOf(',')>x.lastIndexOf('.')?x.replace(/\./g,'').replace(',','.'):x.replace(/,/g,'');
  else if(x.includes(','))x=x.replace(',','.');else if(/^(?:\d{1,3}\.)+\d{3}$/.test(x))x=x.replace(/\./g,'');
