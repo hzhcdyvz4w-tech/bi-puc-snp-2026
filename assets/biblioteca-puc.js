@@ -44,11 +44,12 @@ function candidates(source){
 }
 async function extract(f){return engine().unpack(f)}
 async function fileText(item){return engine().read(item)}
-async function reanalyse(){
- let changed=0,problems=[];const button=E('puc-reanalyse');if(button)button.disabled=true;
- try{for(const d of stored){if(!d.blob)continue;
+async function reanalyse(onlySEIBMs=false){
+ let changed=0,problems=[];const button=E(onlySEIBMs?'puc-bm-reanalyse':'puc-reanalyse');if(button)button.disabled=true;
+ const queue=onlySEIBMs?stored.filter(d=>d.origin==='SEI'&&isBM(d)):[...stored];
+ try{for(const d of queue){if(!d.blob)continue;
   try{const result=await fileText({name:d.name,blob:d.blob});d.text=result.text;d.quality=result.quality;updateEntry(d);await transact('readwrite',s=>s.put(d));changed++;
-   if(changed%10===0)status('Reanalisando documentos: '+changed+'/'+stored.length);
+   if(changed%5===0)status('Reanalisando documentos: '+changed+'/'+queue.length);
   }catch(err){problems.push(d.name+': '+err.message)}
  }await reload();status('Reanálise concluída: '+changed+' arquivos; '+stored.filter(isBM).length+' BMs identificados. '+(problems.length?'Falhas: '+problems.slice(0,3).join('; '):''))}
  finally{if(button)button.disabled=false}
@@ -109,7 +110,7 @@ function refreshBMConfront(){
 }
 function setupBMConfront(){
  const cmp=E('comparacao');if(!cmp)return;
- const panel=document.createElement('div');panel.className='panel';panel.id='puc-bm-confront';panel.innerHTML='<h2>Boletins de medição relacionados ao confronto</h2><p class="muted">Exibe <strong>somente documentos reconhecidos como BMs</strong> e vinculados à PUC selecionada. Filtre também pelo processo. Valores extraídos são candidatos, não entram automaticamente nos indicadores nem constituem prova de pagamento ou execução física.</p><div class="filters"><label>Filtrar processo SEI <input id="puc-bm-filter-process" placeholder="Número ou referência" style="width:220px;max-width:100%"></label><button type="button" class="btn secondary" id="puc-bm-show-all">Mostrar BMs de todas as PUCs</button><button type="button" class="btn secondary" id="puc-bm-go-docs">Anexar / gerenciar documentos</button></div><div class="puc-bm-association" style="padding:12px;border:1px solid #d5e3ec;border-radius:8px;margin:12px 0;display:flex;align-items:end;gap:9px;flex-wrap:wrap"><label>PUC comprovada nos documentos <select id="puc-bm-assoc-project"><option value="">Selecionar empreendimento</option></select></label><label>Processo SEI <input id="puc-bm-assoc-process" placeholder="Ex.: 50020.001577/2025-18"></label><button type="button" class="btn secondary" id="puc-bm-assoc-save">Vincular BMs exibidos à PUC/processo (após conferir)</button><small>Não valida medições ou valores. Utilize somente para boletins do mesmo empreendimento e processo.</small></div><div class="statusline" id="puc-bm-confront-count"></div><div class="scroll"><table class="data-table"><thead><tr><th>PUC</th><th>Processo</th><th>BM nº</th><th>Competência</th><th>Documento</th><th>Valores candidatos</th><th>Ação</th></tr></thead><tbody id="puc-bm-confront-rows"></tbody></table></div>';
+ const panel=document.createElement('div');panel.className='panel';panel.id='puc-bm-confront';panel.innerHTML='<h2>Boletins de medição relacionados ao confronto</h2><p class="muted">Exibe <strong>somente documentos reconhecidos como BMs</strong> e vinculados à PUC selecionada. Filtre também pelo processo. Valores extraídos são candidatos, não entram automaticamente nos indicadores nem constituem prova de pagamento ou execução física.</p><div class="filters"><label>Filtrar processo SEI <input id="puc-bm-filter-process" placeholder="Número ou referência" style="width:220px;max-width:100%"></label><button type="button" class="btn secondary" id="puc-bm-show-all">Mostrar BMs de todas as PUCs</button><button type="button" class="btn secondary" id="puc-bm-go-docs">Anexar / gerenciar documentos</button><button type="button" class="btn secondary" id="puc-bm-reanalyse">Reanalisar PDFs dos BMs já anexados</button></div><div class="puc-bm-association" style="padding:12px;border:1px solid #d5e3ec;border-radius:8px;margin:12px 0;display:flex;align-items:end;gap:9px;flex-wrap:wrap"><label>PUC comprovada nos documentos <select id="puc-bm-assoc-project"><option value="">Selecionar empreendimento</option></select></label><label>Processo SEI <input id="puc-bm-assoc-process" placeholder="Ex.: 50020.001577/2025-18"></label><button type="button" class="btn secondary" id="puc-bm-assoc-save">Vincular BMs exibidos à PUC/processo (após conferir)</button><small>Não valida medições ou valores. Utilize somente para boletins do mesmo empreendimento e processo.</small></div><div class="statusline" id="puc-bm-confront-count"></div><div class="scroll"><table class="data-table"><thead><tr><th>PUC</th><th>Processo</th><th>BM nº</th><th>Competência</th><th>Documento</th><th>Valores candidatos</th><th>Ação</th></tr></thead><tbody id="puc-bm-confront-rows"></tbody></table></div>';
  cmp.appendChild(panel);
  const assoc=E('puc-bm-assoc-project');
  bmProjectOptions().forEach(p=>{const opt=document.createElement('option');opt.value=p.id;opt.textContent=p.label;assoc.appendChild(opt)});
@@ -125,6 +126,7 @@ function setupBMConfront(){
  E('puc-bm-filter-process').addEventListener('input',refreshBMConfront);
  E('puc-bm-show-all').onclick=()=>{E('cmp-project').value='';E('cmp-project').dispatchEvent(new Event('change'));refreshBMConfront()};
  E('puc-bm-go-docs').onclick=()=>document.querySelector('[data-page="documentos"]')?.click();
+ E('puc-bm-reanalyse').onclick=()=>reanalyse(true);
  refreshBMConfront();
 }
 
@@ -141,7 +143,7 @@ function view(id){selected=stored.find(x=>x.id===id);if(!selected)return;
 function setup(){
  let section=E('documentos');if(!section)return;let pane=document.createElement('div');pane.className='panel';pane.id='puc-library';pane.innerHTML='<h2>Biblioteca documental compartilhada e persistente (local)</h2><p class="muted">Anexe vários documentos de uma vez. Ficam armazenados no navegador (IndexedDB) para consulta em Documentos e Confronto; não são publicados nem compartilhados entre computadores.</p><div class="formgrid"><label>Origem<select id="puc-lib-origin"><option>SEI</option><option>DOCAS</option><option>BALANCO</option><option>PORTAL</option></select></label><label>Investimento<select id="puc-lib-project"><option value="">Selecionar ao confrontar</option></select></label><label>Processo / referência<input id="puc-lib-ref"></label><label>Arquivos (múltiplos ou ZIP)<input id="puc-lib-files" multiple type="file" accept=".pdf,.zip,.txt,.csv,.json,.xml,.xls,.xlsx,.doc,.docx,.png,.jpg,.jpeg"></label></div><div class="two-actions" style="margin:12px 0"><button class="btn" type="button" id="puc-lib-save">Importar e guardar nesta máquina</button><button class="btn secondary" type="button" id="puc-lib-export">Exportar índice JSON</button><strong id="puc-library-count"></strong></div><p role="status" id="puc-library-status"></p><div class="scroll"><table class="data-table"><thead><tr><th>Arquivo</th><th>Origem</th><th>Projeto</th><th>Tipo</th><th>Achados sugeridos</th><th>Ação</th></tr></thead><tbody id="puc-library-list"></tbody></table></div><div id="puc-library-detail"></div>';
  section.appendChild(pane);
- const reBtn=document.createElement('button');reBtn.type='button';reBtn.id='puc-reanalyse';reBtn.className='btn secondary';reBtn.textContent='Reanalisar documentos já anexados';reBtn.onclick=reanalyse;
+ const reBtn=document.createElement('button');reBtn.type='button';reBtn.id='puc-reanalyse';reBtn.className='btn secondary';reBtn.textContent='Reanalisar documentos já anexados';reBtn.onclick=()=>reanalyse(false);
  E('puc-library-count')?.parentElement?.appendChild(reBtn);
 
  // A lista de anexos fica recolhível, sem remover nem apagar arquivos.
