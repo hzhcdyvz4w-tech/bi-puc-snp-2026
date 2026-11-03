@@ -10,7 +10,7 @@ const engine=()=>window.PUCDocEngine;
 function bmNumber(x){return engine()?.bmNumber(x.name,x.text)||''}
 function bmCompetence(x){return engine()?.bmPeriod(x.name,x.text)||''}
 function classification(x){return engine()?.bmClass(x.name,x.text)||'SEM INDICAÇÃO DE BM'}
-function updateEntry(x){if(x.origin==='SEI')x.ref=String(x.ref||'').replace(/\s*\|\s*\d+\s+documento\(s\)\s+selecionado\(s\)/gi,'').trim();x.text=String(x.text||'');x.candidates=engine()?.indicators(x.text)||[];
+function updateEntry(x){if(x.origin==='SEI')x.ref=String(x.ref||'').replace(/\s*\|\s*\d+\s+documento\(s\)\s+selecionado\(s\)/gi,'').trim();x.text=String(x.text||'');x.workName=engine()?.bmWorkName?.(x.text)||x.workName||'';x.candidates=engine()?.indicators(x.text)||[];
  x.bmStatus=x.bmManual?'BM IDENTIFICADO (MANUAL)':classification(x);
  if(x.bmManual||x.bmStatus==='BM IDENTIFICADO'||x.bmStatus==='BM PROVÁVEL'){
   x.category='BM / medição';x.bm={number:bmNumber(x),period:bmCompetence(x),candidates:x.candidates,status:'PENDENTE DE CONFERÊNCIA'}
@@ -210,7 +210,7 @@ async function saveFinding(docId,finding){const item=stored.find(d=>d.id===docId
  else {find.id=crypto.randomUUID();item.findings.push(find)}
  await transact('readwrite',st=>st.put(item));await reload();return find}
 async function deleteFinding(docId,findingId){const item=stored.find(d=>d.id===docId);if(!item)return;item.findings=(item.findings||[]).filter(x=>x.id!==findingId);await transact('readwrite',st=>st.put(item));await reload()}
-window.PUCDocLibrary={list:()=>stored.map(x=>({id:x.id,name:x.name,container:x.container,origin:x.origin,project:x.project,ref:x.ref,category:x.category,bmStatus:x.bmStatus,bmNumber:x.bm?.number||'',bmPeriod:x.bm?.period||'',quality:x.quality,candidates:x.candidates||[],findings:x.findings||[],text:x.text||'',hash:x.hash})),ingest:async(files,origin,project,ref,selectedZipEntries=null)=>{if(!db)throw Error('Banco documental não inicializado');return ingest(files,origin,project,ref,selectedZipEntries)},saveFinding,deleteFinding,assignBMContext,getLastIngestReport:()=>({...lastIngestReport,errors:[...lastIngestReport.errors]}),refresh:reload};
+window.PUCDocLibrary={list:()=>stored.map(x=>({id:x.id,name:x.name,container:x.container,origin:x.origin,project:x.project,ref:x.ref,category:x.category,bmStatus:x.bmStatus,bmNumber:x.bm?.number||'',bmPeriod:x.bm?.period||'',quality:x.quality,candidates:x.candidates||[],findings:x.findings||[],text:x.text||'',workName:x.workName||'',hash:x.hash})),ingest:async(files,origin,project,ref,selectedZipEntries=null)=>{if(!db)throw Error('Banco documental não inicializado');return ingest(files,origin,project,ref,selectedZipEntries)},saveFinding,deleteFinding,assignBMContext,getLastIngestReport:()=>({...lastIngestReport,errors:[...lastIngestReport.errors]}),refresh:reload};
 
 async function init(){try{db=await openDB();setup();await reload();window.PUCDocLibrary.storageReady=true}catch(err){const msg='Não foi possível inicializar a biblioteca local: '+err.message;window.PUCDocLibrary.storageError=msg;status(msg);if(!E('puc-library-status')){const notice=document.createElement('p');notice.id='puc-library-error';notice.className='notice';notice.textContent=msg;E('documentos')?.insertBefore(notice,E('documentos').firstChild)}console.error(msg,err)}}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
