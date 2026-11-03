@@ -90,6 +90,9 @@
   assert(linked===1,'Vinculação explícita do BM ao empreendimento e processo');
   const linkedBM=w.PUCDocLibrary.list().find(x=>x.id===syntheticBM.id);
   assert(linkedBM.project==='PUC-01'&&linkedBM.ref==='50020.001577/2025-18','PUC e processo SEI persistidos sem quantidade de arquivos no identificador');
+  assert(w.PUC3ReviewDoc(syntheticBM.id),'Abrir revisão auditável diretamente do BM');
+  assert(!d().getElementById('puc3-review').hidden&&d().getElementById('puc3-find-bm').value==='05','Formulário de revisão preenche o número do BM já identificado');
+  assert(d().getElementById('puc3-find-project').value==='PUC-01','Formulário de revisão utiliza PUC vinculada');
   assert(d().querySelectorAll('#puc3-sei-choices input[type=checkbox]').length===2,'Dois documentos SEI armazenados podem ser selecionados');
   const storedChoice=d().querySelector('#puc3-sei-choices input[type=checkbox]');storedChoice.click();
   assert(d().getElementById('puc3-sei-selected-count').textContent.startsWith('1 de 2'),'Desmarcar documento SEI preservado altera a seleção do confronto');
