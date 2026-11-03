@@ -140,6 +140,25 @@ function sourceCards(){
  $('puc3-balanco-search').addEventListener('input',renderBalancoChoices);
 }
 
+function renderSeiSelector(){
+ const area=$('puc3-sei-choices'),counter=$('puc3-sei-selected-count');if(!area||!counter)return;
+ const available=docs().filter(d=>d.origin==='SEI'),valid=new Set(available.map(d=>d.id));
+ seiExcluded=new Set([...seiExcluded].filter(id=>valid.has(id)));saveSeiSelection();
+ const query=($('puc3-sei-search')?.value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+ area.replaceChildren();let shown=0;
+ for(const doc of available){
+  const caption=doc.name+(doc.container&&doc.container!=='Arquivo individual'?' · '+doc.container:'')+(doc.bmNumber?' · BM '+doc.bmNumber:'');
+  const positive=doc.bmStatus&&doc.bmStatus!=='SEM INDICAÇÃO DE BM';
+  const searchable=(caption+(positive?' · '+doc.bmStatus:'')).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  if(query&&!searchable.includes(query))continue;
+  const label=document.createElement('label');label.className='puc3-sei-choice';
+  const cb=document.createElement('input');cb.type='checkbox';cb.value=doc.id;cb.checked=!seiExcluded.has(doc.id);
+  cb.onchange=()=>{cb.checked?seiExcluded.delete(doc.id):seiExcluded.add(doc.id);saveSeiSelection();renderSeiSelector();render()};
+  const span=document.createElement('span');span.textContent=caption+(positive?' · '+doc.bmStatus:'');label.append(cb,span);area.appendChild(label);shown++;
+ }
+ if(!shown)area.textContent=available.length?'Nenhum documento corresponde à pesquisa.':'Nenhum documento SEI armazenado neste navegador.';
+ counter.textContent=(available.length-seiExcluded.size)+' de '+available.length+' documento(s) selecionado(s) para o confronto.';
+}
 let seiZipSelected=new Set(),seiZipItems=[],seiZipRevision=0,seiZipReady=false;
 function seiNameMatch(item,q){
  const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
