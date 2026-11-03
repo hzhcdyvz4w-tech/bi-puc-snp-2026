@@ -77,7 +77,9 @@ function bmHeaderFromPDFItems(items){
   }
   if(heading.length<3)continue;
   heading.sort((a,b)=>a.x-b.x);
-  const mid=heading.map((h,j)=>j===0?-Infinity:(heading[j-1].x+h.x)/2);
+  // O cabeçalho costuma estar centralizado dentro da coluna; limites pelo centro visual.
+  const center=h=>h.x+(h.width||Math.max(20,h.key.length*3))/2;
+  const mid=heading.map((h,j)=>j===0?-Infinity:(center(heading[j-1])+center(h))/2);
   const candidates=rows.filter(r=>r.y<row.y-3.5&&r.y>row.y-90);
   const out=[];
   for(let j=0;j<heading.length;j++){
