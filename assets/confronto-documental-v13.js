@@ -32,17 +32,78 @@ function renderChecks(){
 function filesForReview(){
  return docs().filter(d=>sources.includes(d.origin)&&(!selected.size||!d.project||selected.has(d.project)||(d.findings||[]).some(f=>selected.has(f.project))));
 }
+
+const PUC_BALANCO_UFS=['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+async function PUCFiltrarBalancoPorUF(file,uf){
+ if(!window.JSZip)throw Error('Leitor de planilhas ZIP/XLSX indisponível.');
+ const zip=await JSZip.loadAsync(await file.arrayBuffer()),parser=new DOMParser();
+ const xml=async path=>{
+  let part=zip.file(path);if(!part)throw Error('XLSX sem arquivo '+path);
+  let doc=parser.parseFromString(await part.async('string'),'application/xml');
+  if(doc.getElementsByTagName('parsererror').length)throw Error('XML inválido em '+path);
+  return doc;
+ };
+ let wb=await xml('xl/workbook.xml'),sheets=[...wb.getElementsByTagNameNS('*','sheet')];
+ const months={janeiro:1,fevereiro:2,'março':3,marco:3,abril:4,maio:5,junho:6,jun:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12};
+ const rank=n=>{n=n.toLowerCase();let year=Number((n.match(/20\d\d/)||[])[0]||0),month=0;for(const [key,v] of Object.entries(months))if(n.includes(key))month=v;return year*12+month};
+ sheets.sort((a,b)=>rank(b.getAttribute('name')||'')-rank(a.getAttribute('name')||''));
+ const latest=sheets[0];if(!latest)throw Error('A planilha não possui abas.');
+ const sheetName=latest.getAttribute('name')||'Aba1';
+ const rid=latest.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships','id')||latest.getAttribute('r:id');
+ const rels=await xml('xl/_rels/workbook.xml.rels');
+ const rel=[...rels.getElementsByTagNameNS('*','Relationship')].find(r=>r.getAttribute('Id')===rid);
+ if(!rel)throw Error('Relacionamento da aba não encontrado.');
+ let target=rel.getAttribute('Target')||'';
+ target=target.startsWith('/')?target.replace(/^\/+/,''):'xl/'+target.replace(/^\.?\//,'');
+ const sheet=await xml(target);
+ let ss=[];
+ if(zip.file('xl/sharedStrings.xml')){
+  let s=await xml('xl/sharedStrings.xml');
+  ss=[...s.getElementsByTagNameNS('*','si')].map(x=>[...x.getElementsByTagNameNS('*','t')].map(t=>t.textContent||'').join(''));
+ }
+ const data=[...sheet.getElementsByTagNameNS('*','row')].map(row=>{
+  let out={};
+  for(const cell of row.getElementsByTagNameNS('*','c')){
+   const col=(cell.getAttribute('r')||'').replace(/\d+/g,'');
+   let v=cell.getElementsByTagNameNS('*','v')[0]?.textContent||'';
+   if(cell.getAttribute('t')==='s')v=ss[Number(v)]||'';
+   if(cell.getAttribute('t')==='inlineStr')v=[...cell.getElementsByTagNameNS('*','t')].map(t=>t.textContent||'').join('');
+   out[col]=v;
+  }
+  return out;
+ });
+ const header=data.find(row=>String(row.AG||'').trim().toUpperCase()==='UF'&&/empreendimento/i.test(String(row.B||'')));
+ if(!header)throw Error('Cabeçalho UF/empreendimento não encontrado na aba '+sheetName);
+ const selected=data.filter(row=>row!==header&&row.B&&String(row.AG||'').toUpperCase().split(/[,;\/]/).map(x=>x.trim()).includes(uf));
+ const colIndex=x=>[...x].reduce((v,c)=>v*26+c.charCodeAt(0)-64,0);
+ const cols=Object.keys(header).sort((a,b)=>colIndex(a)-colIndex(b));
+ const csvCell=x=>{let s=String(x??'');if(/^\s*[=+@]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
+ const csv=[cols.map(k=>csvCell(header[k])).join(';'),...selected.map(row=>cols.map(k=>csvCell(row[k])).join(';'))].join('\r\n');
+ const name='BALANCO_'+uf+'_'+sheetName.replace(/[^a-z0-9-]/gi,'_').slice(0,35)+'.csv';
+ return {file:new File(['\ufeff'+csv],name,{type:'text/csv'}),count:selected.length};
+}
+
 function sourceCards(){
- $('puc3-uploads').innerHTML=sources.map(source=>'<div class="puc3-source"><h3>'+esc(names[source])+'</h3><label>PUC associada ao lote<select id="puc3-project-'+source+'">'+pOptions+'</select></label><label>Processo / referência<input id="puc3-ref-'+source+'" placeholder="SEI, período ou referência do relatório"></label><label>Arquivos<input type="file" multiple id="puc3-files-'+source+'" accept=".zip,.pdf,.xls,.xlsx,.csv,.doc,.docx,.txt,.html,.htm,.xml,.json"></label><button class="btn" type="button" data-import="'+source+'">Analisar anexos '+source+'</button><small>'+ (source==='SEI'?'Busca possíveis BMs pelo nome e texto.':source==='BALANCO'?'Selecione a planilha/relatório oficial.':'A base pré-carregada não conta: anexe a consulta a confrontar.')+'</small></div>').join('');
+ $('puc3-uploads').innerHTML=sources.map(source=>'<div class="puc3-source"><h3>'+esc(names[source])+'</h3>'+(source==='BALANCO'?'<label>UF do Balanço (aba mais recente)<select id="puc3-uf-balanco"><option value="">Todas as UFs</option>'+PUC_BALANCO_UFS.map(uf=>'<option value="'+uf+'">'+uf+'</option>').join('')+'</select></label>':'')+'<label>Processo / referência<input id="puc3-ref-'+source+'" placeholder="SEI, período ou referência do relatório"></label><label>Arquivos<input type="file" multiple id="puc3-files-'+source+'" accept=".zip,.pdf,.xls,.xlsx,.csv,.doc,.docx,.txt,.html,.htm,.xml,.json"></label><button class="btn" type="button" data-import="'+source+'">Analisar anexos '+source+'</button><small>'+ (source==='SEI'?'Busca possíveis BMs pelo nome e texto.':source==='BALANCO'?'Selecione a UF para importar apenas as linhas correspondentes da aba mais recente da planilha XLSX.':'A base pré-carregada não conta: anexe a consulta a confrontar.')+'</small></div>').join('');
  $('puc3-uploads').querySelectorAll('[data-import]').forEach(b=>b.onclick=()=>importFiles(b.dataset.import));
 }
 async function importFiles(source){
- const files=[...$('puc3-files-'+source).files],project=$('puc3-project-'+source).value,ref=$('puc3-ref-'+source).value.trim();
+ const files=[...$('puc3-files-'+source).files],project='',ref=$('puc3-ref-'+source).value.trim(),uf=source==='BALANCO'?($('puc3-uf-balanco')?.value||''):'';
  if(!files.length){status('Selecione ao menos um arquivo para '+source+'.');return}
  if(!lib()){status('Biblioteca documental indisponível. Recarregue a página e execute o diagnóstico.');return}
  const button=$('puc3-uploads').querySelector('[data-import="'+source+'"]');button.disabled=true;
  try{status('Analisando '+files.length+' anexo(s) de '+source+'; arquivos internos do ZIP serão inventariados...');
-  const n=await lib().ingest(files,source,project,ref);
+  let targetFiles=files,filterMessage='';
+  if(source==='BALANCO'&&uf){
+   const filtered=[];let count=0;
+   for(const file of files){
+    if(!/\.xlsx$/i.test(file.name))throw Error('O filtro de UF funciona com Balanço XLSX. Para PDF ou CSV, utilize Todas as UFs.');
+    const result=await PUCFiltrarBalancoPorUF(file,uf);filtered.push(result.file);count+=result.count;
+   }
+   if(!count)throw Error('Não foram encontrados empreendimentos para '+uf+' na aba mais recente da planilha.');
+   targetFiles=filtered;filterMessage=' | UF '+uf+' | '+count+' empreendimento(s)';
+  }
+  const n=await lib().ingest(targetFiles,source,project,ref+filterMessage);
   $('puc3-files-'+source).value='';
   if(project)selected.add(project);
   renderChecks();render();
