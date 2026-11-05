@@ -1,3 +1,5 @@
-/* Definir com URL e chave publishable/anon do projeto Supabase.
-NUNCA adicionar chave service_role nem sb_secret_ ao navegador. */
-window.PUC_DOCAS_CONFIG = { supabaseUrl: '', publishableKey: '' };
+/* Configuracao publica do portal DOCAS: chave publicavel (nao secreta). */
+window.PUC_DOCAS_CONFIG = Object.freeze({
+  supabaseUrl: 'https://agweqgryqldhxqzbuqyo.supabase.co',
+  publishableKey: 'sb_publishable_6fiTgSdUnlsZKM7XMUqcDg_oxW-gXR7'
+});
