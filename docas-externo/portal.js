@@ -1,5 +1,8 @@
 'use strict';
-(()=> {
+/* Links antigos do GitHub migram automaticamente para o portal independente Supabase. */
+if (location.hostname === 'hzhcdyvz4w-tech.github.io') {
+  location.replace('https://agweqgryqldhxqzbuqyo.supabase.co/functions/v1/puc-docas-formulario/' + location.hash);
+} else (()=> {
   const cfg = window.PUC_DOCAS_CONFIG || {};
   const base = String(cfg.supabaseUrl || "").replace(/\/$/, "");
   const apiKey = String(cfg.publishableKey || "");
