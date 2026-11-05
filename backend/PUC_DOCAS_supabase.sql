@@ -42,11 +42,17 @@ create table if not exists public.puc_doca_declaracoes(
  constraint responsavel_nonblank check(length(trim(responsavel_preenchimento)) between 2 and 180)
 );
 create index if not exists idx_puc_docas_companhia_data on public.puc_doca_declaracoes(companhia_codigo,enviado_em desc);
-create or replace function public.puc_is_doca_admin()
-returns boolean language sql stable security definer set search_path=public,pg_temp
-as $$select exists(select 1 from public.puc_doca_perfis p where p.usuario_id=auth.uid() and p.papel='gerente' and p.ativo=true)$$;
-revoke all on function public.puc_is_doca_admin() from public;
-grant execute on function public.puc_is_doca_admin() to authenticated;
+create schema if not exists puc_internal;
+revoke all on schema puc_internal from public;
+grant usage on schema puc_internal to authenticated;
+create or replace function puc_internal.is_puc_doca_gerente()
+returns boolean language sql stable security definer set search_path=''
+as $ select (select auth.uid()) is not null and exists (
+  select 1 from public.puc_doca_perfis p
+  where p.usuario_id=(select auth.uid()) and p.papel='gerente' and p.ativo=true
+) $;
+revoke all on function puc_internal.is_puc_doca_gerente() from public,anon;
+grant execute on function puc_internal.is_puc_doca_gerente() to authenticated;
 alter table public.puc_doca_perfis enable row level security;
 alter table public.puc_doca_declaracoes enable row level security;
 revoke all on public.puc_doca_perfis from public,anon,authenticated;
@@ -61,26 +67,26 @@ on public.puc_doca_declaracoes to authenticated;
 grant update(status,analise) on public.puc_doca_declaracoes to authenticated;
 drop policy if exists puc_perfil_visivel on public.puc_doca_perfis;
 create policy puc_perfil_visivel on public.puc_doca_perfis for select to authenticated
-using(usuario_id=auth.uid() or public.puc_is_doca_admin());
+using(usuario_id=auth.uid() or puc_internal.is_puc_doca_gerente());
 drop policy if exists puc_declaracoes_doca_insert on public.puc_doca_declaracoes;
 create policy puc_declaracoes_doca_insert on public.puc_doca_declaracoes for insert to authenticated
 with check(usuario_id=auth.uid() and status='recebida' and exists(
 select 1 from public.puc_doca_perfis p where p.usuario_id=auth.uid()
-and p.papel='doca' and p.ativo=true and p.companhia_codigo=companhia_codigo
-and p.companhia_nome=companhia_nome));
+and p.papel='doca' and p.ativo=true and p.companhia_codigo=puc_doca_declaracoes.companhia_codigo
+and p.companhia_nome=puc_doca_declaracoes.companhia_nome));
 drop policy if exists puc_declaracoes_gerente_select on public.puc_doca_declaracoes;
 create policy puc_declaracoes_gerente_select on public.puc_doca_declaracoes
-for select to authenticated using(public.puc_is_doca_admin());
+for select to authenticated using(puc_internal.is_puc_doca_gerente());
 drop policy if exists puc_declaracoes_gerente_update on public.puc_doca_declaracoes;
 create policy puc_declaracoes_gerente_update on public.puc_doca_declaracoes
-for update to authenticated using(public.puc_is_doca_admin())
-with check(public.puc_is_doca_admin());
-create or replace function public.puc_doca_marca_atualizacao()
+for update to authenticated using(puc_internal.is_puc_doca_gerente())
+with check(puc_internal.is_puc_doca_gerente());
+create or replace function puc_internal.puc_doca_marca_atualizacao()
 returns trigger language plpgsql set search_path=public,pg_temp
 as $$begin new.atualizado_em=now();return new;end$$;
 drop trigger if exists trg_puc_doca_marca_atualizacao on public.puc_doca_declaracoes;
 create trigger trg_puc_doca_marca_atualizacao before update on public.puc_doca_declaracoes
-for each row execute function public.puc_doca_marca_atualizacao();
+for each row execute function puc_internal.puc_doca_marca_atualizacao();
 -- Em Authentication > Users, criar previamente uma conta para cada DOCA e para o gestor.
 -- Em SQL (substituir UUID autentico):
 -- insert into public.puc_doca_perfis(usuario_id,companhia_codigo,companhia_nome,papel)
