@@ -1,3 +1,5 @@
+> **ATUALIZAÇÃO 05/11/2026 — correção dos links:** o formulário HTML público foi restaurado em `https://hzhcdyvz4w-tech.github.io/bi-puc-snp-2026/docas-externo/?v=corrigido-20261105-1#acesso=<chave>`. Não usar a função Supabase como hospedagem HTML. O Supabase recebe os dados por `puc-docas-externo`; a função antiga `puc-docas-formulario` somente redireciona (302). As chaves devem ser entregues individualmente fora do repositório. Cinco convites foram testados por HTTP 200; a página e três arquivos estáticos por HTTP 200. A conta gerencial já foi associada, e há um recebimento no banco. As instruções históricas abaixo descrevem etapas anteriores, já superadas.
+
 # BI Executivo PUC — DOCAS sem login (implantação 05/11/2026)
 
 ## O que foi alterado
