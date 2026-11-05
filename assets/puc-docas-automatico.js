@@ -3,30 +3,61 @@
   'use strict';
   const $ = (id) => document.getElementById(id);
   function init() {
-    const localInput = $('puc3-files-DOCAS');
-    const card = localInput?.closest('.puc3-source') || localInput?.closest('.puc3-upload') || localInput?.parentElement?.parentElement;
-    if (card && !card.dataset.docasAuto) {
-      card.dataset.docasAuto = '1';
-      if(card.classList.contains('puc3-source'))card.hidden=true;
-      const ref = $('puc3-ref-DOCAS');
-      for (const el of [ref, localInput]) {
-        if (el) {
-          const label=el.closest('label');
-          if(label) label.hidden=true; else el.hidden=true;
-        }
+    const localInput=$('puc3-files-DOCAS');
+    const card=localInput?.closest('.puc3-source');
+    const central=$('puc3-central-files');
+    const manager=$('puc-docas-externas-manager');
+
+    // O módulo gerencial pertence à mesma área de documentos, após as três fontes.
+    if(central&&manager&&central.nextElementSibling!==manager){
+      central.insertAdjacentElement('afterend',manager);
+    }
+    if(card&&!card.dataset.docasAuto){
+      card.dataset.docasAuto='1';
+      card.hidden=false;
+      card.classList.add('puc3-docas-integrada');
+      // Preservar nós e listeners anteriores (compatibilidade), mas nunca pedir JSON.
+      const title=card.querySelector('h3');
+      for(const node of [...card.children])if(node!==title)node.hidden=true;
+      const info=document.createElement('p');
+      info.className='muted';
+      info.textContent='As DOCAS preenchem o formulário externo exclusivo. Os registros são recebidos automaticamente no banco do BI, sem anexar JSON ou importar arquivos.';
+      const count=document.createElement('p');
+      count.id='puc-docas-card-status';
+      count.className='statusline';
+      count.textContent='Acesse a central abaixo para consultar as respostas das 13 companhias.';
+      const actions=document.createElement('div');
+      actions.className='two-actions';
+      const records=document.createElement('button');
+      records.className='btn';
+      records.type='button';
+      records.textContent='Ver formulários recebidos';
+      const manage=document.createElement('button');
+      manage.className='btn secondary';
+      manage.type='button';
+      manage.textContent='Gerenciar acessos das DOCAS';
+      function go(which){
+        document.querySelector('#nav [data-page="documentos"]')?.click();
+        const panel=$('puc-docas-externas-manager');
+        if(!panel){count.textContent='Central indisponível. Atualize a página.';return}
+        if(which==='links')$('pd-ver-companhias')?.click();
+        else $('pd-ver-registros')?.click();
+        panel.scrollIntoView({behavior:'smooth',block:'start'});
       }
-      const importButton=card.querySelector('[data-import="DOCAS"]');
-      if(importButton) importButton.hidden=true;
-      const attachment=$('puc3-attachment-DOCAS');if(attachment)attachment.hidden=true;
-      const oldLink=card.querySelector('a[href="formulario-docas.html"]');
-      if(oldLink) oldLink.hidden=true;
-      for(const small of card.querySelectorAll('small')){if(/Importe a declaração|JSON|Importar declaração/i.test(small.textContent))small.hidden=true}
-      const originalInfo=[...card.querySelectorAll('p')].find(p=>p.textContent.includes('baixa um JSON')||p.textContent.includes('Não há transmissão automática'));
-      if(originalInfo)originalInfo.textContent='O preenchimento externo envia automaticamente as informações à base central Supabase. Não é necessário baixar JSON, anexar arquivo nem importar manualmente o formulário.';
-      const tip=document.createElement('p');
-      tip.className='muted';
-      tip.textContent='Consulte os registros atualizados automaticamente em “Recebimentos externos — Informações das DOCAS”, abaixo. A consulta dos dados requer autenticação do gestor SNP.';
-      card.append(tip);
+      records.onclick=()=>go('records');
+      manage.onclick=()=>go('links');
+      actions.append(records,manage);
+      card.append(info,count,actions);
+      if(!$('puc-docas-card-css')){
+        const css=document.createElement('style');
+        css.id='puc-docas-card-css';
+        css.textContent='#puc3-central-files .puc3-docas-integrada[hidden]{display:block!important}'+
+          '#puc3-central-files .puc3-docas-integrada > [hidden]{display:none!important}'+
+          '#puc3-central-files .puc3-docas-integrada .two-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}'+
+          '#puc3-central-files .puc3-docas-integrada .two-actions .btn{margin:0}'+
+          '#puc-docas-externas-manager{scroll-margin-top:18px}';
+        document.head.appendChild(css);
+      }
     }
     const cmp=$('comparacao');
     if(cmp&&!$('puc-docas-compare-automatico')){
@@ -54,6 +85,8 @@
     init();
     const data=window.PUC_DOCAS_DECLARACOES_EXTERNAS;
     if(!Array.isArray(data))return;
+    const cardStatus=$('puc-docas-card-status');
+    if(cardStatus)cardStatus.textContent=data.length+' formulário(s) recebido(s). Consulte a central para conferir.';
     const status=$('puc-docas-auto-status'),tbody=$('puc-docas-auto-rows');
     if(!tbody)return;
     tbody.replaceChildren();
