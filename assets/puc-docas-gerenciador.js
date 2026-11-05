@@ -6,8 +6,17 @@ const seletor=document.createElement('div');
 seletor.className='two-actions';
 seletor.innerHTML='<button class="btn" type="button" id="pd-ver-registros">Formulários recebidos</button><button class="btn secondary" type="button" id="pd-ver-companhias">Acessos das DOCAS</button>';
 const companhias=document.createElement('div');companhias.hidden=true;companhias.id='pd-companhias';
-companhias.innerHTML='<p class="muted">Companhias vinculadas ao Balanço MPOR 2026. Os convites são administrados na central da SNP.</p><div class="scroll"><table class="data-table"><thead><tr><th>Companhia</th><th>Referências do Balanço</th><th>Envios</th><th>Validade</th></tr></thead><tbody id="pd-companhias-dados"></tbody></table></div>';
+companhias.innerHTML='<p class="muted">Companhias vinculadas ao Balanço MPOR 2026. Os convites são administrados na central da SNP.</p><div class="scroll"><table class="data-table"><thead><tr><th>Companhia</th><th>Referências do Balanço</th><th>Envios</th><th>Validade</th><th>Convite externo</th></tr></thead><tbody id="pd-companhias-dados"></tbody></table></div>';
 conteudo.append(seletor,registros,companhias);
+const conviteBox=document.createElement('div');conviteBox.id='pd-link-emitido-area';conviteBox.hidden=true;
+conviteBox.innerHTML='<label>Endereço recém-emitido para a DOCA<input id="pd-link-emitido" type="text" readonly autocomplete="off"></label><button id="pd-copiar-emitido" class="btn" type="button">Copiar endereço</button><p class="muted">Esse endereço permite somente preencher o formulário externo. Não concede acesso ao BI gerencial.</p>';
+companhias.append(conviteBox);
+$('pd-copiar-emitido').onclick=async()=>{
+ const campo=$('pd-link-emitido');if(!campo.value)return;
+ try{await navigator.clipboard.writeText(campo.value);status('Link copiado.')}
+ catch{campo.select();document.execCommand('copy');status('Link selecionado para cópia.')}
+};
+
 async function exibirCompanhias(){
  const body=$('pd-companhias-dados');body.replaceChildren();
  if(!token||!(await renewSession()))return;
@@ -19,6 +28,22 @@ async function exibirCompanhias(){
   cell(tr,item.nome);cell(tr,item.empreendimentos);
   cell(tr,String(item.enviados||0)+' / '+String(item.max_envios||300));
   cell(tr,item.ativo?new Date(item.expira_em).toLocaleDateString('pt-BR'):'Inativo');
+  const botao=document.createElement('button');botao.type='button';botao.className='btn secondary';botao.textContent='Emitir novo link';
+  botao.onclick=async()=>{
+   if(!confirm('Emitir um novo link para '+item.nome+'? O link anterior deixará de funcionar.'))return;
+   botao.disabled=true;
+   try{
+    const resp=await fetch(base+'/rest/v1/rpc/puc_doca_gerencia',{method:'POST',headers:headers({'Content-Type':'application/json'}),body:JSON.stringify({p_acao:'renovar',p_codigo:item.codigo}),cache:'no-store'});
+    if(!resp.ok)throw Error('HTTP '+resp.status);
+    const d=await resp.json();if(!d.ok||!d.link)throw Error('Não foi possível emitir o convite');
+    $('pd-link-emitido').value=d.link;$('pd-link-emitido-area').hidden=false;
+    status('Novo link emitido para '+item.nome+'. Copie e encaminhe apenas à Companhia. O link anterior foi invalidado.');
+    await exibirCompanhias()
+   }catch(e){status('Falha ao emitir convite: '+e.message)}
+   finally{botao.disabled=false}
+  };
+  tr.insertCell().append(botao);
+
  }
  status((data.convites||[]).length+' companhias registradas no Supabase.')
 }
