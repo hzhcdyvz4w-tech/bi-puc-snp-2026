@@ -40,8 +40,11 @@
         document.querySelector('#nav [data-page="documentos"]')?.click();
         const panel=$('puc-docas-externas-manager');
         if(!panel){count.textContent='Central indisponível. Atualize a página.';return}
-        if(which==='links')$('pd-ver-companhias')?.click();
-        else $('pd-ver-registros')?.click();
+        window.PUC_DOCAS_TAB_DESEJADA=which==='links'?'links':'records';
+        if($('pd-painel')?.style.display==='block'){
+          if(which==='links')$('pd-ver-companhias')?.click();
+          else $('pd-ver-registros')?.click();
+        }
         panel.scrollIntoView({behavior:'smooth',block:'start'});
       }
       records.onclick=()=>go('records');
