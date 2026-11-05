@@ -72,6 +72,7 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
   else init();
   window.addEventListener('puc:docas-externas-atualizadas',sync);
+  document.addEventListener('click',event=>{if(event.target.closest('#pd-exit')){const link=document.getElementById('pd-link-emitido');if(link)link.value='';const box=document.getElementById('pd-link-emitido-area');if(box)box.hidden=true;}});
   if(location.hash==='#recebimentos-docas'){
     document.querySelector('#nav [data-page="documentos"]')?.click();
     setTimeout(()=>document.getElementById('puc-docas-externas-manager')?.scrollIntoView({block:'start'}),150);
