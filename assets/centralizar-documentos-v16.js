@@ -47,9 +47,9 @@
   if($('puc3-central-files'))return;
   // Elementos originais são realocados: callbacks, selecao e importacao permanecem os mesmos.
   const central=document.createElement('div');central.id='puc3-central-files';central.className='panel';
-  central.innerHTML='<h2>Documentos das PUCs · SEI (BMs), Balanço e DOCAS</h2><p class="muted">Anexe os processos SEI, os Balanços e os formulários das DOCAS. Os documentos ficam armazenados localmente neste navegador. A análise dos resultados é realizada no menu <strong>Confronto das fontes</strong>.</p>';
+  central.innerHTML='<h2>Documentos das PUCs · SEI (BMs), Balanço e DOCAS</h2><p class="muted">Anexe os processos SEI e os arquivos do Balanço. Os formulários das DOCAS são recebidos automaticamente no banco central do BI PUCs. Os arquivos SEI e Balanço continuam armazenados neste navegador; o confronto está no menu <strong>Confronto das fontes</strong>.</p>';
   const header=search.closest('.filters');
-  const uploadTitle=document.createElement('h3');uploadTitle.textContent='1 · Anexar documentos';
+  const uploadTitle=document.createElement('h3');uploadTitle.textContent='1 · SEI, Balanço e informações das DOCAS';
   central.appendChild(uploadTitle);central.appendChild(uploads);central.appendChild(message);
   // O seletor de PUCs é necessário para delimitar a auditoria, mas não faz parte da tela Documentos.
   // Ele foi transferido ao Confronto das fontes em uma seção recolhida.
@@ -58,7 +58,7 @@
   projectPicker.appendChild(header);projectPicker.appendChild(select);
   cmp.insertBefore(projectPicker,main);
   const footer=document.createElement('div');footer.className='two-actions';
-  footer.innerHTML='<button type="button" class="btn" id="puc3-docs-compare">Ir para o confronto dos documentos</button><small class="muted">SEI: processos e BMs (inclusive ZIP). Balanço: planilha/relatório. DOCAS: declaração JSON emitida pelo formulário; a base SIOP de referência permanece em sua página.</small>';
+  footer.innerHTML='<button type="button" class="btn" id="puc3-docs-compare">Ir para o confronto dos documentos</button><small class="muted">SEI: processos e BMs (inclusive ZIP). Balanço: planilha/relatório. DOCAS: recebimento automático dos formulários no Supabase; a base SIOP de referência permanece em sua página.</small>';
   central.appendChild(footer);
   docs.insertBefore(central,docs.firstElementChild);
   $('puc3-docs-compare').onclick=()=>{document.querySelector('#nav [data-page="comparacao"]')?.click();main.scrollIntoView({behavior:'smooth',block:'start'})};
