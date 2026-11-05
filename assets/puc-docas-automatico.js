@@ -16,8 +16,10 @@
       }
       const importButton=card.querySelector('[data-import="DOCAS"]');
       if(importButton) importButton.hidden=true;
+      const attachment=$('puc3-attachment-DOCAS');if(attachment)attachment.hidden=true;
       const oldLink=card.querySelector('a[href="formulario-docas.html"]');
       if(oldLink) oldLink.hidden=true;
+      for(const small of card.querySelectorAll('small')){if(/Importe a declaração|JSON|Importar declaração/i.test(small.textContent))small.hidden=true}
       const originalInfo=[...card.querySelectorAll('p')].find(p=>p.textContent.includes('baixa um JSON')||p.textContent.includes('Não há transmissão automática'));
       if(originalInfo)originalInfo.textContent='O preenchimento externo envia automaticamente as informações à base central Supabase. Não é necessário baixar JSON, anexar arquivo nem importar manualmente o formulário.';
       const tip=document.createElement('p');
@@ -69,5 +71,9 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
   else init();
   window.addEventListener('puc:docas-externas-atualizadas',sync);
+  if(location.hash==='#recebimentos-docas'){
+    document.querySelector('#nav [data-page="documentos"]')?.click();
+    setTimeout(()=>document.getElementById('puc-docas-externas-manager')?.scrollIntoView({block:'start'}),150);
+  }
   sync();
 })();
