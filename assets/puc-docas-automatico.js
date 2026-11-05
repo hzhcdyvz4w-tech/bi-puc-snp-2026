@@ -7,6 +7,7 @@
     const card = localInput?.closest('.puc3-source') || localInput?.closest('.puc3-upload') || localInput?.parentElement?.parentElement;
     if (card && !card.dataset.docasAuto) {
       card.dataset.docasAuto = '1';
+      if(card.classList.contains('puc3-source'))card.hidden=true;
       const ref = $('puc3-ref-DOCAS');
       for (const el of [ref, localInput]) {
         if (el) {
