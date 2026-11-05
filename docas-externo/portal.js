@@ -14,7 +14,13 @@
   let invite = fragment.get("acesso") || "";
   let company = null;
   let protocol = null;
-  const today = () => new Date().toLocaleDateString("en-CA", {timeZone:"America/Sao_Paulo"});
+  const today = () => {
+    const parts = new Intl.DateTimeFormat("en-US",{
+      timeZone:"America/Sao_Paulo", year:"numeric", month:"2-digit", day:"2-digit"
+    }).formatToParts(new Date());
+    const m = Object.fromEntries(parts.map(p => [p.type,p.value]));
+    return m.year+"-"+m.month+"-"+m.day;
+  };
   const show = (message, error = false) => {
     const el = $("mensagem");
     el.hidden = false;
