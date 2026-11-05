@@ -1,1 +1,110 @@
-'use strict';(()=>{const c=window.PUC_DOCAS_CONFIG||{},b=(c.supabaseUrl||'').replace(/\/$/,''),key=c.publishableKey||'',ok=/^https:\/\/[a-z0-9.-]+\.supabase\.(co|in)$/i.test(b)&&key&&!/service_role|sb_secret_/i.test(key),$=s=>document.getElementById(s);let token='',p=null,protocolo=null;const msg=(s,e)=>{let x=$('mensagem');x.hidden=false;x.className=e?'error':'';x.textContent=s};const hd=()=>({'apikey':key,'Authorization':'Bearer '+token,'Content-Type':'application/json'});const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'});const df=$('dados-form');df.elements.data_atualizacao.value=today();if(!ok){$('config-erro').hidden=false;$('entrar').disabled=true;return}$('login-form').addEventListener('submit',async e=>{e.preventDefault();$('entrar').disabled=true;try{let r=await fetch(b+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email:$('email').value.trim(),password:$('senha').value})});if(!r.ok)throw Error('Credenciais inválidas. Solicite habilitação ao gestor.');let s=await r.json();if(!s.access_token||!s.user?.id)throw Error('Sessão não autorizada.');token=s.access_token;r=await fetch(b+'/rest/v1/puc_doca_perfis?select=companhia_codigo,companhia_nome,papel,ativo&usuario_id=eq.'+encodeURIComponent(s.user.id),{headers:hd(),cache:'no-store'});if(!r.ok)throw Error('Não foi possível consultar a autorização.');p=(await r.json())[0];if(!p||!p.ativo||p.papel!=='doca')throw Error('Perfil sem acesso ao formulário das Docas.');$('login').hidden=true;$('declaracao').hidden=false;$('companhia').textContent='Companhia autorizada: '+p.companhia_nome;df.elements.companhia_nome.value=p.companhia_nome;$('mensagem').hidden=true;}catch(err){token='';p=null;msg(err.message,true)}finally{$('entrar').disabled=false}});$('sair').onclick=()=>{token='';p=null;protocolo=null;$('login').hidden=false;$('declaracao').hidden=true;$('login-form').reset();df.reset();df.elements.data_atualizacao.value=today();$('mensagem').hidden=true};df.addEventListener('reset',()=>{setTimeout(()=>{df.elements.data_atualizacao.value=today();df.elements.companhia_nome.value=p?.companhia_nome||'';protocolo=null},0)});df.addEventListener('submit',async e=>{e.preventDefault();if(!p||!token)return msg('É necessário autenticar novamente.',true);const btn=$('enviar');btn.disabled=true;try{let payload=Object.fromEntries(new FormData(df));for(let k of ['investimento_total','execucao_fisica','execucao_financeira'])payload[k]=payload[k]===''?null:Number(payload[k]);for(let k of ['inicio','conclusao_prevista'])if(!payload[k])payload[k]=null;for(let k in payload)if(typeof payload[k]==='string')payload[k]=payload[k].trim()||null;if(!protocolo)protocolo=crypto.randomUUID();Object.assign(payload,{protocolo,companhia_codigo:p.companhia_codigo,companhia_nome:p.companhia_nome});let r=await fetch(b+'/rest/v1/puc_doca_declaracoes',{method:'POST',headers:{...hd(),Prefer:'return=minimal'},body:JSON.stringify(payload),cache:'no-store'});if(!r.ok){if(r.status===401)throw Error('Sessão expirada. Entre novamente.');throw Error(r.status===409?'Protocolo já registrado, confirme com o gestor.':'Não foi possível confirmar gravação no banco (HTTP '+r.status+').')}let id=protocolo;df.reset();protocolo=null;msg('Declaração recebida pela SNP e registrada no banco.\nProtocolo: '+id+'\nStatus: RECEBIDA (sujeita a conferência).\nVocê pode informar outro empreendimento.');}catch(err){msg(err.message,true)}finally{btn.disabled=false}});})();
+'use strict';
+(()=> {
+  const cfg = window.PUC_DOCAS_CONFIG || {};
+  const base = String(cfg.supabaseUrl || "").replace(/\/$/, "");
+  const apiKey = String(cfg.publishableKey || "");
+  const endpoint = base + "/functions/v1/puc-docas-externo";
+  const $ = (id) => document.getElementById(id);
+  const form = $("dados-form");
+  const status = $("acesso-status");
+  const button = $("enviar");
+  const validConfig = /^https:\/\/[a-z0-9.-]+\.supabase\.(co|in)$/i.test(base)
+    && apiKey.length > 15 && !/service_role|sb_secret_/.test(apiKey);
+  const fragment = new URLSearchParams(location.hash.replace(/^#/, ""));
+  let invite = fragment.get("acesso") || "";
+  let company = null;
+  let protocol = null;
+  const today = () => new Date().toLocaleDateString("en-CA", {timeZone:"America/Sao_Paulo"});
+  const show = (message, error = false) => {
+    const el = $("mensagem");
+    el.hidden = false;
+    el.className = error ? "error" : "";
+    el.textContent = message;
+  };
+  form.elements.data_atualizacao.value = today();
+  async function request(action, dados = {}) {
+    const response = await fetch(endpoint,{
+      method:"POST",
+      mode:"cors",
+      cache:"no-store",
+      redirect:"error",
+      headers:{"Content-Type":"application/json", "apikey":apiKey},
+      body:JSON.stringify({action, chave:invite, dados})
+    });
+    let result;
+    try {result = await response.json();} catch {throw Error("Resposta inválida do servidor.");}
+    if(!response.ok || !result.ok) {
+      throw Error(String(result.erro || "A operação não foi autorizada."));
+    }
+    return result;
+  }
+  function clearSensitiveFragment() {
+    if(location.hash) history.replaceState(null,"",location.pathname+location.search);
+  }
+  async function startup() {
+    if(!validConfig) {
+      $("config-erro").hidden = false;
+      status.textContent = "Serviço de preenchimento indisponível.";
+      return;
+    }
+    if (!/^[a-f0-9]{64}$/.test(invite)) {
+      status.textContent = "Link de convite ausente ou inválido. Solicite o endereço individual à SNP.";
+      return;
+    }
+    // A chave permanece somente na memória da página, não no URL ou no referrer.
+    clearSensitiveFragment();
+    try {
+      const result = await request("verificar");
+      company = {
+        companhia_codigo: result.companhia_codigo,
+        companhia_nome: result.companhia_nome
+      };
+      if (!company.companhia_codigo || !company.companhia_nome) {
+        throw Error("Convite sem Companhia identificada.");
+      }
+      form.elements.companhia_nome.value = company.companhia_nome;
+      $("companhia").textContent = "Companhia autorizada: " + company.companhia_nome;
+      $("declaracao").hidden = false;
+      $("acesso").hidden = true;
+    } catch(err) {
+      invite = "";
+      status.textContent = "Não foi possível abrir o formulário: " + err.message;
+    }
+  }
+  form.addEventListener("reset", () => {
+    setTimeout(() => {
+      form.elements.data_atualizacao.value = today();
+      form.elements.companhia_nome.value = company?.companhia_nome || "";
+      protocol = null;
+    },0);
+  });
+  form.addEventListener("submit", async(event) => {
+    event.preventDefault();
+    if (!company || !invite) return show("O link não foi autorizado. Solicite um novo convite.",true);
+    if (!form.reportValidity()) return;
+    button.disabled = true;
+    try {
+      const data = Object.fromEntries(new FormData(form));
+      // Companhia é definida pelo servidor. Dados enviados pelo navegador não a alteram.
+      delete data.companhia_nome;
+      for(const k of ["investimento_total","execucao_fisica","execucao_financeira"]) {
+        data[k] = data[k] === "" ? null : Number(data[k]);
+      }
+      for(const k of ["inicio","conclusao_prevista"]) if(!data[k]) data[k] = null;
+      for(const k of Object.keys(data)) if(typeof data[k] === "string") {
+        data[k] = data[k].trim() || null;
+      }
+      if(!protocol) protocol=crypto.randomUUID();
+      data.protocolo=protocol;
+      const result = await request("enviar",data);
+      const receipt = String(result.protocolo || protocol);
+      form.reset();
+      show("Informações registradas no banco de dados da SNP.\nProtocolo: " +
+           receipt + "\nSituação: recebida, aguardando conferência.\nVocê pode cadastrar outro empreendimento.");
+    } catch(err) {
+      show("Não foi possível confirmar o envio: " + err.message +
+           "\nO formulário permanece preenchido para uma nova tentativa.",true);
+    } finally {button.disabled = false;}
+  });
+  startup();
+})();
