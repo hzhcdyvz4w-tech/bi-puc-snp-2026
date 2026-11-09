@@ -152,7 +152,12 @@ function emlDownload(){if(!q('md-body').value.trim()){q('md-feedback').textConte
 function exportReview(){if(!project()){q('md-feedback').textContent='Selecione um empreendimento.';return}const items=RULES.filter(r=>chosenStages.has(r.etapa)).map(r=>({codigo:r.codigo,etapa:r.etapa,...decide(r.codigo)}));blobDownload('PUC_REVISAO_MINUTA_PRIVADA_'+currentId+'.json',JSON.stringify({versao:'V9',data:new Date().toISOString(),projeto:currentId,etapas:[...chosenStages],etapa_confirmada:q('md-confirm-stage').checked,itens:items,assunto:q('md-subject').value,rascunho:q('md-body').value,alerta:'Informações de processo para uso autorizado. Não publicar no GitHub público.'},null,2),'application/json')}
 function insertUI(){
  const navEl=q('nav');
- const btn=document.createElement('button');btn.type='button';btn.dataset.page='minutas';btn.textContent='Minutas / E-mail';btn.setAttribute('aria-selected','false');navEl.appendChild(btn);btn.addEventListener('click',()=>openFor(q('md-project').value||q('report-project')?.value||q('docas-project')?.value||currentId));
+ let btn=navEl.querySelector('[data-page="minutas"]');
+ if(!btn){btn=document.createElement('button');btn.type='button';btn.dataset.page='minutas';navEl.appendChild(btn)}
+ btn.textContent='Minutas / E-mail';
+ btn.setAttribute('aria-selected',btn.getAttribute('aria-selected')||'false');
+ if(navEl.lastElementChild!==btn)navEl.appendChild(btn);
+ btn.addEventListener('click',()=>openFor(q('md-project').value||q('report-project')?.value||q('docas-project')?.value||currentId));
  const sec=document.createElement('section');sec.id='minutas';sec.className='page hidden';
  sec.innerHTML=`<div class="panel"><div class="section-header"><div><h2>Minuta de e-mail · Matriz Documental PUC</h2><p class="muted">Geração assistida a partir da <b>MATRIZ_PUC_2026 — MATRIZ DOCUMENTAL</b> (54 requisitos, 10 etapas), com referências jurídicas, aplicabilidade e resultado do confronto SIOP × SEI/BMs × Balanço × Docas. <b>Não envia e-mails.</b></p></div><span class="tag warn">RASCUNHO · REVISÃO OBRIGATÓRIA</span></div>
  <div class="filters md-toolbar"><label>Companhia Docas<select id="md-company"><option value="">Selecione</option></select></label><label>Empreendimento<select id="md-project"><option value="">Selecione</option></select></label><label>ETAPA para incluir<select id="md-stage"></select></label><button class="btn" type="button" id="md-add-stage">Adicionar etapa</button><button class="btn secondary" type="button" id="md-analyze">Verificar etapa sugerida</button></div>
