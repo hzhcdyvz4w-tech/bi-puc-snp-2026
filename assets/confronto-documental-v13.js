@@ -35,7 +35,7 @@ try{seiExcluded=new Set(JSON.parse(localStorage.getItem(SEI_EXCLUSIONS_KEY)||'[]
 function saveSeiSelection(){try{localStorage.setItem(SEI_EXCLUSIONS_KEY,JSON.stringify([...seiExcluded]))}catch(e){}document.dispatchEvent(new CustomEvent('puc-sei-selection-updated'))}
 function seiIncluded(d){return d.origin!=='SEI'||!seiExcluded.has(d.id)}
 function filesForReview(){
- return docs().filter(d=>sources.includes(d.origin)&&seiIncluded(d)&&(!selected.size||!d.project||selected.has(d.project)||(d.findings||[]).some(f=>selected.has(f.project))));
+ return docs().filter(d=>sources.includes(d.origin)&&seiIncluded(d)&&(!selected.size||!d.project||selected.has(d.project)||(d.projects||[]).some(id=>selected.has(id))||(d.findings||[]).some(f=>selected.has(f.project))));
 }
 
 const PUC_BALANCO_UFS=['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
@@ -336,7 +336,7 @@ async function importFiles(source){
 function lineFor(d){
  const quality=d.quality||'Documento anterior — reanalisar',bm=/^(?:BM IDENTIFICADO|BM PROVÁVEL)/.test(d.bmStatus||'');
  const findings=(d.findings||[]).length, candidates=(d.candidates||[]).slice(0,bm?9:4).map(c=>c.type+': '+(c.values||[]).join(', ')).join('; ');
- return '<tr><td><strong>'+esc(d.origin)+'</strong><br>'+esc(d.project||'Carteira / sem vínculo')+'</td><td>'+esc(d.name)+'<small>'+esc(d.container||'Arquivo individual')+'</small></td><td>'+esc(bm?'BM '+(d.bmNumber||'nº a confirmar')+(d.bmPeriod?' · '+d.bmPeriod:' · competência a conferir'):d.bmStatus||'Não classificado')+'</td><td>'+esc(candidates||'Nenhum valor extraído')+'</td><td>'+esc(quality)+'<small>'+findings+' achado(s) revisado(s)</small></td><td><button type="button" class="btn secondary" data-review="'+esc(d.id)+'">Revisar</button></td></tr>'
+ return '<tr><td><strong>'+esc(d.origin)+'</strong><br>'+esc((d.projects||[d.project]).filter(Boolean).join(', ')||'Carteira / sem vínculo')+'</td><td>'+esc(d.name)+'<small>'+esc(d.container||'Arquivo individual')+'</small></td><td>'+esc(bm?'BM '+(d.bmNumber||'nº a confirmar')+(d.bmPeriod?' · '+d.bmPeriod:' · competência a conferir'):d.bmStatus||'Não classificado')+'</td><td>'+esc(candidates||'Nenhum valor extraído')+'</td><td>'+esc(quality)+'<small>'+findings+' achado(s) revisado(s)</small></td><td><button type="button" class="btn secondary" data-review="'+esc(d.id)+'">Revisar</button></td></tr>'
 }
 function renderFiles(){
  const files=filesForReview();
@@ -372,7 +372,7 @@ function review(id,fid){
  $('puc3-review-info').textContent=(d.container||'Arquivo individual')+' · '+(d.quality||'Leitura anterior')+' · '+(d.bmStatus||'Sem classificação BM');
  $('puc3-find-id').value=f.id||'';
  $('puc3-find-project').innerHTML='<option value="">Selecione a PUC comprovada</option>'+projects.map(p=>'<option value="'+esc(p.id)+'">'+esc(p.id+' · '+p.empreendimento)+'</option>').join('');
- $('puc3-find-project').value=f.project||d.project||(selected.size===1?[...selected][0]:'');
+ $('puc3-find-project').value=f.project||(d.projects||[]).find(id=>selected.has(id))||d.project||(selected.size===1?[...selected][0]:'');
  $('puc3-find-indicator').innerHTML=metricSelect();$('puc3-find-indicator').value=f.indicator||'';
  $('puc3-find-value').value=f.value??'';
  $('puc3-find-period').value=f.period||d.bmPeriod||'';
@@ -425,7 +425,7 @@ function audit(){
  if(!selected.size){$('puc3-result').innerHTML='<p class="notice">Selecione uma ou mais PUCs na aba Documentos antes de confrontar. Nenhuma correspondência foi calculada.</p>';status('Confronto não executado: nenhuma PUC selecionada.');lastPairs=[];return {pairs:[],findings:[]}}
   const findings=lastRows.filter(f=>selected.has(f.project)&&sources.includes(f.source));
  const byProject=new Map();
- for(const p of selected){byProject.set(p,{sources:new Set(),found:[],pairs:[],pending:0,docs:filesForReview().filter(d=>d.project===p||!d.project)})}
+ for(const p of selected){byProject.set(p,{sources:new Set(),found:[],pairs:[],pending:0,docs:filesForReview().filter(d=>d.project===p||(d.projects||[]).includes(p)||!d.project)})}
  for(const f of findings){const r=byProject.get(f.project);if(!r)continue;r.found.push(f);r.sources.add(f.source);if(!f.verified||!f.period||!f.cutoff)r.pending++}
  const pairs=[];
  for(const [id,r] of byProject){for(let i=0;i<r.found.length;i++)for(let j=i+1;j<r.found.length;j++){
@@ -477,7 +477,7 @@ function reportHtml(){
  for(const id of selected){
   const p=projects.find(x=>x.id===id);
   body+='<section><h2>'+esc(id)+' · '+esc(p?.empreendimento||'')+'</h2><p><strong>Companhia:</strong> '+esc(p?.empresa||'')+'</p>';
-  const ds=docs().filter(d=>sources.includes(d.origin)&&(d.project===id||((d.findings||[]).some(f=>f.project===id))));
+  const ds=docs().filter(d=>sources.includes(d.origin)&&(d.project===id||(d.projects||[]).includes(id)||((d.findings||[]).some(f=>f.project===id))));
   body+='<h3>Arquivos anexados</h3><table><thead><tr><th>Fonte</th><th>Documento</th><th>Leitura</th><th>BM</th></tr></thead><tbody>';
   body+=ds.length?ds.map(d=>'<tr><td>'+esc(d.origin)+'</td><td>'+esc(d.name)+'</td><td>'+esc(d.quality||'não informada')+'</td><td>'+esc(d.bmStatus||'Não identificado')+'</td></tr>').join(''):'<tr><td colspan="4">Nenhum documento vinculado à PUC</td></tr>';
   body+='</tbody></table><h3>Achados extraídos e conferidos</h3><table><thead><tr><th>Fonte / documento / referência</th><th>Indicador</th><th>Valor</th><th>Competência / corte</th><th>Objeto / contrato / BM</th><th>Conferência</th></tr></thead><tbody>';
