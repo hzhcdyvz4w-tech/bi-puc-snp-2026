@@ -66,7 +66,7 @@ async function ingest(files,origin,project,ref,selectedZipEntries=null){
    if(file.size>90*1024*1024)throw Error('arquivo acima de 90 MB');
    const inner=await extract(file);
    for(const item of inner){
-    if(origin==='SEI'&&/\\.zip$/i.test(file.name)&&selectedZipEntries&&!selectedZipEntries.has(file.name+'\\u0001'+item.container+'\\u0001'+item.name))continue;
+    if(origin==='SEI'&&/\.zip$/i.test(file.name)&&selectedZipEntries&&!selectedZipEntries.has(file.name+'\u0001'+item.container+'\u0001'+item.name))continue;
     const hash=await digest(item.blob);
     const previous=stored.find(x=>x.hash===hash&&x.origin===origin&&x.ref===ref);
     if(previous){
@@ -192,7 +192,7 @@ function setup(){
  const link=document.createElement('button');link.type='button';link.className='btn secondary';link.textContent='Vincular anexos sem PUC ao investimento escolhido';controls.appendChild(link);
  link.onclick=async()=>{const projects=chosenProjects(),ref=E('puc-lib-ref').value.trim();
  if(!projects.length){status('Marque uma ou mais PUCs na Biblioteca.');return}
- const docs=stored.filter(x=>!x.project&&(!ref||x.ref===ref));if(!docs.length){status('Não há anexos sem PUC nesse processo.');return}
+ const docs=stored.filter(x=>!projectIds(x).length&&(!ref||x.ref===ref));if(!docs.length){status('Não há anexos sem PUC nesse processo.');return}
  if(!confirm('Vincular '+docs.length+' documento(s) sem PUC a '+projects.join(', ')+'? Confira a documentação de cada investimento.'))return;
  const tx=db.transaction('files','readwrite');docs.forEach(d=>{d.projects=[...projects];d.project=projects[0];tx.objectStore('files').put(d)});
  await new Promise((ok,fail)=>{tx.oncomplete=ok;tx.onerror=()=>fail(tx.error);tx.onabort=()=>fail(tx.error)});
