@@ -86,7 +86,9 @@
       $("acesso").hidden = true;
     } catch(err) {
       invite = "";
-      status.textContent = "Não foi possível abrir o formulário: " + err.message;
+      status.textContent = "Não foi possível validar o acesso: " + err.message + ". Cole novamente o link completo abaixo para tentar outra vez.";
+      const recovery = $("recuperar-acesso");
+      if(recovery) recovery.hidden = false;
     }
   }
   form.addEventListener("reset", () => {
