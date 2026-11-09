@@ -134,13 +134,13 @@ async function render(){
  for(const d of docs)sel.add(new Option(d.name+(d.project?' · '+d.project:''),d.id));
  const valid=docs.some(d=>d.id===previous);sel.value=valid?previous:(docs.length===1?docs[0].id:'');
  chosen=sel.value;panel.innerHTML='';
- const run=++generation;if(!sel.value){msg.textContent='Nenhum BM selecionado. Anexe e marque um BM no menu Documentos → SEI.';return}
+ const run=++generation;const legacy=byId('ficha-print-area');if(legacy)legacy.hidden=false;if(!sel.value){msg.textContent='Nenhum BM selecionado. Anexe e marque um BM no menu Documentos → SEI.';return}
  msg.textContent='Lendo a tabela histórica do BM selecionado na biblioteca local...';
  try{
   const doc=docs.find(d=>d.id===sel.value),res=await extract(doc);
   if(run!==generation)return;
   msg.textContent=res.points.length+' boletins encontrados no histórico do PDF selecionado. Revise os números e percentuais.';
-  panel.innerHTML=layout(res);
+  panel.innerHTML=layout(res);const legacy=byId('ficha-print-area');if(legacy)legacy.hidden=true;
  }catch(e){if(run!==generation)return;msg.textContent='Não foi possível gerar a Curva S documental: '+e.message}
 }
 function setup(){
