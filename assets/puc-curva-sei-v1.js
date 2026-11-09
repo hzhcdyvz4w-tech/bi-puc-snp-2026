@@ -98,18 +98,23 @@ function svgChart(points){
  xTicks+'<text x="'+(width/2)+'" y="'+(height-2)+'" font-size="12" text-anchor="middle">Dias decorridos a partir do início contratual (conforme BM)</text></svg>';
 }
 function horizontalTable(points){
- const header=points.map(p=>'<th>BM '+String(p.number).padStart(2,'0')+'</th>').join('');
- const line=(title,key,formatter)=>'<tr><th>'+title+'</th>'+points.map(p=>'<td>'+formatter(Number.isFinite(p[key])?p[key]:null)+'</td>').join('')+'</tr>';
- return '<div class="puc-curva-table-scroll"><table class="puc-curva-table"><thead><tr><th>Indicador</th>'+header+'</tr></thead><tbody>'+
- line('Período (dias)','day',v=>v===null?'—':v)+
- line('Previsto (parcial) — R$','financeiroPrevistoParcial',money)+
- line('Realizado (parcial) — R$','financeiroRealizadoParcial',money)+
- line('Previsto (acumulado) — R$','financeiroPrevistoAcumulado',money)+
- line('Realizado (acumulado) — R$','financeiroRealizadoAcumulado',money)+
- line('Previsto (parcial) — %','percentualPrevistoParcial',pct)+
- line('Realizado (parcial) — %','percentualRealizadoParcial',pct)+
- line('Previsto (acumulado) — %','percentualPrevistoAcumulado',pct)+
- line('Realizado (acumulado) — %','percentualRealizadoAcumulado',pct)+'</tbody></table></div>';
+ const chunks=[];for(let i=0;i<points.length;i+=14)chunks.push(points.slice(i,i+14));
+ const build=items=>{
+  const header=items.map(p=>'<th>BM '+String(p.number).padStart(2,'0')+'</th>').join('');
+  const line=(title,key,formatter,kind)=>'<tr class="puc-curva-row-'+kind+'"><th>'+title+'</th>'+items.map(p=>'<td>'+formatter(Number.isFinite(p[key])?p[key]:null)+'</td>').join('')+'</tr>';
+  return '<div class="puc-curva-table-scroll"><table class="puc-curva-table"><thead><tr><th>Indicador</th>'+header+'</tr></thead><tbody>'+
+   line('Período (dias)','day',v=>v===null?'—':v,'neutral')+
+   line('Previsto (parcial) — R$','financeiroPrevistoParcial',money,'plan')+
+   line('Realizado (parcial) — R$','financeiroRealizadoParcial',money,'real')+
+   line('Previsto (acumulado) — R$','financeiroPrevistoAcumulado',money,'plan')+
+   line('Realizado (acumulado) — R$','financeiroRealizadoAcumulado',money,'real')+
+   line('Previsto (parcial) — %','percentualPrevistoParcial',pct,'plan')+
+   line('Realizado (parcial) — %','percentualRealizadoParcial',pct,'real')+
+   line('Previsto (acumulado) — %','percentualPrevistoAcumulado',pct,'plan')+
+   line('Realizado (acumulado) — %','percentualRealizadoAcumulado',pct,'real')+
+   '</tbody></table></div>';
+ };
+ return chunks.map((items,i)=>'<section class="puc-curva-table-block"><h5>Histórico BM '+items[0].number+' a BM '+items[items.length-1].number+'</h5>'+build(items)+'</section>').join('');
 }
 function layout(result){
  const {points,meta,doc}=result;
@@ -151,7 +156,7 @@ function setup(){
  byId('puc-curva-document-select').onchange=()=>{chosen=byId('puc-curva-document-select').value;render()};
  document.addEventListener('puc-documents-updated',render);document.addEventListener('puc-sei-selection-updated',render);
  const style=document.createElement('style');
- style.textContent='.puc-curva-chooser{display:flex;flex-direction:column;gap:7px;margin:15px 0;padding:15px;background:#f5f8fc;border:1px solid #cbdce8;border-radius:9px}.puc-curva-chooser select{width:100%;max-width:650px;padding:10px}.puc-curva-chooser p{font-size:13px;color:#49657a}.puc-curva-report{border:1px solid #d5e0e9;border-radius:9px;overflow:hidden;margin:15px 0;padding:17px}.puc-curva-report header{display:flex;justify-content:space-between;gap:12px;align-items:center;border-bottom:2px solid #b6d2e5;padding-bottom:12px}.puc-curva-report h3{margin:0;font-size:20px}.puc-curva-report small{display:block;color:#597185}.puc-curva-warning{color:#9b4d22;font-size:11px;font-weight:700}.puc-curva-meta,.puc-curva-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}.puc-curva-meta>div,.puc-curva-kpis>div{padding:10px;background:#f2f6fa;border:1px solid #dce7f0;border-radius:5px;min-width:0}.puc-curva-meta strong,.puc-curva-kpis strong{display:block;font-size:14px;overflow-wrap:anywhere}.puc-curva-obj{grid-column:1/-1}.puc-curva-report h4{font-size:15px;margin:18px 0 10px}.puc-curva-table-scroll{overflow-x:auto;max-width:100%;border:1px solid #dce4ed}.puc-curva-table{border-collapse:collapse;min-width:max-content;font-size:12px}.puc-curva-table th,.puc-curva-table td{border:1px solid #d2dfe9;padding:7px 9px;white-space:nowrap;text-align:right}.puc-curva-table th:first-child{position:sticky;left:0;background:#eaf2fa;text-align:left;z-index:1}.puc-curva-table thead{background:#d3e6f4}.puc-curva-table tbody tr:nth-child(even){background:#f6f9fc}.puc-curva-svg{width:100%;height:auto;display:block;background:white}.puc-curva-legend{display:flex;gap:22px;flex-wrap:wrap;font-size:12px;margin:10px 0}.puc-curva-legend i{display:inline-block;width:17px;height:3px;vertical-align:middle;margin-right:6px}.puc-curva-note{font-size:12px;color:#4f6275;line-height:1.5}.ficha-grafico-enxuto #ficha-print-area:has(+ *){margin-top:10px}@media(max-width:800px){.puc-curva-meta,.puc-curva-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}@media print{.puc-curva-chooser{display:none}.puc-curva-table-scroll{overflow:visible}.puc-curva-table{font-size:8px}}';
+ style.textContent='.puc-curva-chooser{display:flex;flex-direction:column;gap:7px;margin:15px 0;padding:15px;background:#f5f8fc;border:1px solid #cbdce8;border-radius:9px}.puc-curva-chooser select{width:100%;max-width:650px;padding:10px}.puc-curva-chooser p{font-size:13px;color:#49657a}.puc-curva-report{border:1px solid #d5e0e9;border-radius:9px;overflow:hidden;margin:15px 0;padding:17px}.puc-curva-report header{display:flex;justify-content:space-between;gap:12px;align-items:center;border-bottom:2px solid #b6d2e5;padding-bottom:12px}.puc-curva-report h3{margin:0;font-size:20px}.puc-curva-report small{display:block;color:#597185}.puc-curva-warning{color:#9b4d22;font-size:11px;font-weight:700}.puc-curva-meta,.puc-curva-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}.puc-curva-meta>div,.puc-curva-kpis>div{padding:10px;background:#f2f6fa;border:1px solid #dce7f0;border-radius:5px;min-width:0}.puc-curva-meta strong,.puc-curva-kpis strong{display:block;font-size:14px;overflow-wrap:anywhere}.puc-curva-obj{grid-column:1/-1}.puc-curva-report h4{font-size:15px;margin:18px 0 10px}.puc-curva-table-scroll{overflow-x:auto;max-width:100%;border:1px solid #dce4ed}.puc-curva-table{border-collapse:collapse;min-width:max-content;font-size:12px}.puc-curva-table th,.puc-curva-table td{border:1px solid #d2dfe9;padding:7px 9px;white-space:nowrap;text-align:right}.puc-curva-table th:first-child{position:sticky;left:0;background:#eaf2fa;text-align:left;z-index:1}.puc-curva-table thead{background:#cbddea}.puc-curva-row-plan{background:#e1eefb}.puc-curva-row-real{background:#fbe8df}.puc-curva-row-neutral{background:#f2f5f8}.puc-curva-table-block{margin:12px 0 24px;break-inside:avoid}.puc-curva-table-block h5{font-size:13px;margin:0 0 8px;color:#25445d}.puc-curva-svg{width:100%;height:auto;display:block;background:white}.puc-curva-legend{display:flex;gap:22px;flex-wrap:wrap;font-size:12px;margin:10px 0}.puc-curva-legend i{display:inline-block;width:17px;height:3px;vertical-align:middle;margin-right:6px}.puc-curva-note{font-size:12px;color:#4f6275;line-height:1.5}.ficha-grafico-enxuto #ficha-print-area:has(+ *){margin-top:10px}@media(max-width:800px){.puc-curva-meta,.puc-curva-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}@media print{.puc-curva-chooser{display:none}.puc-curva-table-scroll{overflow:visible}.puc-curva-table{font-size:8px}}';
  document.head.appendChild(style);render();
 }
 window.PUCCurvaSEI={parsePage,extract,render,selected,setup};
