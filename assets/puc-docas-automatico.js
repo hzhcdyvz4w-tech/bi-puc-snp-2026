@@ -8,9 +8,35 @@
     const central=$('puc3-central-files');
     const manager=$('puc-docas-externas-manager');
 
-    // O módulo gerencial pertence à mesma área de documentos, após as três fontes.
-    if(central&&manager&&central.nextElementSibling!==manager){
-      central.insertAdjacentElement('afterend',manager);
+    // O painel gerencial fica na aba DOCAS, nunca no portal externo.
+    const docas=$('docas');
+    if(docas&&!$('puc-docas-acessos-portal')){
+      const painel=document.createElement('section');
+      painel.className='panel';
+      painel.id='puc-docas-acessos-portal';
+      painel.innerHTML='<h2>Informações das DOCAS — Acesso e recebimentos</h2>'+
+        '<p class="muted">Ambiente interno da SNP. O gestor entra com e-mail e senha para liberar convites individuais e consultar as declarações enviadas. O formulário externo não disponibiliza outras áreas do BI.</p>'+
+        '<div class="two-actions"><button class="btn" id="puc-docas-ver-recebidos" type="button">Ver formulários recebidos</button>'+
+        '<button class="btn secondary" id="puc-docas-liberar" type="button">Liberar acesso ao formulário</button>'+
+        '<a class="btn secondary" href="docas-externo/" target="_blank" rel="noopener noreferrer">Visualizar página externa</a></div>'+
+        '<p class="muted" id="puc-docas-painel-ajuda">Para enviar à companhia, gere e copie um link individual em “Liberar acesso”. O endereço genérico não permite preenchimento sem convite.</p>';
+      docas.insertBefore(painel,docas.firstChild);
+      const go=(tipo)=>{
+        window.PUC_DOCAS_TAB_DESEJADA=tipo;
+        if($('pd-painel')?.style.display==='block'){
+          $('pd-ver-'+(tipo==='links'?'companhias':'registros'))?.click();
+          window.PUC_DOCAS_TAB_DESEJADA=null;
+        }
+        $('puc-docas-externas-manager')?.scrollIntoView({behavior:'smooth',block:'start'});
+        if($('pd-login')?.style.display!=='none')$('pd-email')?.focus();
+      };
+      $('puc-docas-ver-recebidos').addEventListener('click',()=>go('records'));
+      $('puc-docas-liberar').addEventListener('click',()=>go('links'));
+    }
+    // Reaproveita o gerenciador autenticado e a mesma base de dados.
+    if(docas&&manager&&manager.parentElement!==docas){
+      const header=$('puc-docas-acessos-portal');
+      header?.insertAdjacentElement('afterend',manager);
     }
     if(card&&!card.dataset.docasAuto){
       card.dataset.docasAuto='1';
@@ -37,7 +63,7 @@
       manage.type='button';
       manage.textContent='Gerenciar acessos das DOCAS';
       function go(which){
-        document.querySelector('#nav [data-page="documentos"]')?.click();
+        document.querySelector('#nav [data-page="docas"]')?.click();
         const panel=$('puc-docas-externas-manager');
         if(!panel){count.textContent='Central indisponível. Atualize a página.';return}
         window.PUC_DOCAS_TAB_DESEJADA=which==='links'?'links':'records';
