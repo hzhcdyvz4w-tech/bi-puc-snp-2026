@@ -1,0 +1,159 @@
+/* BI PUC — Curva S documental por BM selecionado; dados permanecem exclusivamente no navegador. */
+(()=>{'use strict';
+const byId=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num=x=>Number(String(x||'').replace(/\./g,'').replace(',','.').replace('%',''));
+const pct=x=>x===null||!Number.isFinite(x)?'—':x.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
+const money=x=>x===null||!Number.isFinite(x)?'—':x.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const excluded=()=>{try{return new Set(JSON.parse(localStorage.getItem('BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1')||'[]'))}catch(e){return new Set()}};
+const selected=()=>((window.PUCDocLibrary?.list?.()||[]).filter(d=>d.origin==='SEI'&&/^(BM IDENTIFICADO|BM PROVÁVEL)/.test(d.bmStatus||'')&&!excluded().has(d.id)&&/\.pdf$/i.test(d.name)));
+function rowsFromItems(items){
+ const rows=[];
+ for(const item of items||[]){
+  const s=String(item.str||'').trim(),x=item.transform?.[4],y=item.transform?.[5];
+  if(!s||!Number.isFinite(x)||!Number.isFinite(y))continue;
+  let row=rows.find(r=>Math.abs(r.y-y)<2.1);
+  if(!row){row={y,parts:[]};rows.push(row)}
+  row.parts.push({s,x});
+ }
+ for(const r of rows){r.parts.sort((a,b)=>a.x-b.x);r.text=r.parts.map(x=>x.s).join(' ')}
+ return rows.sort((a,b)=>b.y-a.y);
+}
+function parsePage(items,pageNo){
+ const rows=rowsFromItems(items);const hdr=rows.map(r=>{
+  const h=[];
+  for(let k=0;k<r.parts.length;k++){
+   const p=r.parts[k],inline=p.s.match(/^BM\s*(\d{1,2})$/i);
+   if(inline){h.push({number:Number(inline[1]),x:p.x});continue}
+   if(/^BM$/i.test(p.s)){
+    const next=r.parts[k+1],match=next?.s.match(/^(\d{1,2})$/);
+    if(match&&next.x-p.x<27){h.push({number:Number(match[1]),x:p.x});k++}
+   }
+  }
+  return {row:r,head:h};
+ }).filter(x=>x.head.length>=3).sort((a,b)=>b.head.length-a.head.length)[0];
+ if(!hdr)return [];
+ const heads=hdr.head.sort((a,b)=>a.x-b.x);
+ if(new Set(heads.map(x=>x.number)).size!==heads.length)return [];
+ const nearest=(x)=>heads.reduce((best,h,i)=>Math.abs(h.x-x)<Math.abs(heads[best].x-x)?i:best,0);
+ function rowAt(offset,kind){
+  const candidates=rows.map(r=>{
+   const delta=hdr.row.y-r.y;
+   const parts=r.parts.filter(p=>kind==='pct'?/\d+(?:,\d+)?\s*%/.test(p.s):/^\d[\d.]*,\d{2}$/.test(p.s));
+   return {r,delta,parts};
+  }).filter(v=>v.parts.length>=Math.min(heads.length,3)&&Math.abs(v.delta-offset)<13);
+  return candidates.sort((a,b)=>Math.abs(a.delta-offset)-Math.abs(b.delta-offset))[0]||null;
+ }
+ const period=rows.filter(r=>hdr.row.y-r.y>2&&hdr.row.y-r.y<16).map(r=>r.parts.filter(p=>/^\d{1,4}$/.test(p.s))).sort((a,b)=>b.length-a.length)[0]||[];
+ const days=new Map();period.forEach(p=>days.set(nearest(p.x),Number(p.s)));
+ const specs=[['financeiroPrevistoParcial',34,'money'],['financeiroRealizadoParcial',61,'money'],
+ ['financeiroPrevistoAcumulado',88,'money'],['financeiroRealizadoAcumulado',115,'money'],
+ ['percentualPrevistoParcial',150,'pct'],['percentualRealizadoParcial',178,'pct'],
+ ['percentualPrevistoAcumulado',206,'pct'],['percentualRealizadoAcumulado',232,'pct']];
+ const points=heads.map((h,i)=>({number:h.number,day:days.get(i)??null,page:pageNo}));
+ for(const [key,offset,kind] of specs){
+  const r=rowAt(offset,kind);if(!r)continue;
+  for(const part of r.parts){
+   const i=nearest(part.x);const value=num(part.s);
+   if(Number.isFinite(value)&&points[i][key]===undefined)points[i][key]=value;
+  }
+ }
+ return points;
+}
+function metadata(text){
+ const src=String(text||'');
+ const take=(rx)=>src.match(rx)?.[1]?.trim()||'';
+ return {contract:take(/CONTRATO\s*:\s*([^\n]+)/i),contractor:take(/CONTRATADA\s*:\s*([^\n]+)/i),
+ serviceOrder:take(/ORDEM\s+DE\s+SERVI[CÇ]O\s*:\s*([^\n]+)/i),
+ object:take(/OBJETO\s*:\s*([^\n]{15,600})/i),bm:take(/MEDI[CÇ][ÃA]O\s*:\s*(\d{1,3})/i)};
+}
+async function extract(doc){
+ const blob=await window.PUCDocLibrary?.getBlob?.(doc.id);
+ if(!blob)throw Error('PDF não preservado nesta biblioteca; é necessário importar novamente em Documentos.');
+ if(!window.pdfjsLib)throw Error('PDF.js indisponível para leitura das tabelas da Curva S.');
+ const pdf=await window.pdfjsLib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise;
+ const pages=Math.min(pdf.numPages,65),data=[],meta=[];
+ for(let page=1;page<=pages;page++){
+  const view=await pdf.getPage(page),items=(await view.getTextContent()).items;
+  data.push(...parsePage(items,page));
+  if(page===1||page===pages)meta.push(rowsFromItems(items).slice(0,24).map(r=>r.text).join('\n'));
+ }
+ const clean=new Map();for(const d of data){const previous=clean.get(d.number);clean.set(d.number,{...(previous||{}),...d})}
+ const points=[...clean.values()].sort((a,b)=>a.number-b.number);
+ if(points.length<3||points.filter(p=>p.percentualPrevistoAcumulado!==undefined).length<3)throw Error('Quadro histórico da Curva S não foi identificado neste PDF. Confira se o documento possui tabela de BMs e percentuais.');
+ const m=metadata(meta.join('\n')+'\n'+doc.text);
+ return {doc,points,meta:m,pages};
+}
+function svgChart(points){
+ const planned=points.filter(x=>Number.isFinite(x.day)&&Number.isFinite(x.percentualPrevistoAcumulado)),actual=points.filter(x=>Number.isFinite(x.day)&&Number.isFinite(x.percentualRealizadoAcumulado));
+ const width=1100,height=320,left=66,right=16,top=19,bottom=45;
+ const maxDay=Math.max(1,...points.map(p=>p.day||0)),x=d=>left+(width-left-right)*d/maxDay,y=v=>top+(height-top-bottom)*(1-v/100);
+ const poly=arr=>arr.map(z=>x(z.day).toFixed(1)+','+y(z.percentualPrevistoAcumulado??z.percentualRealizadoAcumulado).toFixed(1)).join(' ');
+ const path=arr=>arr.map(z=>x(z.day).toFixed(1)+','+y(z.percentualRealizadoAcumulado).toFixed(1)).join(' ');
+ const ticks=[0,20,40,60,80,100].map(v=>'<line x1="'+left+'" y1="'+y(v)+'" x2="'+(width-right)+'" y2="'+y(v)+'" stroke="#e0e7ef"/><text x="'+(left-9)+'" y="'+(y(v)+4)+'" text-anchor="end" font-size="12" fill="#40536b">'+v+'%</text>').join('');
+ const xTicks=Array.from({length:7},(_,i)=>Math.round(maxDay*i/6)).map(d=>'<text x="'+x(d)+'" y="'+(height-18)+'" text-anchor="middle" font-size="12" fill="#40536b">'+d+'</text>').join('');
+ return '<svg class="puc-curva-svg" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Curva S com percentuais acumulados previstos e realizados por dias transcorridos" xmlns="http://www.w3.org/2000/svg">'+ticks+
+ '<polyline points="'+poly(planned)+'" fill="none" stroke="#2563a6" stroke-width="2.8"/><polyline points="'+path(actual)+'" fill="none" stroke="#c8554b" stroke-width="2.8"/>'+
+ actual.map(p=>'<circle cx="'+x(p.day)+'" cy="'+y(p.percentualRealizadoAcumulado)+'" r="3" fill="#c8554b"><title>BM '+p.number+' — '+p.day+' dias — realizado '+pct(p.percentualRealizadoAcumulado)+'</title></circle>').join('')+
+ xTicks+'<text x="'+(width/2)+'" y="'+(height-2)+'" font-size="12" text-anchor="middle">Dias decorridos a partir do início contratual (conforme BM)</text></svg>';
+}
+function horizontalTable(points){
+ const header=points.map(p=>'<th>BM '+String(p.number).padStart(2,'0')+'</th>').join('');
+ const line=(title,key,formatter)=>'<tr><th>'+title+'</th>'+points.map(p=>'<td>'+formatter(Number.isFinite(p[key])?p[key]:null)+'</td>').join('')+'</tr>';
+ return '<div class="puc-curva-table-scroll"><table class="puc-curva-table"><thead><tr><th>Indicador</th>'+header+'</tr></thead><tbody>'+
+ line('Período (dias)','day',v=>v===null?'—':v)+
+ line('Previsto (parcial) — R$','financeiroPrevistoParcial',money)+
+ line('Realizado (parcial) — R$','financeiroRealizadoParcial',money)+
+ line('Previsto (acumulado) — R$','financeiroPrevistoAcumulado',money)+
+ line('Realizado (acumulado) — R$','financeiroRealizadoAcumulado',money)+
+ line('Previsto (parcial) — %','percentualPrevistoParcial',pct)+
+ line('Realizado (parcial) — %','percentualRealizadoParcial',pct)+
+ line('Previsto (acumulado) — %','percentualPrevistoAcumulado',pct)+
+ line('Realizado (acumulado) — %','percentualRealizadoAcumulado',pct)+'</tbody></table></div>';
+}
+function layout(result){
+ const {points,meta,doc}=result;
+ const last=[...points].reverse().find(p=>Number.isFinite(p.percentualRealizadoAcumulado));
+ const realized=points.filter(p=>Number.isFinite(p.percentualRealizadoAcumulado));
+ const maxDay=points[points.length-1]?.day;
+ const chart=svgChart(points);
+ return '<div class="puc-curva-report"><header><div><h3>CURVA S — Acompanhamento global do contrato</h3><small>Fonte: Documentos → SEI · Somente BM selecionado</small></div><span class="puc-curva-warning">EXTRAÇÃO AUTOMÁTICA · CONFERIR</span></header>'+
+ '<div class="puc-curva-meta"><div><small>Contrato</small><strong>'+esc(meta.contract||'Não identificado')+'</strong></div><div><small>Contratada</small><strong>'+esc(meta.contractor||'Não identificada')+'</strong></div><div><small>Ordem de serviço</small><strong>'+esc(meta.serviceOrder||'Não identificada')+'</strong></div><div><small>BM de referência</small><strong>'+esc(meta.bm||doc.bmNumber||'Não identificado')+'</strong></div><div class="puc-curva-obj"><small>Objeto / obra</small><strong>'+esc(meta.object||doc.workName||'Não identificado')+'</strong></div></div>'+
+ '<div class="puc-curva-kpis"><div><small>Último BM com percentual realizado</small><strong>'+(last?'BM '+last.number:'—')+'</strong></div><div><small>Último realizado acumulado</small><strong>'+(last?pct(last.percentualRealizadoAcumulado):'—')+'</strong></div><div><small>BM(s) no histórico</small><strong>'+points.length+'</strong></div><div><small>Dias previstos na tabela</small><strong>'+(Number.isFinite(maxDay)?maxDay:'—')+'</strong></div></div>'+
+ '<h4>Histórico contratual dos boletins — previsto × realizado</h4>'+horizontalTable(points)+
+ '<h4>Curva S — percentuais acumulados ao longo do tempo</h4>'+chart+
+ '<div class="puc-curva-legend"><span><i style="background:#2563a6"></i> Previsto acumulado</span><span><i style="background:#c8554b"></i> Realizado acumulado</span></div>'+
+ '<p class="puc-curva-note">Percentuais da Curva S do próprio BM (base contratual). Não presumir equivalência com execução física oficial, pagamentos, SIOP ou Balanço. Os dias e medições são reproduzidos apenas onde a tabela documental contém valores legíveis. Não há interpolação ou projeção automática. BMs repetidos não são somados.</p>'+
+ '<p class="puc-curva-note">Documento de origem: '+esc(doc.name)+' · Biblioteca local · '+result.pages+' página(s) examinada(s). A associação à PUC, a competência e os valores dependem de conferência.</p></div>';
+}
+let chosen='',generation=0;
+async function render(){
+ const panel=byId('puc-curva-documental'),sel=byId('puc-curva-document-select'),msg=byId('puc-curva-document-status');if(!panel||!sel)return;
+ const docs=selected(),previous=chosen||sel.value;
+ sel.replaceChildren(new Option('Selecione um BM com Curva S anexado em Documentos',''));
+ for(const d of docs)sel.add(new Option(d.name+(d.project?' · '+d.project:''),d.id));
+ const valid=docs.some(d=>d.id===previous);sel.value=valid?previous:(docs.length===1?docs[0].id:'');
+ chosen=sel.value;panel.innerHTML='';
+ const run=++generation;if(!sel.value){msg.textContent='Nenhum BM selecionado. Anexe e marque um BM no menu Documentos → SEI.';return}
+ msg.textContent='Lendo a tabela histórica do BM selecionado na biblioteca local...';
+ try{
+  const doc=docs.find(d=>d.id===sel.value),res=await extract(doc);
+  if(run!==generation)return;
+  msg.textContent=res.points.length+' boletins encontrados no histórico do PDF selecionado. Revise os números e percentuais.';
+  panel.innerHTML=layout(res);
+ }catch(e){if(run!==generation)return;msg.textContent='Não foi possível gerar a Curva S documental: '+e.message}
+}
+function setup(){
+ const root=byId('ficha-result-panel');if(!root||byId('puc-curva-documental'))return;
+ const box=document.createElement('div');box.id='puc-curva-documental-wrap';
+ box.innerHTML='<div class="puc-curva-chooser"><label for="puc-curva-document-select">BM selecionado em Documentos → SEI</label><select id="puc-curva-document-select"></select><p id="puc-curva-document-status" aria-live="polite"></p></div><div id="puc-curva-documental"></div>';
+ root.insertBefore(box,byId('ficha-print-area'));
+ byId('puc-curva-document-select').onchange=()=>{chosen=byId('puc-curva-document-select').value;render()};
+ document.addEventListener('puc-documents-updated',render);document.addEventListener('puc-sei-selection-updated',render);
+ const style=document.createElement('style');
+ style.textContent='.puc-curva-chooser{display:flex;flex-direction:column;gap:7px;margin:15px 0;padding:15px;background:#f5f8fc;border:1px solid #cbdce8;border-radius:9px}.puc-curva-chooser select{width:100%;max-width:650px;padding:10px}.puc-curva-chooser p{font-size:13px;color:#49657a}.puc-curva-report{border:1px solid #d5e0e9;border-radius:9px;overflow:hidden;margin:15px 0;padding:17px}.puc-curva-report header{display:flex;justify-content:space-between;gap:12px;align-items:center;border-bottom:2px solid #b6d2e5;padding-bottom:12px}.puc-curva-report h3{margin:0;font-size:20px}.puc-curva-report small{display:block;color:#597185}.puc-curva-warning{color:#9b4d22;font-size:11px;font-weight:700}.puc-curva-meta,.puc-curva-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}.puc-curva-meta>div,.puc-curva-kpis>div{padding:10px;background:#f2f6fa;border:1px solid #dce7f0;border-radius:5px;min-width:0}.puc-curva-meta strong,.puc-curva-kpis strong{display:block;font-size:14px;overflow-wrap:anywhere}.puc-curva-obj{grid-column:1/-1}.puc-curva-report h4{font-size:15px;margin:18px 0 10px}.puc-curva-table-scroll{overflow-x:auto;max-width:100%;border:1px solid #dce4ed}.puc-curva-table{border-collapse:collapse;min-width:max-content;font-size:12px}.puc-curva-table th,.puc-curva-table td{border:1px solid #d2dfe9;padding:7px 9px;white-space:nowrap;text-align:right}.puc-curva-table th:first-child{position:sticky;left:0;background:#eaf2fa;text-align:left;z-index:1}.puc-curva-table thead{background:#d3e6f4}.puc-curva-table tbody tr:nth-child(even){background:#f6f9fc}.puc-curva-svg{width:100%;height:auto;display:block;background:white}.puc-curva-legend{display:flex;gap:22px;flex-wrap:wrap;font-size:12px;margin:10px 0}.puc-curva-legend i{display:inline-block;width:17px;height:3px;vertical-align:middle;margin-right:6px}.puc-curva-note{font-size:12px;color:#4f6275;line-height:1.5}.ficha-grafico-enxuto #ficha-print-area:has(+ *){margin-top:10px}@media(max-width:800px){.puc-curva-meta,.puc-curva-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}@media print{.puc-curva-chooser{display:none}.puc-curva-table-scroll{overflow:visible}.puc-curva-table{font-size:8px}}';
+ document.head.appendChild(style);render();
+}
+window.PUCCurvaSEI={parsePage,extract,render,selected,setup};
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup);else setup();
+})();
