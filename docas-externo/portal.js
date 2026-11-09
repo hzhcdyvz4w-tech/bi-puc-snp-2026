@@ -10,8 +10,18 @@
   const button = $("enviar");
   const validConfig = /^https:\/\/[a-z0-9.-]+\.supabase\.(co|in)$/i.test(base)
     && apiKey.length > 15 && !/service_role|sb_secret_/.test(apiKey);
-  const fragment = new URLSearchParams(location.hash.replace(/^#/, ""));
-  let invite = fragment.get("acesso") || "";
+  // Ler a chave diretamente da URL completa. Aceita links com #acesso=<token>
+  // e, por compatibilidade, ?acesso=<token>. Nunca envia fragmentos ao servidor.
+  function extractInvite() {
+    const full = String(window.location.href || "");
+    const hash = String(window.location.hash || "").replace(/^#/, "");
+    const fragment = new URLSearchParams(hash);
+    const search = new URLSearchParams(window.location.search);
+    const raw = fragment.get("acesso") || search.get("acesso") ||
+      (full.match(/(?:[?#&])acesso=([a-f0-9]{64})(?=$|[&#])/i) || [])[1] || "";
+    return String(raw).trim().toLowerCase();
+  }
+  let invite = extractInvite();
   let company = null;
   let protocol = null;
   const today = () => {
@@ -54,7 +64,9 @@
       return;
     }
     if (!/^[a-f0-9]{64}$/.test(invite)) {
-      status.textContent = "Link de convite ausente ou inválido. Solicite o endereço individual à SNP.";
+      status.textContent = "Não foi possível identificar o token automaticamente. Cole abaixo o link completo recebido da SNP.";
+      const recovery = $("recuperar-acesso");
+      if (recovery) recovery.hidden = false;
       return;
     }
     // A chave permanece somente na memória da página, não no URL ou no referrer.
@@ -111,6 +123,23 @@
       show("Não foi possível confirmar o envio: " + err.message +
            "\nO formulário permanece preenchido para uma nova tentativa.",true);
     } finally {button.disabled = false;}
+  });
+  const recovery = $("recuperar-acesso");
+  const recoveryForm = $("recuperar-form");
+  if (recoveryForm) recoveryForm.addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const entry = String($("recuperar-token")?.value || "").trim();
+    const match = entry.match(/(?:^|[?#&])acesso=([a-f0-9]{64})(?=$|[&#])/i);
+    const standalone = /^[a-f0-9]{64}$/i.test(entry) ? entry : "";
+    const candidate = String(match?.[1] || standalone).toLowerCase();
+    if (!/^[a-f0-9]{64}$/.test(candidate)) {
+      status.textContent = "O link informado não contém um token válido de 64 caracteres.";
+      return;
+    }
+    invite = candidate;
+    recovery.hidden = true;
+    $("recuperar-token").value = "";
+    startup();
   });
   startup();
 })();
