@@ -16,6 +16,19 @@
   const ready=await until(()=>d()?.getElementById('puc3-central-files')&&d()?.getElementById('puc-library-count')&&w.PUCDocLibrary?.list,25000);
   const info=()=>{try{return JSON.stringify({readyState:d()?.readyState,url:w.location.href,central:!!d()?.getElementById('puc3-central-files'),library:!!w.PUCDocLibrary,libraryCount:!!d()?.getElementById('puc-library-count'),libraryPanel:!!d()?.getElementById('puc-library'),libraryError:w.PUCDocLibrary?.storageError||d()?.getElementById('puc-library-error')?.textContent||'',indexedDB:!!w.indexedDB,nav:!!d()?.getElementById('nav'),bodyLength:d()?.body?.innerHTML?.length})}catch(e){return 'iframe indisponível: '+e.message}};
   assert(ready, 'Inicialização dos módulos e da biblioteca',info());
+
+  assert(!!w.PUCCurvaSEI?.parsePage,'Leitor da Curva S documental disponível');
+  const item=(str,x,y)=>({str,transform:[1,0,0,1,x,600-y],width:9});
+  const sample=[
+   item('BOLETIM DE MEDIÇÃO',15,110),item('BM',130,110),item('00',137,110),item('BM',200,110),item('01',207,110),item('BM',270,110),item('02',277,110),
+   item('0',130,116),item('46',200,116),item('77',270,116),
+   ...[['0,00%',130],['2,11%',200],['5,26%',270]].map(([value,x])=>item(value,x,316)),
+   ...[['0,00%',130],['2,11%',200],['5,20%',270]].map(([value,x])=>item(value,x,342))
+  ];
+  const series=w.PUCCurvaSEI.parsePage(sample,1);
+  assert(series.length===3&&series[1].day===46,'Linha do tempo dos dias recuperada do cabeçalho dos BMs');
+  assert(series[2].percentualPrevistoAcumulado===5.26&&series[2].percentualRealizadoAcumulado===5.2,'Percentuais acumulados previsto e realizado lidos separadamente');
+  assert(!!d().getElementById('puc-curva-document-select'),'Seletor de BM documental conectado à ficha');
   const docs=d().getElementById('documentos'),compare=d().getElementById('comparacao');
   const central=d().getElementById('puc3-central-files'),uploads=d().getElementById('puc3-uploads');
   assert(docs.contains(central)&&central.contains(uploads)&&!compare.contains(uploads),'Anexos somente em Documentos');
