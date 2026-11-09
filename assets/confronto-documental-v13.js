@@ -298,7 +298,7 @@ async function refreshBalancoPreview(){
  }catch(e){if(request===balancoRequest)label.textContent='Falha na leitura do Balanço: '+e.message}
 }
 async function importFiles(source){
- const files=[...$('puc3-files-'+source).files],project='',ref=$('puc3-ref-'+source).value.trim(),uf=source==='BALANCO'?($('puc3-uf-balanco')?.value||''):'',empreendimentoIds=source==='BALANCO'?[...balancoSelected]:null;
+ const files=[...$('puc3-files-'+source).files],project=[...selected],ref=$('puc3-ref-'+source).value.trim(),uf=source==='BALANCO'?($('puc3-uf-balanco')?.value||''):'',empreendimentoIds=source==='BALANCO'?[...balancoSelected]:null;
  if(!files.length){status('Selecione ao menos um arquivo para '+source+'.');return}
  if(!lib()){status('Biblioteca documental indisponível. Recarregue a página e execute o diagnóstico.');return}
  const button=$('puc3-uploads').querySelector('[data-import="'+source+'"]');button.disabled=true;
@@ -327,7 +327,7 @@ async function importFiles(source){
   const n=await lib().ingest(targetFiles,source,project,ref+filterMessage,seiChoice);
   // Mantém a seleção do arquivo após analisar; no recarregamento, exibe o anexo preservado no IndexedDB.
   refreshAttachmentStatus();
-  if(project)selected.add(project);
+  if(project.length)for(const id of project)selected.add(id);
   renderChecks();render();
   const errors=lib().getLastIngestReport?.().errors||[];status(n+' documento(s) incorporado(s) a '+source+'. '+docs().filter(d=>d.origin===source&&/^BM IDENTIFICADO|^BM PROVÁVEL/.test(d.bmStatus||'')).length+' possíveis BMs nesta origem. '+(errors.length?'Pendências: '+errors.slice(0,4).join('; ')+'. ':'')+'Revise os achados antes de comparar.');
  }catch(e){status('Falha ao analisar '+source+': '+e.message)}
@@ -542,6 +542,7 @@ function init(){
  $('puc3-csv').onclick=()=>csv(lastRows.map(f=>({puc:f.project,fonte:f.source,documento:f.document,referencia:f.reference||'',indicador:label[f.indicator]||f.indicator,valor:f.value,unidade:units[f.indicator],competencia:f.period,data_corte:f.cutoff,objeto:f.object,contrato:f.contract,numero_bm:f.bmNumber,apuracao:f.aggregation,conferido:f.verified?'SIM':'NÃO',observacao:f.note})),'PUC_ACHADOS_DOCUMENTAIS_SEI_BALANCO_SIOP.csv');
  $('puc3-report').onclick=()=>download(new Blob([reportHtml()],{type:'text/html;charset=utf-8'}),'RELATORIO_DOCUMENTAL_PUC_SEI_BALANCO_DOCAS.html');
  document.addEventListener('puc-documents-updated',render);
+ document.addEventListener('puc-library-projects-selected',e=>{const ids=e.detail?.projects||[];selected=new Set(ids);renderChecks();render();});
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
