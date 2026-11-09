@@ -1,52 +1,104 @@
-'use strict';(()=>{const root=document.getElementById('documentos');if(!root)return;const c=window.PUC_DOCAS_CONFIG||{},base=(c.supabaseUrl||'').replace(/\/$/,''),key=c.publishableKey||'',valid=/^https:\/\/[a-z0-9.-]+\.supabase\.(co|in)$/i.test(base)&&key&&!/sb_secret_|service_role/i.test(key);const s=document.createElement('section');s.className='panel';s.id='puc-docas-externas-manager';s.innerHTML='<h2>Central DOCAS — Formulários recebidos</h2><p class="muted">Consulta autenticada da base central. As informações enviadas pelas Docas permanecem pendentes de conferência pela SNP.</p><p id="pd-status" class="statusline"></p><form id="pd-login"><div class="formgrid"><label>E-mail do gestor<input type="email" id="pd-email" required autocomplete="username"></label><label>Senha<input type="password" id="pd-password" required autocomplete="current-password"></label></div><button class="btn" type="submit">Acessar recebimentos</button></form><div id="pd-painel" style="display:none"><div class="two-actions"><button class="btn" id="pd-refresh" type="button">Atualizar registros</button><button class="btn secondary" id="pd-export" type="button">Exportar registros CSV</button><button class="btn secondary" id="pd-exit" type="button">Sair</button></div><div class="scroll"><table class="data-table"><thead><tr><th>Recebimento</th><th>Companhia</th><th>UF</th><th>Empreendimento</th><th>Física</th><th>Financeira</th><th>Status</th><th>Conferência</th></tr></thead><tbody id="pd-rows"></tbody></table></div></div>';root.insertBefore(s,root.firstChild);const $=id=>s.querySelector('#'+id);let token='',rows=[],refreshToken='',expiry=0;const SESSION_KEY='puc_docas_manager_session';const saveSession=()=>{try{token&&refreshToken?sessionStorage.setItem(SESSION_KEY,JSON.stringify({token,refreshToken,expiry})):sessionStorage.removeItem(SESSION_KEY)}catch(e){}};async function renewSession(){if(!token||!refreshToken)return false;if(expiry>Date.now()+90000)return true;try{const r=await fetch(base+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({refresh_token:refreshToken})});if(!r.ok)throw Error('sessão expirada');const d=await r.json();token=d.access_token;refreshToken=d.refresh_token;expiry=Date.now()+(d.expires_in||3600)*1000;saveSession();return !!token}catch(e){token='';refreshToken='';expiry=0;saveSession();clearPrivate();status('Sessão expirada. Entre novamente para continuar.');$('pd-painel').style.display='none';$('pd-login').style.display='block';return false}};const fieldNames=['data_atualizacao','companhia_nome','uf','empreendimento','id_gov_pac','objetivo_descricao','investimento_total','origem_recursos','inicio','conclusao_prevista','situacao','fase','execucao_fisica','execucao_financeira','contratos_principais','resultados_entregas','restricoes_pendencias','providencias_proximos_marcos','responsavel_preenchimento'];const fieldLabels=['Data da atualização','Companhia / Executor','UF','Empreendimento','ID Gov / PAC','Objetivo / descrição','Investimento total (R$)','Origem dos recursos','Início','Conclusão prevista','Situação','Fase','Execução física (%)','Execução financeira (%)','Contratos principais','Resultados / entregas','Restrições / pendências','Providências / próximos marcos','Responsável pelo preenchimento'];const status=t=>$('pd-status').textContent=t;function clearPrivate(){const temp=$('pd-link-emitido');if(temp)temp.value='';const wrap=$('pd-link-emitido-area');if(wrap)wrap.hidden=true;rows=[];$('pd-rows').replaceChildren();window.PUC_DOCAS_DECLARACOES_EXTERNAS=[];window.dispatchEvent(new CustomEvent('puc:docas-externas-atualizadas',{detail:{quantidade:0}}))}const headers=(x={})=>({'apikey':key,'Authorization':'Bearer '+token,...x});function cell(tr,v){const t=tr.insertCell();t.textContent=String(v??'—');return t}async function load(){if(!token||!(await renewSession()))return;status('Consultando registros autorizados…');let r=await fetch(base+'/rest/v1/puc_doca_declaracoes?select=*&order=enviado_em.desc&limit=500',{headers:headers(),cache:'no-store'});if(!r.ok){status('Falha de consulta (HTTP '+r.status+').');return}rows=await r.json();const tbody=$('pd-rows');tbody.replaceChildren();for(const x of rows){let tr=tbody.insertRow();cell(tr,new Date(x.enviado_em).toLocaleString('pt-BR'));cell(tr,x.companhia_nome);cell(tr,x.uf);cell(tr,x.empreendimento);cell(tr,x.execucao_fisica==null?'—':x.execucao_fisica+'%');cell(tr,x.execucao_financeira==null?'—':x.execucao_financeira+'%');cell(tr,x.status);let d=document.createElement('details'),sum=document.createElement('summary');sum.textContent='Examinar';d.append(sum);let pre=document.createElement('pre');pre.style.whiteSpace='pre-wrap';pre.style.fontSize='11px';pre.textContent=fieldLabels.map((l,i)=>l+': '+(x[fieldNames[i]]??'—')).join('\n')+'\nProtocolo: '+x.protocolo;d.append(pre);let sel=document.createElement('select');['recebida','em_analise','validada','devolvida'].forEach(v=>{let o=document.createElement('option');o.value=v;o.textContent=v;sel.append(o)});sel.value=x.status;d.append(sel);let note=document.createElement('textarea');note.placeholder='Análise / justificativa';note.maxLength=5000;note.rows=3;note.value=x.analise||'';d.append(note);let btn=document.createElement('button');btn.className='btn';btn.type='button';btn.textContent='Salvar conferência';btn.onclick=async()=>{btn.disabled=true;try{let a=await fetch(base+'/rest/v1/puc_doca_declaracoes?id=eq.'+encodeURIComponent(x.id),{method:'PATCH',headers:headers({'Content-Type':'application/json','Prefer':'return=minimal'}),body:JSON.stringify({status:sel.value,analise:note.value})});if(!a.ok)throw Error('HTTP '+a.status);x.status=sel.value;x.analise=note.value;tr.cells[6].textContent=x.status;status('Conferência salva no banco.')}catch(e){status('Falha na gravação: '+e.message)}finally{btn.disabled=false}};d.append(btn);tr.insertCell().append(d)}window.PUC_DOCAS_DECLARACOES_EXTERNAS=rows.slice();window.dispatchEvent(new CustomEvent('puc:docas-externas-atualizadas',{detail:{quantidade:rows.length}}));status('Recebidas '+rows.length+' declaração(ões) — máximo 500 recentes.')}if(!valid){$('pd-login').querySelector('button').disabled=true;status('Banco central ainda não configurado.');return}$('pd-login').addEventListener('submit',async e=>{e.preventDefault();status('Validando perfil gerencial…');try{let r=await fetch(base+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:key,'Content-Type':'application/json'},body:JSON.stringify({email:$('pd-email').value.trim(),password:$('pd-password').value})});if(!r.ok)throw Error('Credenciais inválidas.');let session=await r.json(),access=session.access_token;if(!access)throw Error('Sem autenticação.');r=await fetch(base+'/rest/v1/puc_doca_perfis?select=papel,ativo&usuario_id=eq.'+encodeURIComponent(session.user.id),{headers:{apikey:key,Authorization:'Bearer '+access}});if(!r.ok)throw Error('Perfil indisponível.');let p=(await r.json())[0];if(!p||p.papel!=='gerente'||!p.ativo)throw Error('Permissão de gestor necessária.');token=access;refreshToken=session.refresh_token||'';expiry=Date.now()+(session.expires_in||3600)*1000;saveSession();$('pd-login').style.display='none';$('pd-painel').style.display='block';$('pd-password').value='';await load();if(window.PUC_DOCAS_TAB_DESEJADA==='links')$('pd-ver-companhias')?.click();window.PUC_DOCAS_TAB_DESEJADA=null;}catch(e){token='';status('Acesso negado: '+e.message)}});$('pd-refresh').onclick=load;$('pd-exit').onclick=()=>{token='';refreshToken='';expiry=0;saveSession();clearPrivate();$('pd-painel').style.display='none';$('pd-login').style.display='block';status('Sessão do gestor encerrada.')};$('pd-export').onclick=()=>{if(!rows.length)return status('Nenhum registro para exportar.');let q=x=>{let a=String(x??'');if(/^[\s=+@-]/.test(a))a="'"+a;return '"'+a.replace(/"/g,'""')+'"'};let csv='\ufeff'+[fieldLabels,...rows.map(r=>fieldNames.map(k=>r[k]))].map(row=>row.map(q).join(';')).join('\r\n');let url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));let a=document.createElement('a');a.href=url;a.download='PUC_DOCAS_Recebimentos.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};window.setInterval(()=>{if(token&&!document.hidden)load()},30000);window.addEventListener('focus',()=>{if(token)load()});window.addEventListener('online',()=>{if(token)load()});(async()=>{try{const old=JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');if(!old?.token||!old?.refreshToken)return;token=old.token;refreshToken=old.refreshToken;expiry=old.expiry||0;if(!(await renewSession()))return;const usr=await fetch(base+'/auth/v1/user',{headers:{apikey:key,Authorization:'Bearer '+token}});if(!usr.ok)throw Error('Usuário não encontrado');const user=await usr.json();const profile=await fetch(base+'/rest/v1/puc_doca_perfis?select=papel,ativo&usuario_id=eq.'+encodeURIComponent(user.id),{headers:headers()});const p=(await profile.json())[0];if(!p||p.papel!=='gerente'||!p.ativo)throw Error('Perfil sem permissão');$('pd-login').style.display='none';$('pd-painel').style.display='block';await load();if(window.PUC_DOCAS_TAB_DESEJADA==='links')$('pd-ver-companhias')?.click();window.PUC_DOCAS_TAB_DESEJADA=null;}catch(e){token='';refreshToken='';expiry=0;saveSession();clearPrivate();status('Conecte-se para acessar os recebimentos')}})();
-const conteudo=$('pd-painel'),registros=document.createElement('div');
-registros.id='pd-registros-conteudo';
-while(conteudo.firstChild)registros.appendChild(conteudo.firstChild);
-const seletor=document.createElement('div');
-seletor.className='two-actions';
-seletor.innerHTML='<button class="btn" type="button" id="pd-ver-registros">Formulários recebidos</button><button class="btn secondary" type="button" id="pd-ver-companhias">Acessos das DOCAS</button>';
-const companhias=document.createElement('div');companhias.hidden=true;companhias.id='pd-companhias';
-companhias.innerHTML='<p class="muted">Companhias vinculadas ao Balanço MPOR 2026. Os convites são administrados na central da SNP.</p><div class="scroll"><table class="data-table"><thead><tr><th>Companhia</th><th>Referências do Balanço</th><th>Envios</th><th>Validade</th><th>Convite externo</th></tr></thead><tbody id="pd-companhias-dados"></tbody></table></div>';
-conteudo.append(seletor,registros,companhias);
-const conviteBox=document.createElement('div');conviteBox.id='pd-link-emitido-area';conviteBox.hidden=true;
-conviteBox.innerHTML='<label>Endereço recém-emitido para a DOCA<input id="pd-link-emitido" type="text" readonly autocomplete="off"></label><button id="pd-copiar-emitido" class="btn" type="button">Copiar endereço</button><p class="muted">Esse endereço permite somente preencher o formulário externo. Não concede acesso ao BI gerencial.</p>';
-companhias.append(conviteBox);
-$('pd-copiar-emitido').onclick=async()=>{
- const campo=$('pd-link-emitido');if(!campo.value)return;
- try{await navigator.clipboard.writeText(campo.value);status('Link copiado.')}
- catch{campo.select();document.execCommand('copy');status('Link selecionado para cópia.')}
-};
-
-async function exibirCompanhias(){
- const body=$('pd-companhias-dados');body.replaceChildren();
- if(!token||!(await renewSession()))return;
- const resp=await fetch(base+'/rest/v1/rpc/puc_doca_gerencia',{method:'POST',headers:headers({'Content-Type':'application/json'}),body:JSON.stringify({p_acao:'listar',p_codigo:null}),cache:'no-store'});
- if(!resp.ok){status('Não foi possível consultar as DOCAS (HTTP '+resp.status+').');return}
- const data=await resp.json();
- for(const item of data.convites||[]){
-  const tr=body.insertRow();
-  cell(tr,item.nome);cell(tr,item.empreendimentos);
-  cell(tr,String(item.enviados||0)+' / '+String(item.max_envios||300));
-  cell(tr,item.ativo?new Date(item.expira_em).toLocaleDateString('pt-BR'):'Inativo');
-  const botao=document.createElement('button');botao.type='button';botao.className='btn secondary';botao.textContent='Emitir novo link';
-  botao.onclick=async()=>{
-   if(!confirm('Emitir um novo link para '+item.nome+'? O link anterior deixará de funcionar.'))return;
-   botao.disabled=true;
-   try{
-    const resp=await fetch(base+'/rest/v1/rpc/puc_doca_gerencia',{method:'POST',headers:headers({'Content-Type':'application/json'}),body:JSON.stringify({p_acao:'renovar',p_codigo:item.codigo}),cache:'no-store'});
-    if(!resp.ok)throw Error('HTTP '+resp.status);
-    const d=await resp.json();if(!d.ok||!d.link)throw Error('Não foi possível emitir o convite');
-    $('pd-link-emitido').value=d.link;$('pd-link-emitido-area').hidden=false;
-    status('Novo link emitido para '+item.nome+'. Copie e encaminhe apenas à Companhia. O link anterior foi invalidado.');
-    await exibirCompanhias()
-   }catch(e){status('Falha ao emitir convite: '+e.message)}
-   finally{botao.disabled=false}
-  };
-  tr.insertCell().append(botao);
-
+/* DOCAS SNP — gestão por token administrativo; nunca publicar o token no repositório. */
+'use strict';
+(()=>{
+ const root=document.getElementById('docas');if(!root)return;
+ const cfg=window.PUC_DOCAS_CONFIG||{},base=String(cfg.supabaseUrl||'').replace(/\/$/,''),key=cfg.publishableKey||'';
+ const area=document.createElement('section');area.id='puc-docas-externas-manager';area.className='panel';
+ area.innerHTML='<h2>Central DOCAS — Formulários recebidos</h2>'+
+ '<p class="muted">Acesso administrativo por token exclusivo, sem e-mail e sem senha. Somente a SNP pode emitir convites ou consultar dados recebidos.</p>'+
+ '<p class="statusline" id="pd-status" role="status" aria-live="polite">Verificando autorização gerencial por token...</p>'+
+ '<div id="pd-login"><p class="notice">Acesso restrito: abra o link administrativo individual fornecido à SNP. Não há cadastro nem formulário de senha.</p></div>'+
+ '<div id="pd-painel" style="display:none"><div class="two-actions"><button class="btn" type="button" id="pd-ver-registros">Formulários recebidos</button>'+
+ '<button class="btn secondary" type="button" id="pd-ver-companhias">Gerar tokens das DOCAS</button>'+
+ '<button class="btn secondary" type="button" id="pd-refresh">Atualizar</button><button class="btn secondary" type="button" id="pd-exit">Encerrar acesso</button></div>'+
+ '<div id="pd-registros-conteudo"><div class="scroll"><table class="data-table"><thead><tr><th>Recebimento</th><th>Companhia</th><th>UF</th><th>Empreendimento</th><th>Física</th><th>Financeira</th><th>Status</th><th>Conferência</th></tr></thead><tbody id="pd-rows"></tbody></table></div></div>'+
+ '<div id="pd-companhias" hidden><p class="muted">Os links emitidos dão acesso exclusivo ao preenchimento do formulário externo. Emitir novo token invalida o anterior para a mesma Companhia.</p>'+
+ '<div class="scroll"><table class="data-table"><thead><tr><th>Companhia</th><th>Envios</th><th>Validade</th><th>Token</th></tr></thead><tbody id="pd-companhias-dados"></tbody></table></div>'+
+ '<div id="pd-link-emitido-area" hidden><label>Link recém-emitido para encaminhamento exclusivo<input id="pd-link-emitido" readonly type="text" autocomplete="off"></label><button class="btn" type="button" id="pd-copiar-emitido">Copiar link</button></div></div></div>';
+ const before=document.getElementById('puc-docas-acessos-portal');
+ if(before)before.insertAdjacentElement('afterend',area);else root.insertBefore(area,root.firstChild);
+ const $=id=>document.getElementById(id);
+ const status=msg=>$('pd-status').textContent=msg;
+ let token='',rows=[],companies=[];
+ const SESSION_KEY='puc_docas_token_gestao_v1';
+ const params=new URLSearchParams(location.hash.replace(/^#/,''));
+ const admin=params.get('gestor');
+ if(admin&&/^[a-f0-9]{64}$/.test(admin)){
+   token=admin;
+   try{sessionStorage.setItem(SESSION_KEY,token)}catch{}
+   history.replaceState(null,'',location.pathname+location.search);
+   document.querySelector('#nav [data-page="docas"]')?.click();
+ }else try{token=sessionStorage.getItem(SESSION_KEY)||''}catch{}
+ const fields=['data_atualizacao','companhia_nome','uf','empreendimento','id_gov_pac','objetivo_descricao','investimento_total','origem_recursos','inicio','conclusao_prevista','situacao','fase','execucao_fisica','execucao_financeira','contratos_principais','resultados_entregas','restricoes_pendencias','providencias_proximos_marcos','responsavel_preenchimento'];
+ const labels=['Data da atualização','Companhia','UF','Empreendimento','ID GOV/PAC','Objetivo','Investimento total','Origem dos recursos','Início','Conclusão prevista','Situação','Fase','Execução física','Execução financeira','Contratos','Resultados','Restrições','Providências','Responsável'];
+ const td=(tr,value)=>{let cell=tr.insertCell();cell.textContent=String(value??'—');return cell};
+ const clear=()=>{rows=[];companies=[];$('pd-rows').replaceChildren();$('pd-companhias-dados').replaceChildren();$('pd-link-emitido').value='';$('pd-link-emitido-area').hidden=true;window.PUC_DOCAS_DECLARACOES_EXTERNAS=[];window.dispatchEvent(new CustomEvent('puc:docas-externas-atualizadas',{detail:{quantidade:0}}))};
+ async function api(action,body={}){
+  if(!token)throw Error('Link administrativo necessário');
+  const resp=await fetch(base+'/functions/v1/puc-docas-gestao-token',{method:'POST',mode:'cors',cache:'no-store',headers:{'Content-Type':'application/json',apikey:key},body:JSON.stringify({action,token,...body})});
+  const out=await resp.json().catch(()=>({}));
+  if(!resp.ok||!out.ok)throw Error(out.erro||('HTTP '+resp.status));
+  return out;
  }
- status((data.convites||[]).length+' companhias registradas no Supabase.')
-}
-$('pd-ver-registros').onclick=()=>{registros.hidden=false;companhias.hidden=true;};
-$('pd-ver-companhias').onclick=()=>{registros.hidden=true;companhias.hidden=false;exibirCompanhias().catch(e=>status(e.message))};
+ function records(){
+  $('pd-rows').replaceChildren();
+  for(const x of rows){
+   const tr=$('pd-rows').insertRow();
+   td(tr,x.enviado_em?new Date(x.enviado_em).toLocaleString('pt-BR'):'—');
+   td(tr,x.companhia_nome);td(tr,x.uf);td(tr,x.empreendimento);
+   td(tr,x.execucao_fisica==null?'—':x.execucao_fisica+'%');
+   td(tr,x.execucao_financeira==null?'—':x.execucao_financeira+'%');td(tr,x.status);
+   const cell=tr.insertCell(),details=document.createElement('details'),summary=document.createElement('summary');
+   summary.textContent='Examinar e conferir';details.append(summary);
+   const pre=document.createElement('pre');pre.style.cssText='white-space:pre-wrap;font-size:12px';
+   pre.textContent=labels.map((v,i)=>v+': '+(x[fields[i]]??'—')).join('\n')+'\nProtocolo: '+x.protocolo;details.append(pre);
+   const select=document.createElement('select');
+   for(const v of ['recebida','em_analise','validada','devolvida']){const o=document.createElement('option');o.value=v;o.textContent=v;select.append(o)}
+   select.value=x.status;details.append(select);
+   const note=document.createElement('textarea');note.rows=3;note.maxLength=5000;note.placeholder='Análise ou justificativa';note.value=x.analise||'';details.append(note);
+   const save=document.createElement('button');save.className='btn';save.type='button';save.textContent='Salvar conferência';
+   save.onclick=async()=>{save.disabled=true;try{await api('conferir',{id:x.id,status:select.value,analise:note.value});x.status=select.value;x.analise=note.value;tr.cells[6].textContent=x.status;status('Conferência salva no banco de dados')}catch(e){status('Erro: '+e.message)}finally{save.disabled=false}};
+   details.append(save);cell.append(details);
+  }
+ }
+ function renderCompanies(){
+  const body=$('pd-companhias-dados');body.replaceChildren();
+  for(const c of companies){
+   const tr=body.insertRow();td(tr,c.companhia_nome);td(tr,(c.enviados||0)+' / '+c.max_envios);
+   td(tr,c.ativo?new Date(c.expira_em).toLocaleDateString('pt-BR'):'Inativo');
+   const actions=tr.insertCell(),generate=document.createElement('button');generate.className='btn secondary';generate.textContent='Emitir token';generate.type='button';
+   generate.onclick=async()=>{
+     if(!confirm('Gerar novo token para '+c.companhia_nome+'? O token anterior será invalidado.'))return;
+     generate.disabled=true;
+     try{const a=await api('emitir',{codigo:c.companhia_codigo});$('pd-link-emitido').value=a.link;$('pd-link-emitido-area').hidden=false;status('Token emitido. Copie e encaminhe somente à Companhia.');await load(false)}catch(e){status('Erro ao gerar: '+e.message)}finally{generate.disabled=false}
+   };
+   const revoke=document.createElement('button');revoke.className='btn secondary';revoke.type='button';revoke.textContent='Revogar';revoke.style.marginLeft='7px';
+   revoke.onclick=async()=>{if(!confirm('Revogar o acesso de '+c.companhia_nome+'?'))return;try{await api('revogar',{codigo:c.companhia_codigo});status('Acesso revogado');await load(false)}catch(e){status('Falha: '+e.message)}};
+   actions.append(generate,revoke);
+  }
+ }
+ async function load(announce=true){
+  if(!token)return;
+  try{
+   const d=await api('listar');rows=d.registros||[];companies=d.companhias||[];
+   $('pd-login').style.display='none';$('pd-painel').style.display='block';
+   records();renderCompanies();
+   window.PUC_DOCAS_DECLARACOES_EXTERNAS=rows.slice();
+   window.dispatchEvent(new CustomEvent('puc:docas-externas-atualizadas',{detail:{quantidade:rows.length}}));
+   if(announce)status(rows.length+' formulário(s) recebidos · '+companies.length+' companhias cadastradas.');
+   if(window.PUC_DOCAS_TAB_DESEJADA==='links')$('pd-ver-companhias').click();
+   else if(window.PUC_DOCAS_TAB_DESEJADA==='records')$('pd-ver-registros').click();
+   window.PUC_DOCAS_TAB_DESEJADA=null;
+  }catch(e){
+   status('Não foi possível autorizar a gestão por token: '+e.message);
+   $('pd-painel').style.display='none';$('pd-login').style.display='block';
+   clear();
+  }
+ }
+ $('pd-ver-registros').onclick=()=>{$('pd-registros-conteudo').hidden=false;$('pd-companhias').hidden=true};
+ $('pd-ver-companhias').onclick=()=>{$('pd-registros-conteudo').hidden=true;$('pd-companhias').hidden=false};
+ $('pd-refresh').onclick=()=>load();
+ $('pd-exit').onclick=()=>{token='';try{sessionStorage.removeItem(SESSION_KEY)}catch{}clear();$('pd-painel').style.display='none';$('pd-login').style.display='block';status('Acesso gerencial encerrado')};
+ $('pd-copiar-emitido').onclick=()=>{const link=$('pd-link-emitido').value;if(link)navigator.clipboard.writeText(link).then(()=>status('Link copiado')).catch(()=>status('Selecione e copie o link'))};
+ if(token)load();else status('Abra o endereço administrativo exclusivo para habilitar emissão de tokens e recebimentos.');
 })();
