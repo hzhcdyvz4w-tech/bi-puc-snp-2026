@@ -1,5 +1,7 @@
 # BI Executivo PUC — V17 · Documentos, Confronto e Relatório
 
+Access: https://hzhcdyvz4w-tech.github.io/bi-puc-snp-2026/?utm_source=chatgpt.com
+
 **Atualização técnica de 30/10/2026.** O fluxo vigente centraliza a anexação exclusivamente na aba **Documentos**, em três quadros: **SEI (BMs)**, **Balanço** e **SIOP**. A seleção das 12 PUCs também está em Documentos. As abas **Confronto das Fontes** e **Relatório Crítico** usam somente arquivos anexados e achados revisados; a base SIOP embutida é **referencial** e não constitui confronto documental.
 
 **Testes realizados:** 18 testes de regressão e **27 testes funcionais em Chrome headless**, todos aprovados, além da verificação de sintaxe dos módulos. **Pendente:** homologação no navegador/rede institucional e conferência documental dos processos e valores oficiais. Ver [relatório da auditoria](docs/AUDITORIA_INTEGRAL_2026-10-30.md). Executar regressões locais com `node tools/test_documental_regressao.js`.
