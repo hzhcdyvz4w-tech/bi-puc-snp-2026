@@ -406,7 +406,7 @@ function init(){
  document.addEventListener('puc-documents-updated',()=>{refreshSelectedSEIBMs();drawSheet()});
  document.addEventListener('puc-sei-selection-updated',()=>{refreshSelectedSEIBMs();renderRows();drawSheet()});
   $f('ficha-generate').onclick=drawSheet;
- $f('ficha-print-btn').onclick=()=>{if(!selectedId){alert('Selecione empreendimento.');return}drawSheet();document.body.classList.add('ficha-print');window.print()};window.addEventListener('afterprint',()=>document.body.classList.remove('ficha-print'));
+ $f('ficha-print-btn').onclick=()=>{if(!selectedId&&!document.getElementById('puc-curva-documental')?.querySelector('.puc-curva-report')){alert('Selecione um empreendimento ou um BM com Curva S em Documentos.');return}if(selectedId)drawSheet();document.body.classList.add('ficha-print');window.print()};window.addEventListener('afterprint',()=>document.body.classList.remove('ficha-print'));
  $f('ficha-open-critico').onclick=()=>{if(!selectedId){alert('Selecione empreendimento.');return}const p=data.projetos.find(x=>x.id===selectedId);nav('relatorio');$f('report-company').value=p.empresa;updateCompanyProject('report-company','report-project','Selecione o empreendimento');$f('report-project').value=selectedId;showCritical()};
  updateProjects();drawSheet();refreshSelectedSEIBMs();
  window.PUCFichasBM={openProject,openSources:(id,kind='sei')=>{if(id)openProject(id);else nav('fichas');sourcePanel(true,kind)},parseBmText,physicalSeries,drawSheet,getState:()=>({bmRows,balances,planned}),selectedSEIDocs,loadSelectedSEIBMs,refreshSelectedSEIBMs,importProcesses,syncConfront};
