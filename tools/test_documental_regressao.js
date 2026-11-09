@@ -140,7 +140,7 @@ test('Números de BM em anexos exportados do SEI',()=>{
 test('Relação documental mantém seleção do usuário e não inclui quantidade no processo',()=>{
  assert.ok(!compareCode.includes("filterMessage+=' | '+seiZipSelected.size+' documento(s) selecionado(s)'"));
  assert.ok(libraryCode.includes('assignBMContext'));
- assert.ok(libraryCode.includes("(!project||x.project===project)"));
+ assert.ok(libraryCode.includes("(!project||projectIds(x).includes(project))"));
 });
 test('Execução financeira percentual não vira reais',()=>{const v=engine.indicators('Execução financeira: 55,3%');assert.equal(v.length,1);assert.equal(v[0].type,'Execução financeira (%)')});
 test('Execução financeira monetária explícita',()=>{const v=engine.indicators('Execução financeira: R$ 1.234.567,89');assert.equal(v.length,1);assert.equal(v[0].type,'Execução financeira (R$ candidato)')});
