@@ -14,12 +14,12 @@
       const painel=document.createElement('section');
       painel.className='panel';
       painel.id='puc-docas-acessos-portal';
-      painel.innerHTML='<h2>Informações das DOCAS — Acesso e recebimentos</h2>'+
-        '<p class="muted">Ambiente interno da SNP. O gestor entra com e-mail e senha para liberar convites individuais e consultar as declarações enviadas. O formulário externo não disponibiliza outras áreas do BI.</p>'+
+      painel.innerHTML='<h2>Informações das DOCAS — Tokens e recebimentos</h2>'+
+        '<p class="muted">Emita tokens individuais de preenchimento no BI principal e consulte as respostas recebidas. Cada token abre somente o formulário da companhia autorizada, sem login nem senha para quem preenche.</p>'+
         '<div class="two-actions"><button class="btn" id="puc-docas-ver-recebidos" type="button">Ver formulários recebidos</button>'+
-        '<button class="btn secondary" id="puc-docas-liberar" type="button">Liberar acesso ao formulário</button>'+
+        '<button class="btn secondary" id="puc-docas-liberar" type="button">Gerar tokens de acesso</button>'+
         '<a class="btn secondary" href="docas-externo/" target="_blank" rel="noopener noreferrer">Visualizar página externa</a></div>'+
-        '<p class="muted" id="puc-docas-painel-ajuda">Para enviar à companhia, gere e copie um link individual em “Liberar acesso”. O endereço genérico não permite preenchimento sem convite.</p>';
+        '<p class="muted" id="puc-docas-painel-ajuda">Clique em “Gerar tokens de acesso”, selecione a companhia e emita seu link individual. O acesso externo não exige e-mail nem senha. A consulta gerencial dos recebimentos permanece restrita à SNP.</p>';
       docas.insertBefore(painel,docas.firstChild);
       const go=(tipo)=>{
         window.PUC_DOCAS_TAB_DESEJADA=tipo;
@@ -61,7 +61,7 @@
       const manage=document.createElement('button');
       manage.className='btn secondary';
       manage.type='button';
-      manage.textContent='Gerenciar acessos das DOCAS';
+      manage.textContent='Gerar tokens das DOCAS';
       function go(which){
         document.querySelector('#nav [data-page="docas"]')?.click();
         const panel=$('puc-docas-externas-manager');
