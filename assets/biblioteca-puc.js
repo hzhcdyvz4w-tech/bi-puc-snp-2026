@@ -255,7 +255,7 @@ function setup(){
   const update=()=>{
    const ids=chosenProjects();summary.textContent=!ids.length?'Marcar uma ou mais PUCs':ids.length===1?ids[0]+' selecionada':ids.length+' PUCs selecionadas · '+ids.join(', ');
    select.value=ids[0]||'';
-   const n=E('puc-lib-multi-count');if(n)n.textContent=ids.length+' de '+projectData().length+' PUCs marcadas';
+   const n=E('puc-lib-multi-count');if(n)n.textContent=ids.length+' de '+projectData().length+' PUCs marcadas';document.dispatchEvent(new CustomEvent('puc-library-projects-selected',{detail:{projects:ids}}));
   };
   list.addEventListener('change',update);
   all.onclick=()=>{list.querySelectorAll('input').forEach(x=>x.checked=true);update()};
@@ -283,7 +283,7 @@ async function saveFinding(docId,finding){const item=stored.find(d=>d.id===docId
  else {find.id=crypto.randomUUID();item.findings.push(find)}
  await transact('readwrite',st=>st.put(item));await reload();return find}
 async function deleteFinding(docId,findingId){const item=stored.find(d=>d.id===docId);if(!item)return;item.findings=(item.findings||[]).filter(x=>x.id!==findingId);await transact('readwrite',st=>st.put(item));await reload()}
-window.PUCDocLibrary={list:()=>stored.map(x=>({id:x.id,name:x.name,container:x.container,origin:x.origin,project:x.project,projects:projectIds(x),ref:x.ref,category:x.category,bmStatus:x.bmStatus,bmNumber:x.bm?.number||'',bmPeriod:x.bm?.period||'',quality:x.quality,candidates:x.candidates||[],findings:x.findings||[],text:x.text||'',workName:x.workName||'',hash:x.hash})),ingest:async(files,origin,project,ref,selectedZipEntries=null)=>{if(!db)throw Error('Banco documental não inicializado');return ingest(files,origin,project,ref,selectedZipEntries)},saveFinding,deleteFinding,assignBMContext,getLastIngestReport:()=>({...lastIngestReport,errors:[...lastIngestReport.errors]}),refresh:reload};
+window.PUCDocLibrary={getSelectedProjects:chosenProjects,list:()=>stored.map(x=>({id:x.id,name:x.name,container:x.container,origin:x.origin,project:x.project,projects:projectIds(x),ref:x.ref,category:x.category,bmStatus:x.bmStatus,bmNumber:x.bm?.number||'',bmPeriod:x.bm?.period||'',quality:x.quality,candidates:x.candidates||[],findings:x.findings||[],text:x.text||'',workName:x.workName||'',hash:x.hash})),ingest:async(files,origin,project,ref,selectedZipEntries=null)=>{if(!db)throw Error('Banco documental não inicializado');return ingest(files,origin,project,ref,selectedZipEntries)},saveFinding,deleteFinding,assignBMContext,getLastIngestReport:()=>({...lastIngestReport,errors:[...lastIngestReport.errors]}),refresh:reload};
 
 async function init(){try{db=await openDB();setup();await reload();window.PUCDocLibrary.storageReady=true}catch(err){const msg='Não foi possível inicializar a biblioteca local: '+err.message;window.PUCDocLibrary.storageError=msg;status(msg);if(!E('puc-library-status')){const notice=document.createElement('p');notice.id='puc-library-error';notice.className='notice';notice.textContent=msg;E('documentos')?.insertBefore(notice,E('documentos').firstChild)}console.error(msg,err)}}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
