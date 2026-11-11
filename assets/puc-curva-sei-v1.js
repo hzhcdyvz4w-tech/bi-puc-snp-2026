@@ -145,6 +145,7 @@ function horizontalTable(points){
   const header=items.map(p=>'<th>BM '+String(p.number).padStart(2,'0')+'</th>').join('');
   const line=(title,key,formatter,kind)=>'<tr class="puc-curva-row-'+kind+'"><th>'+title+'</th>'+items.map(p=>'<td>'+formatter(Number.isFinite(p[key])?p[key]:null)+'</td>').join('')+'</tr>';
   return '<div class="puc-curva-table-scroll"><table class="puc-curva-table"><thead><tr><th>Indicador</th>'+header+'</tr></thead><tbody>'+
+   line('Página do PDF','page',v=>v===null?'—':v,'neutral')+
    line('Período (dias)','day',v=>v===null?'—':v,'neutral')+
    line('Previsto (parcial) — R$','financeiroPrevistoParcial',money,'plan')+
    line('Realizado (parcial) — R$','financeiroRealizadoParcial',money,'real')+
@@ -231,6 +232,7 @@ async function render(){
  if(!currentProject())return showLegacy('Escolha o empreendimento para consultar os BMs.');
  if(!doc)return showLegacy('Histórico previsto × realizado não identificado entre os BMs vinculados.');
  const status=byId('puc-curva-document-status');
+ activeReport=null;box.replaceChildren();const legacy=byId('ficha-print-area');if(legacy)legacy.hidden=true;
  status.textContent='Lendo a tabela histórica do PDF selecionado...';
  try{
   const result=await extract(doc);if(run!==generation)return;
