@@ -1,143 +1,54 @@
-/* Integração declaratória automática — formulário DOCAS → Supabase → Documentos e Confronto */
-(function () {
-  'use strict';
-  const $ = (id) => document.getElementById(id);
-  function init() {
-    const localInput=$('puc3-files-DOCAS');
-    const card=localInput?.closest('.puc3-source');
-    const central=$('puc3-central-files');
-    const manager=$('puc-docas-externas-manager');
-
-    // O painel gerencial fica na aba DOCAS, nunca no portal externo.
-    const docas=$('docas');
-    if(docas&&!$('puc-docas-acessos-portal')){
-      const painel=document.createElement('section');
-      painel.className='panel';
-      painel.id='puc-docas-acessos-portal';
-      painel.innerHTML='<h2>Informações das DOCAS — Tokens e recebimentos</h2>'+
-        '<p class="muted">Emita tokens individuais de preenchimento no BI principal e consulte as respostas recebidas. Cada token abre somente o formulário da companhia autorizada, sem login nem senha para quem preenche.</p>'+
-        '<div class="two-actions"><button class="btn" id="puc-docas-ver-recebidos" type="button">Ver formulários recebidos</button>'+
-        '<button class="btn secondary" id="puc-docas-liberar" type="button">Gerar tokens de acesso</button>'+
-        '<a class="btn secondary" href="docas-externo/" target="_blank" rel="noopener noreferrer">Visualizar página externa</a></div>'+
-        '<p class="muted" id="puc-docas-painel-ajuda">Clique em “Gerar tokens de acesso”, selecione a companhia e emita seu link individual. O acesso externo não exige e-mail nem senha. A consulta gerencial dos recebimentos permanece restrita à SNP.</p>';
-      docas.insertBefore(painel,docas.firstChild);
-      const go=(tipo)=>{
-        window.PUC_DOCAS_TAB_DESEJADA=tipo;
-        if($('pd-painel')?.style.display==='block'){
-          $('pd-ver-'+(tipo==='links'?'companhias':'registros'))?.click();
-          window.PUC_DOCAS_TAB_DESEJADA=null;
-        }
-        $('puc-docas-externas-manager')?.scrollIntoView({behavior:'smooth',block:'start'});
-        if($('pd-login')?.style.display!=='none')$('pd-email')?.focus();
-      };
-      $('puc-docas-ver-recebidos').addEventListener('click',()=>go('records'));
-      $('puc-docas-liberar').addEventListener('click',()=>go('links'));
-    }
-    // Reaproveita o gerenciador autenticado e a mesma base de dados.
-    if(docas&&manager&&manager.parentElement!==docas){
-      const header=$('puc-docas-acessos-portal');
-      header?.insertAdjacentElement('afterend',manager);
-    }
-    if(card&&!card.dataset.docasAuto){
-      card.dataset.docasAuto='1';
-      card.hidden=false;
-      card.classList.add('puc3-docas-integrada');
-      // Preservar nós e listeners anteriores (compatibilidade), mas nunca pedir JSON.
-      const title=card.querySelector('h3');
-      for(const node of [...card.children])if(node!==title)node.hidden=true;
-      const info=document.createElement('p');
-      info.className='muted';
-      info.textContent='As DOCAS preenchem o formulário externo exclusivo. Os registros são recebidos automaticamente no banco do BI, sem anexar JSON ou importar arquivos.';
-      const count=document.createElement('p');
-      count.id='puc-docas-card-status';
-      count.className='statusline';
-      count.textContent='Acesse a central abaixo para consultar as respostas das 13 companhias.';
-      const actions=document.createElement('div');
-      actions.className='two-actions';
-      const records=document.createElement('button');
-      records.className='btn';
-      records.type='button';
-      records.textContent='Ver formulários recebidos';
-      const manage=document.createElement('button');
-      manage.className='btn secondary';
-      manage.type='button';
-      manage.textContent='Gerar tokens das DOCAS';
-      function go(which){
-        document.querySelector('#nav [data-page="docas"]')?.click();
-        const panel=$('puc-docas-externas-manager');
-        if(!panel){count.textContent='Central indisponível. Atualize a página.';return}
-        window.PUC_DOCAS_TAB_DESEJADA=which==='links'?'links':'records';
-        if($('pd-painel')?.style.display==='block'){
-          if(which==='links')$('pd-ver-companhias')?.click();
-          else $('pd-ver-registros')?.click();
-        }
-        panel.scrollIntoView({behavior:'smooth',block:'start'});
-      }
-      records.onclick=()=>go('records');
-      manage.onclick=()=>go('links');
-      actions.append(records,manage);
-      card.append(info,count,actions);
-      if(!$('puc-docas-card-css')){
-        const css=document.createElement('style');
-        css.id='puc-docas-card-css';
-        css.textContent='#puc3-central-files .puc3-docas-integrada[hidden]{display:block!important}'+
-          '#puc3-central-files .puc3-docas-integrada > [hidden]{display:none!important}'+
-          '#puc3-central-files .puc3-docas-integrada .two-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}'+
-          '#puc3-central-files .puc3-docas-integrada .two-actions .btn{margin:0}'+
-          '#puc-docas-externas-manager{scroll-margin-top:18px}';
-        document.head.appendChild(css);
-      }
-    }
-    const cmp=$('comparacao');
-    if(cmp&&!$('puc-docas-compare-automatico')){
-      const pane=document.createElement('section');pane.id='puc-docas-compare-automatico';pane.className='panel';
-      const heading=document.createElement('h2');heading.textContent='DOCAS — Declarações recebidas automaticamente';
-      const note=document.createElement('p');note.className='muted';
-      note.textContent='Fonte: declarações externas recebidas no banco central. Dados não substituem o processo SEI, Balanço ou medição e não são automaticamente homologados.';
-      const status=document.createElement('p');status.id='puc-docas-auto-status';status.className='statusline';
-      status.textContent='Aguardando autenticação gerencial para sincronizar informações do Supabase.';
-      const wrap=document.createElement('div');wrap.className='scroll';
-      const table=document.createElement('table');table.className='data-table';
-      table.style.minWidth='720px';
-      const thead=document.createElement('thead');
-      const tr=document.createElement('tr');
-      for (const name of ['Companhia','UF','Empreendimento','Data','Execução física','Execução financeira','Situação']) {
-        const th=document.createElement('th');th.textContent=name;tr.append(th);
-      }
-      thead.append(tr);
-      const tbody=document.createElement('tbody');tbody.id='puc-docas-auto-rows';
-      table.append(thead,tbody);wrap.append(table);pane.append(heading,note,status,wrap);
-      cmp.append(pane);
-    }
+/* Integração documental DOCAS: somente atalhos e resumo no Confronto.
+   Gestão de convites, autenticação e recebimentos ficam exclusivamente no módulo gerenciador. */
+'use strict';
+(()=>{
+ const $=id=>document.getElementById(id);
+ function init(){
+  const input=$('puc3-files-DOCAS'),card=input?.closest('.puc3-source');
+  if(card&&!card.dataset.docasBridge){
+   card.dataset.docasBridge='1';card.hidden=false;card.classList.add('puc3-docas-integrada');
+   const title=card.querySelector('h3');
+   for(const element of Array.from(card.children))if(element!==title)element.hidden=true;
+   const p=document.createElement('p');p.className='muted';
+   p.textContent='As DOCAS enviam formulários exclusivamente por seus convites externos. Os registros entram no Supabase e aparecem automaticamente na Central DOCAS do BI.';
+   const line=document.createElement('p');line.id='puc-docas-card-status';line.className='statusline';line.textContent='Acesse a Central DOCAS para consultar respostas e administrar convites.';
+   const action=document.createElement('button');action.className='btn';action.type='button';action.textContent='Abrir Central DOCAS';
+   action.onclick=()=>{
+     if(typeof window.PUC_DOCAS_ABRIR==='function')window.PUC_DOCAS_ABRIR('records');
+     else document.querySelector('#nav [data-page="docas"]')?.click();
+   };
+   card.append(p,line,action);
+   const css=document.createElement('style');css.id='puc-docas-card-style';
+   css.textContent='#puc3-central-files .puc3-docas-integrada[hidden]{display:block!important}#puc3-central-files .puc3-docas-integrada > [hidden]{display:none!important}';
+   document.head.append(css);
   }
-  function sync(){
-    init();
-    const data=window.PUC_DOCAS_DECLARACOES_EXTERNAS;
-    if(!Array.isArray(data))return;
-    const cardStatus=$('puc-docas-card-status');
-    if(cardStatus)cardStatus.textContent=data.length+' formulário(s) recebido(s). Consulte a central para conferir.';
-    const status=$('puc-docas-auto-status'),tbody=$('puc-docas-auto-rows');
-    if(!tbody)return;
-    tbody.replaceChildren();
-    const ordered=data.slice().sort((a,b)=>String(b.enviado_em||'').localeCompare(String(a.enviado_em||'')));
-    for(const r of ordered.slice(0,250)){
-      const tr=document.createElement('tr');
-      const info=[r.companhia_nome,r.uf,r.empreendimento,r.data_atualizacao,
-        r.execucao_fisica==null?'Não informado':r.execucao_fisica+'%',
-        r.execucao_financeira==null?'Não informado':r.execucao_financeira+'%',
-        r.status||'recebida'];
-      for(const value of info){const td=document.createElement('td');td.textContent=String(value??'—');tr.append(td)}
-      tbody.append(tr);
-    }
-    if(status)status.textContent=ordered.length+' declaração(ões) diretamente do Supabase; valores declarados, sujeitos à conferência técnica.';
+  const compare=$('comparacao');
+  if(compare&&!$('puc-docas-compare-automatico')){
+   const el=document.createElement('section');el.id='puc-docas-compare-automatico';el.className='panel';
+   const h=document.createElement('h2');h.textContent='DOCAS — Dados declarados no Supabase';
+   const p=document.createElement('p');p.className='muted';p.textContent='Valores informados pelas Companhias, sujeitos à conferência com SEI, Balanço e SIOP. A visualização exige autorização gerencial.';
+   const info=document.createElement('p');info.className='statusline';info.id='puc-docas-auto-status';info.textContent='Entre na Central DOCAS para liberar a consulta.';
+   const wrap=document.createElement('div');wrap.className='scroll';
+   const table=document.createElement('table');table.className='data-table';table.style.minWidth='700px';
+   const head=table.createTHead().insertRow();
+   for(const col of ['Companhia','UF','Empreendimento','Atualização','Execução física','Execução financeira','Situação']){let th=document.createElement('th');th.textContent=col;head.append(th)}
+   const body=table.createTBody();body.id='puc-docas-auto-rows';wrap.append(table);el.append(h,p,info,wrap);compare.append(el);
   }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});
-  else init();
-  window.addEventListener('puc:docas-externas-atualizadas',sync);
-  document.addEventListener('click',event=>{if(event.target.closest('#pd-exit')){const link=document.getElementById('pd-link-emitido');if(link)link.value='';const box=document.getElementById('pd-link-emitido-area');if(box)box.hidden=true;}});
-  if(location.hash==='#recebimentos-docas'){
-    document.querySelector('#nav [data-page="docas"]')?.click();
-    setTimeout(()=>document.getElementById('puc-docas-externas-manager')?.scrollIntoView({block:'start'}),150);
+ }
+ function refresh(){
+  init();
+  const arr=window.PUC_DOCAS_DECLARACOES_EXTERNAS;
+  if(!Array.isArray(arr))return;
+  const status=$('puc-docas-auto-status'),body=$('puc-docas-auto-rows'),note=$('puc-docas-card-status');
+  if(note)note.textContent=arr.length+' formulário(s) sincronizado(s) com o Supabase.';
+  if(!body)return;body.replaceChildren();
+  for(const x of arr.slice().sort((a,b)=>String(b.enviado_em||'').localeCompare(String(a.enviado_em||''))).slice(0,250)){
+   const row=body.insertRow();
+   const data=[x.companhia_nome,x.uf,x.empreendimento,x.data_atualizacao,x.execucao_fisica==null?'—':x.execucao_fisica+'%',x.execucao_financeira==null?'—':x.execucao_financeira+'%',x.status];
+   for(const value of data){const c=row.insertCell();c.textContent=String(value??'—')}
   }
-  sync();
+  if(status)status.textContent=arr.length+' declaração(ões) do Supabase. Dados sujeitos à conferência técnica.';
+ }
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',refresh,{once:true});else refresh();
+ window.addEventListener('puc:docas-externas-atualizadas',refresh);
 })();
