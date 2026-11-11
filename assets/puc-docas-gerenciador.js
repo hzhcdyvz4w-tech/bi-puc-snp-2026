@@ -10,6 +10,8 @@
  const correct=/^https:\/\/[a-z0-9.-]+\.supabase\.(co|in)$/i.test(base)
       && apikey.startsWith('sb_publishable_');
  const storageKey='puc_docas_gestor_auth_2026_v4';
+ try{for(const key of ['puc_docas_token_gestao_v1','puc_docas_manager_session','puc_docas_gestor_sessao_2026'])sessionStorage.removeItem(key)}catch{}
+ if(location.hash.startsWith('#gestor='))history.replaceState(null,'',location.pathname+location.search);
  const style=document.createElement('link');
  style.rel='stylesheet';style.href='assets/puc-docas-central.css?v=20261111';
  document.head.append(style);
@@ -18,7 +20,7 @@
  root.innerHTML=[
  '<div class="pdc-heading"><div><h2>Central DOCAS — Gestão SNP</h2><p class="pdc-note">Formulários recebidos e convites externos das companhias em um único lugar, vinculados ao Supabase. Nenhum arquivo JSON é necessário.</p></div><span class="pill" id="pdc-role">Acesso protegido</span></div>',
  '<p id="pdc-message" class="statusline" role="status" aria-live="polite">Verificando autorização gerencial...</p>',
- '<form class="pdc-login" id="pdc-login"><strong>Autorização do gestor SNP</strong><p class="pdc-note">Entre com a conta gerencial cadastrada no Supabase. Após autenticar, a Central sincroniza os dados automaticamente durante a sessão.</p><div class="pdc-fields"><label>E-mail institucional<input id="pdc-email" type="email" autocomplete="username" required></label><label>Senha<input id="pdc-password" type="password" autocomplete="current-password" required></label></div><button id="pdc-login-button" class="btn" type="submit">Entrar na Central DOCAS</button></form>',
+ '<form class="pdc-login" id="pdc-login"><strong>Autorização do gestor SNP</strong><p class="pdc-note">Entre com a conta gerencial cadastrada no Supabase. Após autenticar, a Central sincroniza os dados automaticamente durante a sessão.</p><div class="pdc-fields"><label>E-mail da conta gerencial<input id="pdc-email" type="email" autocomplete="username" required></label><label>Senha<input id="pdc-password" type="password" autocomplete="current-password" required></label></div><button id="pdc-login-button" class="btn" type="submit">Entrar na Central DOCAS</button></form>',
  '<div id="pdc-admin" hidden>',
  '<div class="pdc-kpis" id="pdc-kpis"></div>',
  '<div class="pdc-actions"><button id="pdc-tab-receipts" class="btn" type="button">Formulários recebidos</button><button id="pdc-tab-invites" class="btn secondary" type="button">Gerar / revogar acessos</button><button id="pdc-refresh" class="btn secondary" type="button">Atualizar agora</button><button id="pdc-exit" class="btn secondary" type="button">Sair da gestão</button></div>',
