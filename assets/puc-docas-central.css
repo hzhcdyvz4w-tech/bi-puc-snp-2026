@@ -26,3 +26,29 @@
 #puc-docas-externas-manager .pdc-note{color:#526c83;font-size:13px;line-height:1.55}
 @media(max-width:850px){#puc-docas-externas-manager .pdc-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:580px){#puc-docas-externas-manager .pdc-fields,#puc-docas-externas-manager .pdc-kpis{grid-template-columns:1fr}#puc-docas-externas-manager .pdc-actions{align-items:stretch}#puc-docas-externas-manager .pdc-actions button{width:100%}#puc-docas-externas-manager{padding:14px}#puc-docas-externas-manager .pdc-token-box{padding:10px}}
+
+
+/* Geradores visíveis e centralizados */
+#puc-docas-externas-manager .pdc-admin-generator{
+ margin-top:18px;padding:18px;border:1px solid #c8dae7;background:#f6f9fc;
+ border-radius:12px;max-width:800px
+}
+#puc-docas-externas-manager .pdc-admin-generator h3{margin-top:0}
+#puc-docas-externas-manager .pdc-token-generator{
+ display:grid;grid-template-columns:minmax(210px,1fr) auto;gap:10px;
+ align-items:end;padding:18px;margin:14px 0;border:1px solid #c6dbe9;
+ border-radius:12px;background:#f3f8fc
+}
+#puc-docas-externas-manager .pdc-token-generator label{grid-column:1/-1;font-weight:700;font-size:13px}
+#puc-docas-externas-manager .pdc-token-generator select{margin:0;min-height:42px;max-width:100%}
+#puc-docas-externas-manager .pdc-token-generator button{margin:0;min-height:42px}
+#puc-docas-externas-manager .pdc-token-generator button:disabled{opacity:.5;cursor:not-allowed}
+#puc-docas-externas-manager .pdc-token-box label{
+ display:block;font-weight:700;font-size:13px;margin-top:10px
+}
+#puc-docas-externas-manager .pdc-admin-generator .pdc-fields{margin-top:15px}
+@media(max-width:680px){
+ #puc-docas-externas-manager .pdc-token-generator{grid-template-columns:1fr;padding:12px}
+ #puc-docas-externas-manager .pdc-token-generator button{width:100%}
+ #puc-docas-externas-manager .pdc-admin-generator{padding:12px}
+}
