@@ -18,15 +18,15 @@
  root.innerHTML=[
  '<div class="pdc-heading"><div><h2>Central DOCAS — Gestão SNP</h2><p class="pdc-note">Formulários recebidos, conferências e convites externos das companhias em um único ambiente. Nenhuma importação JSON é necessária.</p></div><span id="pdc-role" class="pill">Token obrigatório</span></div>',
  '<p id="pdc-message" class="statusline" role="status" aria-live="polite">Informe seu token administrativo.</p>',
- '<div class="pdc-actions" id="pdc-acesso-externo"><a class="btn secondary" href="https://hzhcdyvz4w-tech.github.io/bi-puc-snp-2026/docas-externo/" target="_blank" rel="noopener noreferrer">Acessar formulário das DOCAS</a><span class="pdc-note">O preenchimento requer o token da Companhia. O token gerencial não é utilizado no formulário externo.</span></div>',
- '<form class="pdc-login" id="pdc-token-login"><strong>Autorização do gestor SNP</strong><p class="pdc-note">Entre com o token administrativo individual. Não é necessário informar e-mail ou senha para acessar a Central.</p><label for="pdc-token-input">Token de acesso gerencial</label><input type="password" id="pdc-token-input" autocomplete="off" spellcheck="false" minlength="64" maxlength="128" placeholder="Cole aqui seu token de acesso" required style="width:100%;margin:8px 0 10px"><div class="pdc-actions"><button class="btn" id="pdc-token-button" type="submit">Entrar com token</button><button class="btn secondary" id="pdc-setup-toggle" type="button" aria-expanded="false" aria-controls="pdc-setup">Primeiro acesso: ativar token</button></div></form>',
- '<section id="pdc-setup" class="pdc-login" hidden><h3>Ativação inicial do token</h3><p class="pdc-note">Para criar ou substituir um token, confirme uma única vez sua conta gerencial já autorizada no Supabase. Após a emissão, a entrada será somente pelo token.</p><form id="pdc-setup-form"><div class="pdc-fields"><label>E-mail gerencial (somente na ativação)<input type="email" id="pdc-setup-email" autocomplete="username" required></label><label>Senha da conta (somente na ativação)<input type="password" id="pdc-setup-password" autocomplete="current-password" required></label></div><div class="pdc-actions"><button id="pdc-setup-button" type="submit" class="btn">Emitir meu token administrativo</button><button id="pdc-setup-cancel" type="button" class="btn secondary">Cancelar</button></div></form><p class="pdc-note">A emissão revoga os tokens administrativos anteriores. Guarde o novo token em local seguro; ele não poderá ser recuperado depois.</p></section>',
+ '<div class="pdc-actions" id="pdc-acesso-externo"><button class="btn" id="pdc-gerar-convites" type="button">Gerar tokens das 13 DOCAS</button><a class="btn secondary" href="https://hzhcdyvz4w-tech.github.io/bi-puc-snp-2026/docas-externo/" target="_blank" rel="noopener noreferrer">Acessar formulário das DOCAS</a><span class="pdc-note">O preenchimento requer o token da Companhia. O token gerencial não é utilizado no formulário externo.</span></div>',
+ '<form class="pdc-login" id="pdc-token-login"><strong>Autorização do gestor SNP</strong><p class="pdc-note">Entre com o token administrativo individual. Não é necessário informar e-mail ou senha para acessar a Central.</p><label for="pdc-token-input">Token de acesso gerencial</label><input type="password" id="pdc-token-input" autocomplete="off" spellcheck="false" minlength="64" maxlength="128" placeholder="Cole aqui seu token de acesso" required style="width:100%;margin:8px 0 10px"><div class="pdc-actions"><button class="btn" id="pdc-token-button" type="submit">Entrar com token</button></div></form>',
+ '<section id="pdc-setup" class="pdc-login pdc-admin-generator"><h3>Gerar token administrativo da SNP</h3><p class="pdc-note">Para criar ou substituir um token, confirme uma única vez sua conta gerencial já autorizada no Supabase. Após a emissão, a entrada será somente pelo token.</p><form id="pdc-setup-form"><div class="pdc-fields"><label>E-mail gerencial (somente na ativação)<input type="email" id="pdc-setup-email" autocomplete="username" required></label><label>Senha da conta (somente na ativação)<input type="password" id="pdc-setup-password" autocomplete="current-password" required></label></div><div class="pdc-actions"><button id="pdc-setup-button" type="submit" class="btn">Gerar token administrativo</button><button id="pdc-setup-cancel" type="button" class="btn secondary">Limpar campos</button></div></form><p class="pdc-note">A emissão revoga os tokens administrativos anteriores. Guarde o novo token em local seguro; ele não poderá ser recuperado depois.</p></section>',
  '<section id="pdc-admin" hidden>',
  '<div id="pdc-kpis" class="pdc-kpis"></div>',
  '<div class="pdc-actions"><button class="btn" id="pdc-tab-receipts" type="button">Formulários recebidos</button><button class="btn secondary" id="pdc-tab-invites" type="button">Gerar / revogar acessos</button><button class="btn secondary" id="pdc-refresh" type="button">Atualizar agora</button><button class="btn secondary" id="pdc-exit" type="button">Encerrar acesso</button></div>',
  '<div class="pdc-token-box" id="pdc-new-admin" hidden><strong>Seu token administrativo foi emitido</strong><p>Copie e guarde agora. Na próxima entrada, será necessário informar este token.</p><input type="text" id="pdc-new-admin-value" readonly autocomplete="off" aria-label="Token administrativo recém-emitido"><button class="btn" id="pdc-copy-admin" type="button">Copiar token administrativo</button><button class="btn secondary" id="pdc-hide-admin" type="button">Ocultar token</button></div>',
  '<section id="pdc-receipts"><p class="pdc-note">Declarações recebidas são dados declarados pelas DOCAS e sujeitos ao confronto com documentos SEI, Balanço e SIOP.</p><div class="pdc-fields"><label>Pesquisar<input id="pdc-search" type="search" placeholder="Companhia, empreendimento, UF ou ID GOV/PAC"></label><label>Filtrar situação<select id="pdc-status"><option value="">Todas</option><option value="recebida">Recebida</option><option value="em_analise">Em análise</option><option value="validada">Validada</option><option value="devolvida">Devolvida</option></select></label></div><div class="pdc-actions"><button id="pdc-export" class="btn secondary" type="button">Exportar registros CSV</button></div><div class="pdc-table"><table class="data-table"><thead><tr><th>Recebimento</th><th>Companhia</th><th>UF</th><th>Empreendimento</th><th>Física</th><th>Financeira</th><th>Situação</th><th>Conferência</th></tr></thead><tbody id="pdc-rows"></tbody></table></div><p id="pdc-list-count" class="pdc-note"></p></section>',
- '<section id="pdc-invites" hidden><p class="pdc-note">Convites das 13 companhias do Balanço MPOR 2026. Emitir novo link invalida o anterior; revogar suspende o acesso. As respostas já recebidas são preservadas.</p><div class="pdc-table"><table class="data-table"><thead><tr><th>Companhia</th><th>Empreendimentos</th><th>Envios</th><th>Validade</th><th>Acesso</th></tr></thead><tbody id="pdc-companies"></tbody></table></div><div class="pdc-token-box" id="pdc-company-link-box" hidden><strong id="pdc-company-link-title">Link externo emitido</strong><input type="text" id="pdc-company-link" readonly autocomplete="off" aria-label="Endereço externo da Companhia"><button id="pdc-company-copy" class="btn" type="button">Copiar link da Companhia</button><p>Encaminhe apenas ao representante da Companhia. Esse endereço não libera acesso à Central DOCAS.</p></div></section>',
+ '<section id="pdc-invites" hidden><h3>Gerador de tokens de acesso externo</h3><p class="pdc-note">Selecione a Companhia e clique em Gerar token e link. O novo token substitui e invalida somente o anterior dessa Companhia. Os formulários recebidos permanecem preservados.</p><div class="pdc-token-generator"><label for="pdc-company-select">Companhia autorizada</label><select id="pdc-company-select"><option value="">Selecione uma das 13 DOCAS</option></select><button id="pdc-generate-company" type="button" class="btn" disabled>Gerar token e link individual</button></div><div class="pdc-table"><table class="data-table"><thead><tr><th>Companhia</th><th>Empreendimentos</th><th>Envios</th><th>Validade</th><th>Acesso</th></tr></thead><tbody id="pdc-companies"></tbody></table></div><div class="pdc-token-box" id="pdc-company-link-box" hidden><strong id="pdc-company-link-title">Token e link gerados</strong><label for="pdc-company-token">Token recém-gerado</label><input type="text" id="pdc-company-token" readonly autocomplete="off"><label for="pdc-company-link">Link externo exclusivo</label><input type="text" id="pdc-company-link" readonly autocomplete="off" aria-label="Endereço externo da Companhia"><div class="pdc-actions"><button id="pdc-company-copy" class="btn" type="button">Copiar link</button><button id="pdc-company-copy-token" class="btn secondary" type="button">Copiar token</button></div><p>Encaminhe apenas ao representante da Companhia. Esse endereço não libera acesso à Central DOCAS.</p></div></section>',
  '<p class="pdc-note">A Central consulta a base automaticamente a cada 30 segundos enquanto a sessão estiver aberta. O token é mantido somente na memória desta página.</p></section>'
  ].join('');
  page.insertBefore(root,page.firstChild);
@@ -41,13 +41,13 @@
   version++;rows=[];companies=[];
   $('pdc-rows').replaceChildren();$('pdc-companies').replaceChildren();
   $('pdc-new-admin-value').value='';$('pdc-new-admin').hidden=true;
-  $('pdc-company-link').value='';$('pdc-company-link-box').hidden=true;
+  $('pdc-company-link').value='';$('pdc-company-token').value='';$('pdc-company-link-box').hidden=true;
   window.PUC_DOCAS_DECLARACOES_EXTERNAS=[];
   window.dispatchEvent(new CustomEvent('puc:docas-externas-atualizadas',{detail:{quantidade:0}}))
  }
  function signOut(note){
   token='';clean();$('pdc-admin').hidden=true;$('pdc-token-login').hidden=false;
-  $('pdc-setup').hidden=true;$('pdc-setup-toggle').setAttribute('aria-expanded','false');
+  $('pdc-setup').hidden=false;$('pdc-setup-form').reset();
   $('pdc-token-input').value='';$('pdc-role').textContent='Token obrigatório';
   msg(note||'Acesso gerencial encerrado.')
  }
@@ -114,39 +114,35 @@
  }
  function renderInvites(){
   const tbody=$('pdc-companies');tbody.replaceChildren();
+  const selected=$('pdc-company-select').value;
+  const picker=$('pdc-company-select');picker.replaceChildren();
+  const empty=document.createElement('option');empty.value='';empty.textContent='Selecione uma das 13 DOCAS';picker.append(empty);
   for(const c of companies){
+   const opt=document.createElement('option');opt.value=c.codigo;opt.textContent=c.nome;picker.append(opt);
    const tr=tbody.insertRow();
    cell(tr,c.nome);cell(tr,c.empreendimentos);
    cell(tr,(c.enviados||0)+' / '+(c.max_envios||300));
    cell(tr,!c.ativo?'Revogado':new Date(c.expira_em).toLocaleDateString('pt-BR'));
-   const col=tr.insertCell(),button=document.createElement('button');
-   button.type='button';button.className='btn secondary';button.textContent='Emitir novo link';
-   button.onclick=async()=>{
-    if(!confirm('Emitir novo acesso para '+c.nome+'? O link antigo será invalidado.'))return;
-    button.disabled=true;
-    try{
-     const result=await request('emitir',{codigo:c.codigo});
-     $('pdc-company-link').value=result.link;
-     $('pdc-company-link-title').textContent='Link emitido para '+c.nome;
-     $('pdc-company-link-box').hidden=false;
-     msg('Novo convite emitido para '+c.nome+'. Copie o link e envie somente à Companhia.');
-     await load(false);
-     $('pdc-company-link-box').scrollIntoView({block:'nearest'});
-    }catch(e){msg('Falha ao emitir convite: '+e.message)}finally{button.disabled=false}
-   };col.append(button);
+   const controls=tr.insertCell();
    if(c.ativo){
-    const off=document.createElement('button');off.type='button';off.className='btn secondary';off.textContent='Revogar';
+    const off=document.createElement('button');
+    off.type='button';off.className='btn secondary';off.textContent='Revogar link';
     off.onclick=async()=>{
-     if(!confirm('Revogar o link da companhia '+c.nome+'?'))return;
+     if(!confirm('Revogar o link da Companhia '+c.nome+'?'))return;
      off.disabled=true;
      try{
       await request('revogar',{codigo:c.codigo});
-      $('pdc-company-link').value='';$('pdc-company-link-box').hidden=true;
-      await load(false);msg('Convite revogado para '+c.nome+'.')
-     }catch(e){msg('Falha na revogação: '+e.message)}finally{off.disabled=false}
-    };col.append(off)
-   }
+      $('pdc-company-token').value='';$('pdc-company-link').value='';
+      $('pdc-company-link-box').hidden=true;
+      await load(false);msg('Token revogado para '+c.nome+'.')
+     }catch(e){msg('Falha na revogação: '+e.message)}
+     finally{off.disabled=false}
+    };
+    controls.append(off)
+   }else controls.textContent='Sem acesso ativo';
   }
+  picker.value=companies.some(c=>c.codigo===selected)?selected:'';
+  $('pdc-generate-company').disabled=!picker.value;
  }
  async function load(announce=true){
   if(busy||!token)return;busy=true;const seq=version;
@@ -190,13 +186,7 @@
   catch(e){signOut('Acesso não autorizado: '+e.message)}
   finally{button.disabled=false}
  });
- $('pdc-setup-toggle').onclick=()=>{
-  const show=$('pdc-setup').hidden;
-  $('pdc-setup').hidden=!show;
-  $('pdc-setup-toggle').setAttribute('aria-expanded',String(show));
-  if(show)$('pdc-setup-email').focus()
- };
- $('pdc-setup-cancel').onclick=()=>{$('pdc-setup').hidden=true;$('pdc-setup-form').reset()};
+ $('pdc-setup-cancel').onclick=()=>{$('pdc-setup-form').reset();$('pdc-setup-email').focus()};
  $('pdc-setup-form').addEventListener('submit',async ev=>{
   ev.preventDefault();
   const button=$('pdc-setup-button');button.disabled=true;
@@ -233,6 +223,9 @@
  });
  $('pdc-tab-receipts').onclick=()=>tab('receipts');
  $('pdc-tab-invites').onclick=()=>tab('invites');
+ $('pdc-gerar-convites').onclick=()=>{if(!token){msg('Primeiro gere ou valide seu token administrativo da SNP; depois serão liberados os 13 convites.');$('pdc-token-input').focus();return;}tab('invites');$('pdc-company-select').focus();};
+ $('pdc-company-select').onchange=()=>{$('pdc-generate-company').disabled=!$('pdc-company-select').value};
+ $('pdc-generate-company').onclick=async()=>{const codigo=$('pdc-company-select').value;const c=companies.find(x=>x.codigo===codigo);if(!c)return; if(!confirm('Gerar um novo token para '+c.nome+'? O convite anterior deixará de funcionar.'))return;const btn=$('pdc-generate-company');btn.disabled=true;try{const result=await request('emitir',{codigo});const novo=new URL(result.link).hash;const chave=new URLSearchParams(novo.slice(1)).get('acesso')||'';if(!/^[a-f0-9]{64}$/.test(chave))throw Error('O servidor não retornou um token válido.');$('pdc-company-token').value=chave;$('pdc-company-link').value=result.link;$('pdc-company-link-title').textContent='Token e link emitidos para '+c.nome;$('pdc-company-link-box').hidden=false;await load(false);msg('Token de '+c.nome+' gerado! Copie apenas o token ou link correspondente à Companhia.');$('pdc-company-link-box').scrollIntoView({block:'nearest'});}catch(e){msg('Falha na emissão: '+e.message)}finally{btn.disabled=!$('pdc-company-select').value}};
  $('pdc-refresh').onclick=()=>load();
  $('pdc-exit').onclick=()=>signOut();
  $('pdc-search').oninput=renderRecords;
@@ -246,6 +239,7 @@
  }
  $('pdc-copy-admin').onclick=()=>copy('pdc-new-admin-value');
  $('pdc-company-copy').onclick=()=>copy('pdc-company-link');
+ $('pdc-company-copy-token').onclick=()=>copy('pdc-company-token');
  $('pdc-hide-admin').onclick=()=>{$('pdc-new-admin-value').value='';$('pdc-new-admin').hidden=true;msg('Token ocultado; lembre-se de guardá-lo em local seguro.')};
  $('pdc-export').onclick=()=>{
   const selected=selectedRows();
@@ -273,5 +267,5 @@
  window.addEventListener('online',()=>{if(token)load(false)});
  if(location.hash==='#recebimentos-docas'||location.hash==='#docas-central')setTimeout(()=>window.PUC_DOCAS_ABRIR('records'),100);
  if(!configured){$('pdc-token-button').disabled=true;msg('Integração ao Supabase indisponível.');return}
- msg('Entre com seu token administrativo ou selecione “Primeiro acesso: ativar token”.')
+ msg('Para gerar convites das 13 DOCAS, use “Gerar token administrativo” pela primeira vez ou valide seu token gerencial já emitido.')
 })();
