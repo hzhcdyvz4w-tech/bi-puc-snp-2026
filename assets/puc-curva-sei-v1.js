@@ -191,22 +191,56 @@ function layout(result){
  '<p class="puc-curva-note">Percentuais extraídos da tabela do BM, sem estimativas, somas de BMs repetidos ou interpolação de períodos ausentes. Não presumir que a tabela contratual corresponde à execução física oficial, ao SIOP ou a valores pagos.</p>'+
  '<p class="puc-curva-note">Fonte: '+esc(source)+' · '+result.pages+' página(s) examinada(s) · Emitido em '+new Date().toLocaleString('pt-BR')+'. Conferir contrato, objeto, sequência e valores com o documento original antes de usar na decisão.</p></div>';
 }
-let chosen='',generation=0;
-async function render(){
- const panel=byId('puc-curva-documental'),sel=byId('puc-curva-document-select'),msg=byId('puc-curva-document-status');if(!panel||!sel)return;
- const docs=selected(),previous=chosen||sel.value;
+let chosen='',generation=0,activeReport=null;
+function availableDocuments(){
+ const docs=selected(),contract=currentContract();
+ if(!contract)return docs;
+ return docs.filter(d=>{
+  const m=metadata(d.text||'');
+  if(m.contract)return m.contract.toUpperCase().includes(contract.toUpperCase());
+  return (d.name||'').toUpperCase().includes(contract.toUpperCase().replaceAll('/','_'));
+ });
+}
+function syncDocuments(){
+ const sel=byId('puc-curva-document-select'),status=byId('puc-curva-document-status');
+ if(!sel)return null;
+ const docs=availableDocuments(),previous=chosen||sel.value;
  sel.replaceChildren(new Option('Selecione um BM com Curva S anexado em Documentos',''));
- for(const d of docs)sel.add(new Option(d.name+(d.project?' · '+d.project:''),d.id));
- const valid=docs.some(d=>d.id===previous);sel.value=valid?previous:(docs.length===1?docs[0].id:'');
- chosen=sel.value;panel.innerHTML='';
- const run=++generation;const legacy=byId('ficha-print-area');if(legacy)legacy.hidden=false;if(!sel.value){msg.textContent='Nenhum BM selecionado. Anexe e marque um BM no menu Documentos → SEI.';return}
- msg.textContent='Lendo a tabela histórica do BM selecionado na biblioteca local...';
+ for(const d of docs)sel.add(new Option(d.name+' · '+(d.bmNumber?'BM '+d.bmNumber:'BM sem número')+(d.ref?' · '+d.ref:''),d.id));
+ const preferred=docs.find(d=>/CURVA[\s_.-]*S/i.test(d.name))||docs[0];
+ sel.value=docs.some(d=>d.id===previous)?previous:(preferred?.id||'');
+ chosen=sel.value;
+ if(!currentProject())status.textContent='Selecione um empreendimento. A Curva S exige vínculo dos BMs com a obra.';
+ else if(!docs.length)status.textContent='Nenhum BM vinculado a esta PUC'+(currentContract()?' e ao contrato informado':'')+'. Confira a associação em Documentos → SEI.';
+ return docs.find(d=>d.id===sel.value)||null;
+}
+function showLegacy(note){
+ const box=byId('puc-curva-documental'),legacy=byId('ficha-print-area');
+ if(box)box.replaceChildren();
+ if(legacy)legacy.hidden=false;
+ activeReport=null;
+ if(currentProject())window.PUCFichasBM?.drawSheet?.();
+ const state=window.PUCFichasBM?.getState?.(),project=currentProject(),contract=currentContract();
+ const confirmed=(state?.bmRows||[]).filter(x=>x.project===project&&x.status==='confirmado'&&x.physical!=null&&Number.isFinite(Number(x.physical))&&(!contract||x.contract===contract));
+ const status=byId('puc-curva-document-status');
+ if(status)status.textContent=note+(confirmed.length?' · '+confirmed.length+' BM(s) físicos conferidos disponíveis na ficha abaixo.':' · Sem pontos físicos conferidos, não será criada curva estimada.');
+}
+async function render(){
+ const box=byId('puc-curva-documental');if(!box)return;
+ const run=++generation,doc=syncDocuments();
+ if(!currentProject())return showLegacy('Escolha o empreendimento para consultar os BMs.');
+ if(!doc)return showLegacy('Histórico previsto × realizado não identificado entre os BMs vinculados.');
+ const status=byId('puc-curva-document-status');
+ status.textContent='Lendo a tabela histórica do PDF selecionado...';
  try{
-  const doc=docs.find(d=>d.id===sel.value),res=await extract(doc);
-  if(run!==generation)return;
-  msg.textContent=res.points.length+' boletins encontrados no histórico do PDF selecionado. Revise os números e percentuais.';
-  panel.innerHTML=layout(res);const legacy=byId('ficha-print-area');if(legacy)legacy.hidden=true;
- }catch(e){if(run!==generation)return;msg.textContent='Não foi possível gerar a Curva S documental: '+e.message}
+  const result=await extract(doc);if(run!==generation)return;
+  const contract=currentContract();
+  if(contract&&result.meta.contract&&result.meta.contract.toUpperCase().trim()!==contract.toUpperCase().trim())
+   return showLegacy('O contrato identificado no PDF não corresponde ao filtro informado. Confira o documento.');
+  box.innerHTML=layout(result);activeReport=result;
+  const legacy=byId('ficha-print-area');if(legacy)legacy.hidden=true;
+  status.textContent=result.points.length+' BMs históricos extraídos do PDF selecionado · '+(result.points.some(x=>Number.isFinite(x.percentualPrevistoAcumulado))?'previsto disponível':'sem previsto')+' · '+(result.points.some(x=>Number.isFinite(x.percentualRealizadoAcumulado))?'realizado disponível':'sem realizado')+'. Extração a conferir.';
+ }catch(e){if(run!==generation)return;showLegacy('Não foi possível extrair o histórico da Curva S: '+e.message)}
 }
 function setup(){
  const root=byId('ficha-result-panel');if(!root||byId('puc-curva-documental'))return;
