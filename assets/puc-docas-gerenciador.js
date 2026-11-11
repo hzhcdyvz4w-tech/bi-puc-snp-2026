@@ -12,7 +12,7 @@
  const configured=/^https:\/\/[a-z0-9.-]+\.supabase\.(co|in)$/i.test(base)
    && key.startsWith('sb_publishable_')&&!key.startsWith('sb_secret_');
  const style=document.createElement('link');
- style.rel='stylesheet';style.href='assets/puc-docas-central.css?v=20261111-token';
+ style.rel='stylesheet';style.href='assets/puc-docas-central.css?v=20261111-gerador';
  document.head.append(style);
  const root=document.createElement('section');root.id='puc-docas-externas-manager';root.className='panel';
  root.innerHTML=[
