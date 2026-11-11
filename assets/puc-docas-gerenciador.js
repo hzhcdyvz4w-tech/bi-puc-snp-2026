@@ -22,6 +22,7 @@
  '<section id="pdc-admin" hidden>',
  '<div id="pdc-kpis" class="pdc-kpis"></div>',
  '<div class="pdc-actions"><button class="btn" id="pdc-tab-invites" type="button">Gerar tokens das DOCAS</button><button class="btn secondary" id="pdc-tab-receipts" type="button">Formulários recebidos</button><button class="btn secondary" id="pdc-refresh" type="button">Atualizar</button><button class="btn secondary" id="pdc-exit" type="button">Encerrar acesso</button><a class="btn secondary" href="https://hzhcdyvz4w-tech.github.io/bi-puc-snp-2026/docas-externo/" target="_blank" rel="noopener noreferrer">Abrir formulário externo</a></div>',
+'<details class="pdc-note"><summary>Trocar o código da Central</summary><p>É possível substituir o código atual por outro, sem e-mail ou senha. O código anterior deixará de funcionar imediatamente.</p><button class="btn secondary" type="button" id="pdc-rotate">Gerar novo código da Central</button><div class="pdc-token-box" id="pdc-rotate-result" hidden><label for="pdc-rotate-code">Novo código da Central (copie e guarde)</label><input id="pdc-rotate-code" type="text" readonly autocomplete="off"><button class="btn" id="pdc-copy-rotate" type="button">Copiar novo código</button></div></details>',
  '<section id="pdc-receipts"><p class="pdc-note">Declarações recebidas são dados declarados pelas DOCAS e sujeitos ao confronto com documentos SEI, Balanço e SIOP.</p><div class="pdc-fields"><label>Pesquisar<input id="pdc-search" type="search" placeholder="Companhia, empreendimento, UF ou ID GOV/PAC"></label><label>Filtrar situação<select id="pdc-status"><option value="">Todas</option><option value="recebida">Recebida</option><option value="em_analise">Em análise</option><option value="validada">Validada</option><option value="devolvida">Devolvida</option></select></label></div><div class="pdc-actions"><button id="pdc-export" class="btn secondary" type="button">Exportar registros CSV</button></div><div class="pdc-table"><table class="data-table"><thead><tr><th>Recebimento</th><th>Companhia</th><th>UF</th><th>Empreendimento</th><th>Física</th><th>Financeira</th><th>Situação</th><th>Conferência</th></tr></thead><tbody id="pdc-rows"></tbody></table></div><p id="pdc-list-count" class="pdc-note"></p></section>',
  '<section id="pdc-invites" hidden><h3>Gerador de tokens de acesso externo</h3><p class="pdc-note">Selecione a Companhia e clique em Gerar token e link. O novo token substitui e invalida somente o anterior dessa Companhia. Os formulários recebidos permanecem preservados.</p><div class="pdc-token-generator"><label for="pdc-company-select">Companhia autorizada</label><select id="pdc-company-select"><option value="">Selecione uma das 13 DOCAS</option></select><button id="pdc-generate-company" type="button" class="btn" disabled>Gerar token e link individual</button></div><div class="pdc-table"><table class="data-table"><thead><tr><th>Companhia</th><th>Empreendimentos</th><th>Envios</th><th>Validade</th><th>Acesso</th></tr></thead><tbody id="pdc-companies"></tbody></table></div><div class="pdc-token-box" id="pdc-company-link-box" hidden><strong id="pdc-company-link-title">Token e link gerados</strong><label for="pdc-company-token">Token recém-gerado</label><input type="text" id="pdc-company-token" readonly autocomplete="off"><label for="pdc-company-link">Link externo exclusivo</label><input type="text" id="pdc-company-link" readonly autocomplete="off" aria-label="Endereço externo da Companhia"><div class="pdc-actions"><button id="pdc-company-copy" class="btn" type="button">Copiar link</button><button id="pdc-company-copy-token" class="btn secondary" type="button">Copiar token</button></div><p>Encaminhe apenas ao representante da Companhia. Esse endereço não libera acesso à Central DOCAS.</p></div></section>',
  '<p class="pdc-note">A Central consulta a base automaticamente a cada 30 segundos enquanto a sessão estiver aberta. O token é mantido somente na memória desta página.</p></section>'
@@ -37,6 +38,7 @@
   version++;rows=[];companies=[];
   $('pdc-rows').replaceChildren();$('pdc-companies').replaceChildren();
   $('pdc-company-link').value='';$('pdc-company-token').value='';$('pdc-company-link-box').hidden=true;
+  $('pdc-rotate-code').value='';$('pdc-rotate-result').hidden=true;
   window.PUC_DOCAS_DECLARACOES_EXTERNAS=[];
   window.dispatchEvent(new CustomEvent('puc:docas-externas-atualizadas',{detail:{quantidade:0}}))
  }
@@ -200,6 +202,21 @@
  }
  $('pdc-company-copy').onclick=()=>copy('pdc-company-link');
  $('pdc-company-copy-token').onclick=()=>copy('pdc-company-token');
+ $('pdc-copy-rotate').onclick=()=>copy('pdc-rotate-code');
+ $('pdc-rotate').onclick=async()=>{
+  if(!confirm('Substituir o código atual da Central? O código antigo deixará de funcionar. Copie o novo antes de sair.'))return;
+  const b=$('pdc-rotate');b.disabled=true;
+  try{
+   const data=await request('rotacionar');
+   if(!/^[a-f0-9]{64}$/.test(data.codigo||''))throw Error('Código novo não foi recebido.');
+   token=data.codigo;
+   $('pdc-rotate-code').value=token;
+   $('pdc-rotate-result').hidden=false;
+   msg('Novo código da Central emitido. Copie e guarde; o anterior foi revogado.');
+  }catch(e){msg('Não foi possível substituir o código: '+e.message)}
+  finally{b.disabled=false}
+ };
+
  $('pdc-export').onclick=()=>{
   const selected=selectedRows();
   if(!selected.length){msg('Nenhum registro para exportação.');return}
