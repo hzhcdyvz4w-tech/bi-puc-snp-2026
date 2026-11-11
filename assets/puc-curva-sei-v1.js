@@ -120,17 +120,24 @@ async function extract(doc){
  return result;
 }
 function svgChart(points){
- const planned=points.filter(x=>Number.isFinite(x.day)&&Number.isFinite(x.percentualPrevistoAcumulado)),actual=points.filter(x=>Number.isFinite(x.day)&&Number.isFinite(x.percentualRealizadoAcumulado));
- const width=1100,height=320,left=66,right=16,top=19,bottom=45;
- const maxDay=Math.max(1,...points.map(p=>p.day||0)),x=d=>left+(width-left-right)*d/maxDay,y=v=>top+(height-top-bottom)*(1-v/100);
- const poly=arr=>arr.map(z=>x(z.day).toFixed(1)+','+y(z.percentualPrevistoAcumulado??z.percentualRealizadoAcumulado).toFixed(1)).join(' ');
- const path=arr=>arr.map(z=>x(z.day).toFixed(1)+','+y(z.percentualRealizadoAcumulado).toFixed(1)).join(' ');
- const ticks=[0,20,40,60,80,100].map(v=>'<line x1="'+left+'" y1="'+y(v)+'" x2="'+(width-right)+'" y2="'+y(v)+'" stroke="#e0e7ef"/><text x="'+(left-9)+'" y="'+(y(v)+4)+'" text-anchor="end" font-size="12" fill="#40536b">'+v+'%</text>').join('');
- const xTicks=Array.from({length:7},(_,i)=>Math.round(maxDay*i/6)).map(d=>'<text x="'+x(d)+'" y="'+(height-18)+'" text-anchor="middle" font-size="12" fill="#40536b">'+d+'</text>').join('');
- return '<svg class="puc-curva-svg" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Curva S com percentuais acumulados previstos e realizados por dias transcorridos" xmlns="http://www.w3.org/2000/svg">'+ticks+
- '<polyline points="'+poly(planned)+'" fill="none" stroke="#2563a6" stroke-width="2.8"/><polyline points="'+path(actual)+'" fill="none" stroke="#c8554b" stroke-width="2.8"/>'+
- actual.map(p=>'<circle cx="'+x(p.day)+'" cy="'+y(p.percentualRealizadoAcumulado)+'" r="3" fill="#c8554b"><title>BM '+p.number+' — '+p.day+' dias — realizado '+pct(p.percentualRealizadoAcumulado)+'</title></circle>').join('')+
- xTicks+'<text x="'+(width/2)+'" y="'+(height-2)+'" font-size="12" text-anchor="middle">Dias decorridos a partir do início contratual (conforme BM)</text></svg>';
+ const width=1100,height=350,left=68,right=22,top=20,bottom=62;
+ const useDays=points.length>1&&points.every(p=>Number.isFinite(p.day))&&points.every((p,i)=>i===0||p.day>points[i-1].day);
+ const scale=p=>useDays?p.day:p.number,positions=points.map(scale),min=Math.min(...positions),max=Math.max(...positions);
+ const x=p=>left+(min===max?(width-left-right)/2:(width-left-right)*(scale(p)-min)/(max-min));
+ const y=v=>top+(height-top-bottom)*(1-v/100);
+ const axes=[0,20,40,60,80,100].map(v=>'<line x1="'+left+'" y1="'+y(v)+'" x2="'+(width-right)+'" y2="'+y(v)+'" stroke="#e0e7ef"/><text x="'+(left-9)+'" y="'+(y(v)+4)+'" text-anchor="end" font-size="12" fill="#40536b">'+v+'%</text>').join('');
+ const series=(key,color)=>{
+  const segments=[];let buffer=[];
+  for(const p of points){if(Number.isFinite(p[key]))buffer.push(p);else if(buffer.length){segments.push(buffer);buffer=[]}}
+  if(buffer.length)segments.push(buffer);
+  // Values not present in a particular BM remain gaps, never inferred.
+  return segments.filter(a=>a.length>1).map(seg=>'<polyline points="'+seg.map(p=>x(p).toFixed(1)+','+y(p[key]).toFixed(1)).join(' ')+'" fill="none" stroke="'+color+'" stroke-width="3" stroke-linejoin="round"/>').join('')+
+   points.filter(p=>Number.isFinite(p[key])).map(p=>'<circle cx="'+x(p).toFixed(1)+'" cy="'+y(p[key]).toFixed(1)+'" r="4" fill="'+color+'"><title>BM '+p.number+' · '+pct(p[key])+'</title></circle>').join('');
+ };
+ const ticks=points.filter((p,i)=>i===0||i===points.length-1||i%Math.max(1,Math.ceil(points.length/12))===0).map(p=>'<text x="'+x(p).toFixed(1)+'" y="'+(height-28)+'" text-anchor="middle" font-size="11" fill="#40536b">'+(useDays?p.day:'BM '+p.number)+'</text>').join('');
+ return '<svg class="puc-curva-svg" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Curva S dos percentuais documentados: previsto azul, realizado verde" xmlns="http://www.w3.org/2000/svg">'+axes+
+ series('percentualPrevistoAcumulado','#3977c5')+series('percentualRealizadoAcumulado','#5cbb83')+
+ ticks+'<text x="'+(width/2)+'" y="'+(height-8)+'" text-anchor="middle" font-size="12">'+(useDays?'Dias transcorridos conforme o BM':'Sequência dos boletins (BM)')+'</text></svg>';
 }
 function horizontalTable(points){
  const chunks=[];for(let i=0;i<points.length;i+=14)chunks.push(points.slice(i,i+14));
