@@ -64,7 +64,7 @@
       return;
     }
     if (!/^[a-f0-9]{64}$/.test(invite)) {
-      status.textContent = "Não foi possível identificar o token automaticamente. Cole abaixo o link completo recebido da SNP.";
+      status.textContent = "Informe o token da Companhia ou cole o link individual recebido da SNP. Clique em Validar token e liberar formulário.";
       const recovery = $("recuperar-acesso");
       if (recovery) recovery.hidden = false;
       return;
@@ -128,7 +128,7 @@
   });
   const recovery = $("recuperar-acesso");
   const recoveryForm = $("recuperar-form");
-  if (recoveryForm) recoveryForm.addEventListener("submit", (ev) => {
+  if (recoveryForm) recoveryForm.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const entry = String($("recuperar-token")?.value || "").trim();
     const match = entry.match(/(?:^|[?#&])acesso=([a-f0-9]{64})(?=$|[&#])/i);
@@ -141,7 +141,11 @@
     invite = candidate;
     recovery.hidden = true;
     $("recuperar-token").value = "";
-    startup();
+    const botao = recoveryForm.querySelector("button[type=submit]");
+    if (botao) { botao.disabled = true; botao.textContent = "Validando acesso..."; }
+    try { await startup(); } finally {
+      if (botao) { botao.disabled = false; botao.textContent = "Validar token e liberar formulário"; }
+    }
   });
   startup();
 })();
