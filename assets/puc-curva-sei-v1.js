@@ -245,12 +245,28 @@ async function render(){
 function setup(){
  const root=byId('ficha-result-panel');if(!root||byId('puc-curva-documental'))return;
  const box=document.createElement('div');box.id='puc-curva-documental-wrap';
- box.innerHTML='<div class="puc-curva-chooser"><label for="puc-curva-document-select">BM selecionado em Documentos → SEI</label><select id="puc-curva-document-select"></select><p id="puc-curva-document-status" aria-live="polite"></p></div><div id="puc-curva-documental"></div>';
+ box.innerHTML='<div class="puc-curva-chooser"><label for="puc-curva-document-select">BM com Curva S — Documentos → SEI</label><select id="puc-curva-document-select" aria-label="Escolher BM com histórico acumulado"></select><button type="button" class="btn secondary" id="puc-curva-refresh">Atualizar Curva S dos BMs</button><p id="puc-curva-document-status" role="status" aria-live="polite"></p></div><div id="puc-curva-documental"></div>';
  root.insertBefore(box,byId('ficha-print-area'));
  byId('puc-curva-document-select').onchange=()=>{chosen=byId('puc-curva-document-select').value;render()};
- document.addEventListener('puc-documents-updated',render);document.addEventListener('puc-sei-selection-updated',render);
+ byId('puc-curva-refresh').onclick=render;
+ byId('ficha-generate')?.addEventListener('click',render);
+ byId('ficha-project')?.addEventListener('change',()=>{chosen='';render()});
+ byId('ficha-contract')?.addEventListener('change',()=>{chosen='';render()});
+ let delay=null;
+ function schedule(){clearTimeout(delay);delay=setTimeout(()=>{cache.clear();render()},180)}
+ document.addEventListener('puc-documents-updated',schedule);
+ document.addEventListener('puc-sei-selection-updated',schedule);
+ document.addEventListener('click',event=>{
+   if(!event.target.closest?.('#ficha-print-btn')||!activeReport||!byId('puc-curva-documental')?.querySelector('.puc-curva-report'))return;
+   event.preventDefault();event.stopImmediatePropagation();event.stopPropagation();
+   document.body.classList.add('ficha-print','puc-curva-print');
+   window.print();
+ },true);
+ window.addEventListener('afterprint',()=>document.body.classList.remove('puc-curva-print'));
  const style=document.createElement('style');
  style.textContent='#ficha-print-area[hidden]{display:none!important}.puc-curva-chooser{display:flex;flex-direction:column;gap:7px;margin:15px 0;padding:15px;background:#f5f8fc;border:1px solid #cbdce8;border-radius:9px}.puc-curva-chooser select{width:100%;max-width:650px;padding:10px}.puc-curva-chooser p{font-size:13px;color:#49657a}.puc-curva-report{border:1px solid #d5e0e9;border-radius:9px;overflow:hidden;margin:15px 0;padding:17px}.puc-curva-report header{display:flex;justify-content:space-between;gap:12px;align-items:center;border-bottom:2px solid #b6d2e5;padding-bottom:12px}.puc-curva-report h3{margin:0;font-size:20px}.puc-curva-report small{display:block;color:#597185}.puc-curva-warning{color:#9b4d22;font-size:11px;font-weight:700}.puc-curva-meta,.puc-curva-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:14px 0}.puc-curva-meta>div,.puc-curva-kpis>div{padding:10px;background:#f2f6fa;border:1px solid #dce7f0;border-radius:5px;min-width:0}.puc-curva-meta strong,.puc-curva-kpis strong{display:block;font-size:14px;overflow-wrap:anywhere}.puc-curva-obj{grid-column:1/-1}.puc-curva-report h4{font-size:15px;margin:18px 0 10px}.puc-curva-table-scroll{overflow-x:auto;max-width:100%;border:1px solid #dce4ed}.puc-curva-table{border-collapse:collapse;min-width:max-content;font-size:12px}.puc-curva-table th,.puc-curva-table td{border:1px solid #d2dfe9;padding:7px 9px;white-space:nowrap;text-align:right}.puc-curva-table th:first-child{position:sticky;left:0;background:#eaf2fa;text-align:left;z-index:1}.puc-curva-table thead{background:#cbddea}.puc-curva-row-plan{background:#e1eefb}.puc-curva-row-real{background:#fbe8df}.puc-curva-row-neutral{background:#f2f5f8}.puc-curva-table-block{margin:12px 0 24px;break-inside:avoid}.puc-curva-table-block h5{font-size:13px;margin:0 0 8px;color:#25445d}.puc-curva-svg{width:100%;height:auto;display:block;background:white}.puc-curva-legend{display:flex;gap:22px;flex-wrap:wrap;font-size:12px;margin:10px 0}.puc-curva-legend i{display:inline-block;width:17px;height:3px;vertical-align:middle;margin-right:6px}.puc-curva-note{font-size:12px;color:#4f6275;line-height:1.5}.ficha-grafico-enxuto #ficha-print-area:has(+ *){margin-top:10px}@media(max-width:800px){.puc-curva-meta,.puc-curva-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}@media print{.puc-curva-chooser{display:none}.puc-curva-table-scroll{overflow:visible}.puc-curva-table{font-size:8px}}';
+
+ style.textContent += '#puc-curva-documental-wrap{margin-top:14px}.puc-curva-chooser{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.puc-curva-chooser select{flex:1;min-width:240px}.puc-curva-chooser p{flex-basis:100%;margin:0}.puc-curva-report header{background:white;color:#20354b;flex-wrap:wrap}.puc-curva-row-real{background:#e7f5eb}.puc-curva-alert{padding:10px;background:#fff3dd;border-left:3px solid #bd873b;font-size:12px}@media(max-width:720px){.puc-curva-chooser{display:block}.puc-curva-chooser select,.puc-curva-chooser button{width:100%;margin:6px 0}}@media print{body.ficha-print.puc-curva-print #fichas,body.ficha-print.puc-curva-print #ficha-result-panel,body.ficha-print.puc-curva-print #puc-curva-documental-wrap,body.ficha-print.puc-curva-print #puc-curva-documental{display:block!important}body.ficha-print.puc-curva-print #ficha-print-area{display:none!important}body.ficha-print.puc-curva-print .puc-curva-chooser{display:none!important}body.ficha-print.puc-curva-print #ficha-result-panel{border:0!important;padding:0!important}body.ficha-print.puc-curva-print .puc-curva-report{border:0!important;padding:0!important}.puc-curva-report{print-color-adjust:exact;-webkit-print-color-adjust:exact}.puc-curva-table-block{break-inside:avoid}.puc-curva-table-scroll{overflow:visible}}';
  document.head.appendChild(style);render();
 }
 window.PUCCurvaSEI={parsePage,extract,render,selected,setup};
