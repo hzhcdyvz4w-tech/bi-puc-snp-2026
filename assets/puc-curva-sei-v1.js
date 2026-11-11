@@ -74,7 +74,9 @@ async function extract(doc){
  if(cache.has(doc.id))return cache.get(doc.id);
  const blob=await window.PUCDocLibrary?.getBlob?.(doc.id);
  if(!blob)throw Error('PDF não preservado na biblioteca local. Reimporte em Documentos → SEI.');
- if(!window.pdfjsLib?.getDocument)throw Error('PDF.js indisponível. Atualize a página.');
+ for(let k=0;k<15&&!window.pdfjsLib?.getDocument;k++)await new Promise(ok=>setTimeout(ok,200));
+ if(!window.pdfjsLib?.getDocument)throw Error('Leitor PDF.js indisponível. Confira a conexão e atualize a página.');
+ if(window.pdfjsLib.GlobalWorkerOptions)window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
  if(blob.size>35*1024*1024)throw Error('PDF acima de 35 MB; confira o arquivo original.');
  const pdf=await window.pdfjsLib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise;
  const pages=Math.min(pdf.numPages,65),records=[],meta=[];
