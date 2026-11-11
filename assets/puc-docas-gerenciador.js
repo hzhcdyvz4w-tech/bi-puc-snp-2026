@@ -241,7 +241,8 @@
  window.setInterval(()=>{if(token&&!document.hidden)load(false)},30000);
  window.addEventListener('focus',()=>{if(token)load(false)});
  window.addEventListener('online',()=>{if(token)load(false)});
- if(location.hash==='#recebimentos-docas'||location.hash==='#docas-central')setTimeout(()=>window.PUC_DOCAS_ABRIR('records'),100);
+ if(location.hash==='#recebimentos-docas')setTimeout(()=>window.PUC_DOCAS_ABRIR('records'),100);
+ if(location.hash==='#docas-central'||location.hash==='#docas-tokens')setTimeout(()=>window.PUC_DOCAS_ABRIR('links'),100);
  if(!configured){$('pdc-token-button').disabled=true;msg('Integração ao Supabase indisponível.');return}
  msg('Digite o código da Central para gerar tokens individuais das DOCAS ou consultar os formulários recebidos.')
 })();
