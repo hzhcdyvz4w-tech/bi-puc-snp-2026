@@ -159,19 +159,37 @@ function horizontalTable(points){
  return chunks.map((items,i)=>'<section class="puc-curva-table-block"><h5>Histórico BM '+items[0].number+' a BM '+items[items.length-1].number+'</h5>'+build(items)+'</section>').join('');
 }
 function layout(result){
- const {points,meta,doc}=result;
- const last=[...points].reverse().find(p=>Number.isFinite(p.percentualRealizadoAcumulado));
- const realized=points.filter(p=>Number.isFinite(p.percentualRealizadoAcumulado));
- const maxDay=points[points.length-1]?.day;
- const chart=svgChart(points);
- return '<div class="puc-curva-report"><header><div><h3>CURVA S — Acompanhamento global do contrato</h3><small>Fonte: Documentos → SEI · Somente BM selecionado</small></div><span class="puc-curva-warning">EXTRAÇÃO AUTOMÁTICA · CONFERIR</span></header>'+
- '<div class="puc-curva-meta"><div><small>Contrato</small><strong>'+esc(meta.contract||'Não identificado')+'</strong></div><div><small>Contratada</small><strong>'+esc(meta.contractor||'Não identificada')+'</strong></div><div><small>Ordem de serviço</small><strong>'+esc(meta.serviceOrder||'Não identificada')+'</strong></div><div><small>BM de referência</small><strong>'+esc(meta.bm||doc.bmNumber||'Não identificado')+'</strong></div><div class="puc-curva-obj"><small>Objeto / obra</small><strong>'+esc(meta.object||doc.workName||'Não identificado')+'</strong></div></div>'+
- '<div class="puc-curva-kpis"><div><small>Último BM com percentual realizado</small><strong>'+(last?'BM '+last.number:'—')+'</strong></div><div><small>Último realizado acumulado</small><strong>'+(last?pct(last.percentualRealizadoAcumulado):'—')+'</strong></div><div><small>BM(s) no histórico</small><strong>'+points.length+'</strong></div><div><small>Dias previstos na tabela</small><strong>'+(Number.isFinite(maxDay)?maxDay:'—')+'</strong></div></div>'+
- '<h4>Histórico contratual dos boletins — previsto × realizado</h4>'+horizontalTable(points)+
- '<h4>Curva S — percentuais acumulados ao longo do tempo</h4>'+chart+
- '<div class="puc-curva-legend"><span><i style="background:#2563a6"></i> Previsto acumulado</span><span><i style="background:#c8554b"></i> Realizado acumulado</span></div>'+
- '<p class="puc-curva-note">Percentuais da Curva S do próprio BM (base contratual). Não presumir equivalência com execução física oficial, pagamentos, SIOP ou Balanço. Os dias e medições são reproduzidos apenas onde a tabela documental contém valores legíveis. Não há interpolação ou projeção automática. BMs repetidos não são somados.</p>'+
- '<p class="puc-curva-note">Documento de origem: '+esc(doc.name)+' · Biblioteca local · '+result.pages+' página(s) examinada(s). A associação à PUC, a competência e os valores dependem de conferência.</p></div>';
+ const {points,meta,doc,warnings}=result;
+ let projects=[];try{projects=JSON.parse(byId('embedded-data')?.textContent||'{}').projetos||[]}catch(e){}
+ const project=projects.find(p=>p.id===currentProject());
+ const actual=[...points].reverse().find(p=>Number.isFinite(p.percentualRealizadoAcumulado));
+ const planned=[...points].reverse().find(p=>Number.isFinite(p.percentualPrevistoAcumulado));
+ const comparable=actual&&planned&&actual.number===planned.number;
+ const delta=comparable?+(actual.percentualRealizadoAcumulado-planned.percentualPrevistoAcumulado).toFixed(2):null;
+ const box=(label,value)=>'<div><small>'+label+'</small><strong>'+value+'</strong></div>';
+ const source=[doc.ref,doc.name].filter(Boolean).join(' · ');
+ const alert=warnings.length?'<p class="puc-curva-alert">'+[...new Set(warnings)].map(esc).join(' · ')+'</p>':'';
+ return '<div class="puc-curva-report" data-doc-id="'+esc(doc.id)+'">'+
+ '<header><div><h3>CURVA S — Acompanhamento contratual</h3><small>Documento: '+esc(source)+'</small></div><span class="puc-curva-warning">EXTRAÇÃO A CONFERIR · NÃO HOMOLOGADA</span></header>'+
+ '<div class="puc-curva-meta">'+
+ box('Empreendimento',esc(project?.empreendimento||doc.workName||'Vínculo não comprovado'))+
+ box('Contrato',esc(meta.contract||currentContract()||'Não identificado'))+
+ box('Contratada',esc(meta.contractor||'Não identificada'))+
+ box('Ordem de serviço',esc(meta.serviceOrder||'Não identificada'))+
+ box('BM de referência',esc(meta.bm||doc.bmNumber||'Não identificado'))+
+ box('PUC / UF',esc((currentProject()||'—')+' / '+(project?.uf||'—')))+
+ '<div class="puc-curva-obj"><small>Objeto contratual</small><strong>'+esc(meta.object||doc.workName||project?.empreendimento||'Não identificado')+'</strong></div></div>'+
+ '<div class="puc-curva-kpis">'+
+ box('Boletins no histórico',String(points.length))+
+ box('Último realizado acumulado',actual?pct(actual.percentualRealizadoAcumulado):'—')+
+ box('Previsto na mesma medição',comparable?pct(planned.percentualPrevistoAcumulado):'—')+
+ box('Desvio realizado – previsto',delta===null?'Não comparável':(delta>0?'+':'')+delta.toLocaleString('pt-BR',{maximumFractionDigits:2})+' p.p.')+
+ '</div>'+alert+
+ '<h4>Curva S — percentuais acumulados documentados</h4>'+svgChart(points)+
+ '<div class="puc-curva-legend"><span><i style="background:#3977c5"></i> Previsto acumulado</span><span><i style="background:#5cbb83"></i> Realizado acumulado</span></div>'+
+ '<h4>Histórico das medições — previsto e realizado</h4>'+horizontalTable(points)+
+ '<p class="puc-curva-note">Percentuais extraídos da tabela do BM, sem estimativas, somas de BMs repetidos ou interpolação de períodos ausentes. Não presumir que a tabela contratual corresponde à execução física oficial, ao SIOP ou a valores pagos.</p>'+
+ '<p class="puc-curva-note">Fonte: '+esc(source)+' · '+result.pages+' página(s) examinada(s) · Emitido em '+new Date().toLocaleString('pt-BR')+'. Conferir contrato, objeto, sequência e valores com o documento original antes de usar na decisão.</p></div>';
 }
 let chosen='',generation=0;
 async function render(){
