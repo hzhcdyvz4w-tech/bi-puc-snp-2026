@@ -2,11 +2,13 @@
 (()=>{'use strict';
 const byId=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const num=x=>Number(String(x||'').replace(/\./g,'').replace(',','.').replace('%',''));
+const num=x=>{const raw=String(x??'').replace(/[\sR$%]/g,'').trim();if(!raw)return NaN;const n=raw.includes(',')?Number(raw.replace(/\./g,'').replace(',','.')):Number(raw);return Number.isFinite(n)?n:NaN};
 const pct=x=>x===null||!Number.isFinite(x)?'—':x.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';
 const money=x=>x===null||!Number.isFinite(x)?'—':x.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const excluded=()=>{try{return new Set(JSON.parse(localStorage.getItem('BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1')||'[]'))}catch(e){return new Set()}};
-const selected=()=>((window.PUCDocLibrary?.list?.()||[]).filter(d=>d.origin==='SEI'&&/^(BM IDENTIFICADO|BM PROVÁVEL)/.test(d.bmStatus||'')&&!excluded().has(d.id)&&/\.pdf$/i.test(d.name)));
+const currentProject=()=>byId('ficha-project')?.value||'';
+const currentContract=()=>byId('ficha-contract')?.value?.trim()||'';
+const selected=()=>{const id=currentProject();if(!id)return [];return (window.PUCDocLibrary?.list?.()||[]).filter(d=>d.origin==='SEI'&&/^(BM IDENTIFICADO|BM PROVÁVEL)/.test(d.bmStatus||'')&&!excluded().has(d.id)&&/\.pdf$/i.test(d.name)&&(d.project===id||(Array.isArray(d.projects)&&d.projects.includes(id))))};
 function rowsFromItems(items){
  const rows=[];
  for(const item of items||[]){
@@ -67,22 +69,55 @@ function metadata(text){
  serviceOrder:take(/ORDEM\s+DE\s+SERVI[CÇ]O\s*:\s*([^\n]+)/i),
  object:take(/OBJETO\s*:\s*([^\n]{15,600})/i),bm:take(/MEDI[CÇ][ÃA]O\s*:\s*(\d{1,3})/i)};
 }
+const cache=new Map();
 async function extract(doc){
+ if(cache.has(doc.id))return cache.get(doc.id);
  const blob=await window.PUCDocLibrary?.getBlob?.(doc.id);
- if(!blob)throw Error('PDF não preservado nesta biblioteca; é necessário importar novamente em Documentos.');
- if(!window.pdfjsLib)throw Error('PDF.js indisponível para leitura das tabelas da Curva S.');
+ if(!blob)throw Error('PDF não preservado na biblioteca local. Reimporte em Documentos → SEI.');
+ if(!window.pdfjsLib?.getDocument)throw Error('PDF.js indisponível. Atualize a página.');
+ if(blob.size>35*1024*1024)throw Error('PDF acima de 35 MB; confira o arquivo original.');
  const pdf=await window.pdfjsLib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise;
- const pages=Math.min(pdf.numPages,65),data=[],meta=[];
- for(let page=1;page<=pages;page++){
-  const view=await pdf.getPage(page),items=(await view.getTextContent()).items;
-  data.push(...parsePage(items,page));
-  if(page===1||page===pages)meta.push(rowsFromItems(items).slice(0,24).map(r=>r.text).join('\n'));
+ const pages=Math.min(pdf.numPages,65),records=[],meta=[];
+ try{
+  for(let p=1;p<=pages;p++){
+   const items=(await (await pdf.getPage(p)).getTextContent()).items;
+   records.push(...parsePage(items,p));
+   if(p===1||p===pages)meta.push(rowsFromItems(items).slice(0,36).map(r=>r.text).join('\n'));
+  }
+ }finally{try{await pdf.destroy()}catch(e){}}
+ const byNumber=new Map(),warnings=[];
+ for(const row of records){
+  if(!Number.isInteger(row.number)||row.number<0||row.number>999)continue;
+  for(const key of ['percentualPrevistoParcial','percentualRealizadoParcial','percentualPrevistoAcumulado','percentualRealizadoAcumulado']){
+   if(!Number.isFinite(row[key])||row[key]<0||row[key]>100)delete row[key];
+  }
+  for(const key of ['financeiroPrevistoParcial','financeiroRealizadoParcial','financeiroPrevistoAcumulado','financeiroRealizadoAcumulado']){
+   if(!Number.isFinite(row[key])||row[key]<0)delete row[key];
+  }
+  if(row.day!=null&&(!Number.isFinite(row.day)||row.day<0))row.day=null;
+  if(!byNumber.has(row.number)){byNumber.set(row.number,row);continue}
+  const prior=byNumber.get(row.number),merged={...prior};
+  for(const [key,value] of Object.entries(row)){
+   if(value==null)continue;
+   if(key!=='page'&&key!=='number'&&Number.isFinite(merged[key])&&Number.isFinite(value)&&merged[key]!==value){
+    warnings.push('BM '+row.number+': valores conflitantes em páginas distintas; conferir a série.');
+    delete merged[key];continue;
+   }
+   if(merged[key]==null)merged[key]=value;
+  }
+  byNumber.set(row.number,merged);
  }
- const clean=new Map();for(const d of data){const previous=clean.get(d.number);clean.set(d.number,{...(previous||{}),...d})}
- const points=[...clean.values()].sort((a,b)=>a.number-b.number);
- if(points.length<3||points.filter(p=>p.percentualPrevistoAcumulado!==undefined).length<3)throw Error('Quadro histórico da Curva S não foi identificado neste PDF. Confira se o documento possui tabela de BMs e percentuais.');
- const m=metadata(meta.join('\n')+'\n'+doc.text);
- return {doc,points,meta:m,pages};
+ const points=[...byNumber.values()].sort((a,b)=>a.number-b.number);
+ if(points.length<2||!points.some(p=>Number.isFinite(p.percentualPrevistoAcumulado)||Number.isFinite(p.percentualRealizadoAcumulado)))
+  throw Error('Histórico acumulado insuficiente neste PDF; consulte BMs individuais conferidos.');
+ for(const key of ['percentualPrevistoAcumulado','percentualRealizadoAcumulado']){
+  const series=points.filter(p=>Number.isFinite(p[key]));
+  if(series.some((p,i)=>i>0&&p[key]<series[i-1][key]-.01))
+   warnings.push('A série '+(key.includes('Previsto')?'prevista':'realizada')+' diminui entre BMs. Verificar retificações.');
+ }
+ const result={doc,points,pages,meta:metadata(meta.join('\n')+'\n'+String(doc.text||'')),warnings:[...new Set(warnings)]};
+ cache.set(doc.id,result);
+ return result;
 }
 function svgChart(points){
  const planned=points.filter(x=>Number.isFinite(x.day)&&Number.isFinite(x.percentualPrevistoAcumulado)),actual=points.filter(x=>Number.isFinite(x.day)&&Number.isFinite(x.percentualRealizadoAcumulado));
