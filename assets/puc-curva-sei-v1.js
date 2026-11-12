@@ -450,10 +450,13 @@ function setup(){
  byId('ficha-project')?.addEventListener('change',()=>{chosen='';render()});
  byId('ficha-contract')?.addEventListener('change',()=>{chosen='';render()});
  let delay=null;
- function schedule(){clearTimeout(delay);delay=setTimeout(()=>{cache.clear();render()},180)}
- document.addEventListener('puc-documents-updated',schedule);
- document.addEventListener('puc-sei-selection-updated',schedule);
- document.addEventListener('puc-ficha-bms-atualizados',schedule);
+ function schedule(clearPdf=false){
+  clearTimeout(delay);
+  delay=setTimeout(()=>{if(clearPdf)cache.clear();render()},240);
+ }
+ document.addEventListener('puc-documents-updated',()=>schedule(true));
+ document.addEventListener('puc-sei-selection-updated',()=>schedule(false));
+ document.addEventListener('puc-ficha-bms-atualizados',()=>schedule(false));
  document.addEventListener('click',event=>{
    if(!event.target.closest?.('#ficha-print-btn')||!activeReport||!byId('puc-curva-documental')?.querySelector('.puc-curva-report'))return;
    event.preventDefault();event.stopImmediatePropagation();event.stopPropagation();
