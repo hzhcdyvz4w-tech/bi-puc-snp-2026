@@ -280,7 +280,7 @@ async function consolidate(docs,progress=()=>{},stillCurrent=()=>true){
  if(!currentContract()&&identifiable.length>1)throw Error('Há BMs com contratos distintos ('+identifiable.join(', ')+'). Selecione um contrato antes de consolidar.');
  const target=contractCode(currentContract())||identifiable[0]||'';
  const input=codes.filter(x=>!x.conflict&&(target?
-    (x.contract===target||(!x.contract&&!!currentContract())):!x.contract));
+    (x.contract===target||!x.contract):!x.contract));
  const noContract=input.filter(x=>!x.contract);
  const evidenceWarnings=noContract.map(x=>x.doc.name+
    ': contrato não reconhecido automaticamente. Vinculação provisória ao filtro; confira o instrumento antes da validação.');
