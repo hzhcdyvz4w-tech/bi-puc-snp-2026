@@ -204,30 +204,49 @@ function layout(result){
  '<p class="puc-curva-note">Fonte: '+esc(source)+' · '+result.pages+' página(s) examinada(s) · Emitido em '+new Date().toLocaleString('pt-BR')+'. Conferir contrato, objeto, sequência e valores com o documento original antes de usar na decisão.</p></div>';
 }
 let chosen='',generation=0,activeReport=null;
+
+const ALL='__todos_bms__';
+const contractCode=s=>{
+ const input=String(s??'').toUpperCase();
+ const found=input.match(/\b\d{1,6}\s*[\/.\-]\s*(?:20)?\d{2,4}\b/);
+ return found?found[0].replace(/\s/g,'').replace(/[.\-]/g,'/'):input.trim().replace(/\s+/g,' ');
+};
+function reviewedRow(doc){
+ const id=currentProject();
+ return (window.PUCFichasBM?.getState?.()?.bmRows||[]).find(
+  r=>r.project===id&&r.sourceDocId===doc.id&&r.status!=='ignorado'
+ )||null;
+}
+function docContract(doc){
+ const reviewed=reviewedRow(doc);
+ const meta=metadata(doc.text||'');
+ const fromText=meta.contract||((doc.text||'').match(/(?:CONTRATO(?:\s+N[°ºO.]*)?\s*[:\s-]+)(\d{1,6}\s*[\/.\-]\s*(?:20)?\d{2,4})/i)?.[1]||'');
+ // A reviewed contract has priority; it must be consistent with the PDF when available.
+ const a=contractCode(reviewed?.contract),b=contractCode(fromText);
+ if(a&&b&&a!==b)return {contract:'',conflict:'Contrato divergente na ficha e no PDF: '+a+' × '+b};
+ return {contract:a||b,conflict:''};
+}
 function availableDocuments(){
- const docs=selected(),contract=currentContract();
+ const docs=selected(),contract=contractCode(currentContract());
  if(!contract)return docs;
- return docs.filter(d=>{
-  const m=metadata(d.text||'');
-  if(m.contract)return m.contract.toUpperCase().trim()===contract.toUpperCase().trim();
-  const fromReview=(window.PUCFichasBM?.getState?.().bmRows||[])
-    .some(x=>x.project===currentProject()&&x.sourceDocId===d.id&&x.status!=='ignorado'&&
-      x.contract.toUpperCase().trim()===contract.toUpperCase().trim());
-  return fromReview||(d.name||'').toUpperCase().includes(contract.toUpperCase().replaceAll('/','_'));
- });
+ return docs.filter(d=>docContract(d).contract===contract);
 }
 function syncDocuments(){
  const sel=byId('puc-curva-document-select'),status=byId('puc-curva-document-status');
  if(!sel)return null;
  const docs=availableDocuments(),previous=chosen||sel.value;
- sel.replaceChildren(new Option('Selecione um BM com Curva S anexado em Documentos',''));
- for(const d of docs)sel.add(new Option(d.name+' · '+(d.bmNumber?'BM '+d.bmNumber:'BM sem número')+(d.ref?' · '+d.ref:''),d.id));
- const preferred=docs.find(d=>/CURVA[\s_.-]*S/i.test(d.name))||docs[0];
- sel.value=docs.some(d=>d.id===previous)?previous:(preferred?.id||'');
+ sel.replaceChildren(new Option('Consolidar histórico de todos os BMs vinculados','__todos_bms__'));
+ for(const d of docs){
+  const review=reviewedRow(d);
+  const no=review?.number||d.bmNumber||'?';
+  sel.add(new Option('BM '+no+' · '+d.name+(review?.status==='confirmado'?' · conferido':' · a conferir'),d.id));
+ }
+ sel.value=docs.some(d=>d.id===previous)?previous:ALL;
  chosen=sel.value;
- if(!currentProject())status.textContent='Selecione um empreendimento. A Curva S exige vínculo dos BMs com a obra.';
- else if(!docs.length)status.textContent='Nenhum BM vinculado a esta PUC'+(currentContract()?' e ao contrato informado':'')+'. Confira a associação em Documentos → SEI.';
- return docs.find(d=>d.id===sel.value)||null;
+ if(!currentProject())status.textContent='Selecione primeiro o empreendimento e o contrato.';
+ else if(!docs.length)status.textContent='Nenhum BM da obra e contrato selecionados. Confira os vínculos dos BMs no menu Documentos → SEI.';
+ else status.textContent=docs.length+' documento(s) BM vinculados disponíveis para compor o histórico. Modo padrão: todos os BMs do contrato.';
+ return sel.value===ALL?{all:true,docs}:docs.find(d=>d.id===sel.value)||null;
 }
 function showLegacy(note){
  const box=byId('puc-curva-documental'),legacy=byId('ficha-print-area');
