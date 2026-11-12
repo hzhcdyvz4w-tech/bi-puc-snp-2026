@@ -219,15 +219,17 @@ function indicators(text){
  for(const [type,rx] of patterns){let m;while((m=rx.exec(t))&&out.length<50){let value=m[2]||m[1];out.push({type,values:[value],excerpt:t.slice(Math.max(0,m.index-60),Math.min(t.length,m.index+m[0].length+65)).replace(/\s+/g,' ').slice(0,270),line:t.slice(0,m.index).split('\n').length,status:'CANDIDATO — EXIGE CONFERÊNCIA'});}}
  return out
 }
-async function unpack(file){
+async function unpack(file,allowedName=null){
  if(typeof w.JSZip==='undefined')throw Error('Leitor ZIP indisponível');
  const results=[],limits={entries:0,bytes:0,maxEntries:550,maxBytes:120*1024*1024};
  async function walk(item,container,depth){
   if(limits.entries>=limits.maxEntries)throw Error('ZIP com mais de 550 documentos');
   const name=item.name||'anexo';
+  if(extension(name)!=='zip'&&allowedName&&!allowedName(name))return;
   if(extension(name)==='zip'&&depth<2){
    const archive=await w.JSZip.loadAsync(await item.arrayBuffer());
    for(const entry of Object.values(archive.files)){if(entry.dir||/(^|\/)(?:__MACOSX|\.)/.test(entry.name)||entry.name.includes('..')||entry.name.startsWith('/'))continue;
+    if(allowedName&&extension(entry.name)!=='zip'&&!allowedName(entry.name))continue;
     const expected=Number(entry._data?.uncompressedSize||0),compressed=Number(entry._data?.compressedSize||0);
     if(expected>limits.maxBytes-limits.bytes)throw Error('ZIP excede limite de 120 MB descompactados (pré-verificação)');
     if(expected>15*1024*1024&&compressed>0&&expected/compressed>500)throw Error('Entrada ZIP com taxa de expansão anormal');
