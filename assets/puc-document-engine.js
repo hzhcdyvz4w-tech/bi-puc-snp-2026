@@ -219,6 +219,16 @@ function indicators(text){
  for(const [type,rx] of patterns){let m;while((m=rx.exec(t))&&out.length<50){let value=m[2]||m[1];out.push({type,values:[value],excerpt:t.slice(Math.max(0,m.index-60),Math.min(t.length,m.index+m[0].length+65)).replace(/\s+/g,' ').slice(0,270),line:t.slice(0,m.index).split('\n').length,status:'CANDIDATO — EXIGE CONFERÊNCIA'});}}
  return out
 }
+function seiBMIndicators(text){
+ const allowed=new Set([
+  'Valor do Contrato (BM)','Valor da Medição (BM)','Valor Acumulado (BM)',
+  'Saldo do Contrato (BM)','Valor da Medição (%) BM','Valor Acumulado (%) BM',
+  'Saldo do Contrato (%) BM','Valor medido (período)','Valor medido (acumulado)',
+  'Valor medido (apuração não determinada)','Execução física (%)','Execução financeira (%)'
+ ]);
+ return indicators(text).filter(row=>allowed.has(row.type));
+}
+
 async function unpack(file,allowedName=null){
  if(typeof w.JSZip==='undefined')throw Error('Leitor ZIP indisponível');
  const results=[],limits={entries:0,bytes:0,maxEntries:550,maxBytes:120*1024*1024},skipped={count:0};
@@ -297,5 +307,5 @@ async function read(item,options={}){
  }
  return {text:'',quality:ext==='xls'?'XLS LEGADO: ANEXADO, LEITURA NÃO DISPONÍVEL':'FORMATO ANEXADO, SEM LEITURA TEXTUAL'};
 }
-w.PUCDocEngine={extension,bmClass,seiBMFileAllowed,seiBMDecision,bmNumber,bmPeriod,indicators,bmHeaderFromPDFItems,bmTotalsFromPDFItems,bmWorkName,unpack,read,cleanHTML};
+w.PUCDocEngine={extension,bmClass,seiBMFileAllowed,seiBMDecision,bmNumber,bmPeriod,indicators,seiBMIndicators,bmHeaderFromPDFItems,bmTotalsFromPDFItems,bmWorkName,unpack,read,cleanHTML};
 })(window);
