@@ -59,7 +59,7 @@ function candidates(source){
  for(const item of patterns){let match;while((match=item.regex.exec(text))&&result.length<30){result.push({type:item.type,excerpt:text.slice(Math.max(0,match.index-70),Math.min(text.length,match.index+match[0].length+80)).replace(/\s+/g,' ').slice(0,260),values:[match[1]],line:text.slice(0,match.index).split('\n').length,status:'CANDIDATO – NÃO CONFERIDO'})}}
  return result
 }
-async function extract(f){return engine().unpack(f)}
+async function extract(f,origin){return engine().unpack(f,origin==='SEI'?engine()?.seiBMFileAllowed:null)}
 async function fileText(item){return engine().read(item)}
 async function reanalyse(onlySEIBMs=false){
  let changed=0,problems=[];const button=E(onlySEIBMs?'puc-bm-reanalyse':'puc-reanalyse');if(button)button.disabled=true;
@@ -81,7 +81,7 @@ async function ingest(files,origin,project,ref,selectedZipEntries=null){
  for(const file of files){
   try{
    if(file.size>90*1024*1024)throw Error('arquivo acima de 90 MB');
-   const inner=await extract(file);
+   const inner=await extract(file,origin);
    for(const item of inner){
     if(origin==='SEI'&&/\.zip$/i.test(file.name)&&selectedZipEntries&&!selectedZipEntries.has(file.name+'\u0001'+item.container+'\u0001'+item.name))continue;
     if(origin==='SEI'&&!engine()?.seiBMFileAllowed?.(item.name)){ignored++;continue}
@@ -200,7 +200,7 @@ function view(id){selected=stored.find(x=>x.id===id);if(!selected)return;
  E('puc-use-evidence').onclick=()=>{if(!E('obs-evidence'))return;const project=selected.project||E('cmp-project').value;if(!project){status('Selecione antes o empreendimento na aba Confronto.');return}E('obs-project').value=project;E('obs-source').value=selected.origin==='SEI'?'SEI':selected.origin==='BALANCO'?'BALANCO':selected.origin==='DOCAS'?'DOCAS':'PORTAL';E('obs-evidence').value=[selected.ref,selected.container,selected.name].filter(Boolean).join(' · ');E('obs-verified').checked=false;E('obs-note').value='Evidência identificada na biblioteca local; valores candidatos NÃO CONFERIDOS. Conferir documento, período, medição, contrato e valor antes de registrar.';document.querySelector('[data-page="comparacao"]').click();E('observation-form').scrollIntoView({behavior:'smooth'});};
 }
 function setup(){
- let section=E('documentos');if(!section)return;let pane=document.createElement('div');pane.className='panel';pane.id='puc-library';pane.innerHTML='<h2>Biblioteca documental compartilhada e persistente (local)</h2><p class="muted">Anexe vários documentos de uma vez. Ficam armazenados no navegador (IndexedDB) para consulta em Documentos e Confronto; não são publicados nem compartilhados entre computadores.</p><div class="formgrid"><label>Origem<select id="puc-lib-origin"><option>SEI</option><option>DOCAS</option><option>BALANCO</option><option>PORTAL</option></select></label><label>Investimento<select id="puc-lib-project"><option value="">Selecionar ao confrontar</option></select></label><label>Processo / referência<input id="puc-lib-ref"></label><label>Arquivos (múltiplos ou ZIP)<input id="puc-lib-files" multiple type="file" accept=".pdf,.zip,.txt,.csv,.json,.xml,.xls,.xlsx,.doc,.docx,.png,.jpg,.jpeg"></label></div><div class="two-actions" style="margin:12px 0"><button class="btn" type="button" id="puc-lib-save">Importar e guardar nesta máquina</button><button class="btn secondary" type="button" id="puc-lib-export">Exportar índice JSON</button><strong id="puc-library-count"></strong></div><p role="status" id="puc-library-status"></p><div class="scroll"><table class="data-table"><thead><tr><th>Arquivo</th><th>Origem</th><th>Projeto</th><th>Tipo</th><th>Achados sugeridos</th><th>Ação</th></tr></thead><tbody id="puc-library-list"></tbody></table></div><div id="puc-library-detail"></div>';
+ let section=E('documentos');if(!section)return;let pane=document.createElement('div');pane.className='panel';pane.id='puc-library';pane.innerHTML='<h2>Biblioteca documental compartilhada e persistente (local)</h2><p class="muted">Anexe vários documentos de uma vez. Ficam armazenados no navegador (IndexedDB) para consulta em Documentos e Confronto; não são publicados nem compartilhados entre computadores.</p><div class="formgrid"><label>Origem<select id="puc-lib-origin"><option>SEI</option><option>DOCAS</option><option>BALANCO</option><option>PORTAL</option></select></label><label>Investimento<select id="puc-lib-project"><option value="">Selecionar ao confrontar</option></select></label><label>Processo / referência<input id="puc-lib-ref"></label><label>Arquivos (múltiplos ou ZIP)<input id="puc-lib-files" multiple type="file" accept=".pdf,.xlsx,.zip"></label></div><div class="two-actions" style="margin:12px 0"><button class="btn" type="button" id="puc-lib-save">Importar e guardar nesta máquina</button><button class="btn secondary" type="button" id="puc-lib-export">Exportar índice JSON</button><strong id="puc-library-count"></strong></div><p role="status" id="puc-library-status"></p><div class="scroll"><table class="data-table"><thead><tr><th>Arquivo</th><th>Origem</th><th>Projeto</th><th>Tipo</th><th>Achados sugeridos</th><th>Ação</th></tr></thead><tbody id="puc-library-list"></tbody></table></div><div id="puc-library-detail"></div>';
  section.appendChild(pane);
  const reBtn=document.createElement('button');reBtn.type='button';reBtn.id='puc-reanalyse';reBtn.className='btn secondary';reBtn.textContent='Reanalisar documentos já anexados';reBtn.onclick=()=>reanalyse(false);
  E('puc-library-count')?.parentElement?.appendChild(reBtn);
@@ -215,7 +215,7 @@ function setup(){
  const link=document.createElement('button');link.type='button';link.className='btn secondary';link.textContent='Vincular anexos sem PUC ao investimento escolhido';controls.appendChild(link);
  link.onclick=async()=>{const projects=chosenProjects(),ref=E('puc-lib-ref').value.trim();
  if(!projects.length){status('Marque uma ou mais PUCs na Biblioteca.');return}
- const docs=stored.filter(x=>!projectIds(x).length&&(!ref||x.ref===ref));if(!docs.length){status('Não há anexos sem PUC nesse processo.');return}
+ const docs=stored.filter(x=>!projectIds(x).length&&(!ref||x.ref===ref)&&(x.origin!=='SEI'||isBM(x)));if(!docs.length){status('Não há anexos sem PUC nesse processo.');return}
  if(!confirm('Vincular '+docs.length+' documento(s) sem PUC a '+projects.join(', ')+'? Confira a documentação de cada investimento.'))return;
  const tx=db.transaction('files','readwrite');docs.forEach(d=>{d.projects=[...projects];d.project=projects[0];tx.objectStore('files').put(d)});
  await new Promise((ok,fail)=>{tx.oncomplete=ok;tx.onerror=()=>fail(tx.error);tx.onabort=()=>fail(tx.error)});
@@ -229,6 +229,7 @@ function setup(){
  const legacy=E('upload-file');if(legacy){legacy.closest('.upload')?.insertAdjacentHTML('beforebegin','<p class="notice subtle">Para arquivos SEI, ZIP, BMs e anexos das Docas, use somente a Biblioteca Documental abaixo. O importador desta seção permanece dedicado à consulta SIOP.</p>');}
  if(E('upload-origin'))E('upload-origin').addEventListener('change',()=>{const isSiop=E('upload-origin').value==='SIOP';const box=E('upload-file')?.closest('.upload');if(box)box.style.display=isSiop?'':'none'});
  /* O botão de acesso a Documentos foi inserido no lugar da janela antiga; sem duplicação. */
+ E('puc-lib-origin').addEventListener('change',()=>{const input=E('puc-lib-files');if(input)input.accept=E('puc-lib-origin').value==='SEI'?'.pdf,.xlsx,.zip':'.pdf,.zip,.txt,.csv,.json,.xml,.xls,.xlsx,.doc,.docx,.png,.jpg,.jpeg'});
  E('puc-lib-save').onclick=async()=>{const b=E('puc-lib-save');b.disabled=true;try{await ingest([...E('puc-lib-files').files],E('puc-lib-origin').value,chosenProjects(),E('puc-lib-ref').value)}finally{b.disabled=false}};
  E('puc-lib-export').onclick=()=>{let data=stored.map(({id,name,container,origin,project,projects,ref,time,category,candidates})=>({id,name,container,origin,project,projects,ref,time,category,candidates}));let blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'}),a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download='indice_documental_puc_local.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
  // Reutilizar os anexos de Documentos e da janela SEI para manter uma única biblioteca.
