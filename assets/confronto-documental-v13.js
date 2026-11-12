@@ -133,9 +133,9 @@ function sourceCards(){
  $('puc3-sei-clear').onclick=()=>{seiExcluded=new Set(docs().filter(d=>d.origin==='SEI').map(d=>d.id));saveSeiSelection();renderSeiSelector();render()};
  $('puc3-files-SEI').addEventListener('change',refreshSeiZipPreview);
  $('puc3-sei-zip-search').addEventListener('input',renderSeiZipPreview);
- $('puc3-sei-zip-all').onclick=()=>{seiZipSelected=new Set(seiZipItems.map(x=>x.key));renderSeiZipPreview()};
+ $('puc3-sei-zip-all').onclick=()=>{seiZipSelected=new Set(seiZipItems.filter(x=>x.eligible).map(x=>x.key));renderSeiZipPreview()};
  $('puc3-sei-zip-clear').onclick=()=>{seiZipSelected.clear();renderSeiZipPreview()};
- $('puc3-sei-zip-visible').onclick=()=>{const q=($('puc3-sei-zip-search')?.value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();seiZipSelected=new Set(seiZipItems.filter(x=>seiNameMatch(x,q)).map(x=>x.key));renderSeiZipPreview()};
+ $('puc3-sei-zip-visible').onclick=()=>{const q=($('puc3-sei-zip-search')?.value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();seiZipSelected=new Set(seiZipItems.filter(x=>x.eligible&&seiNameMatch(x,q)).map(x=>x.key));renderSeiZipPreview()};
  $('puc3-sei-scan-bm').onclick=scanPendingSeiBMs;
  renderSeiSelector();
   $('puc3-files-BALANCO').addEventListener('change',refreshBalancoPreview);
@@ -200,7 +200,7 @@ async function refreshSeiZipPreview(){
  });
  seiZipSelected=new Set();renderSeiZipPreview();
  const zipFiles=files.filter(f=>/\.zip$/i.test(f.name));
- if(!zipFiles.length){seiZipReady=true;return}
+ if(!zipFiles.length){seiZipReady=true;await scanPendingSeiBMs();return}
  if(count)count.textContent='Lendo arquivos individuais e conteúdo interno do ZIP...';
  try{
   if(!eng?.unpack)throw Error('Leitor ZIP não inicializado');
@@ -214,36 +214,44 @@ async function refreshSeiZipPreview(){
    }
   }
   if(generation!==seiZipRevision)return;
-  seiZipItems.push(...entries);seiZipReady=true;renderSeiZipPreview();
+  seiZipItems.push(...entries);seiZipReady=true;renderSeiZipPreview();await scanPendingSeiBMs();
  }catch(e){if(generation===seiZipRevision){seiZipReady=false;if(count)count.textContent='Erro ao ler o ZIP: '+e.message+' — escolha outro arquivo antes de importar.'}}
 }
 async function scanPendingSeiBMs(){
  const button=$('puc3-sei-scan-bm'),count=$('puc3-sei-zip-count'),generation=seiZipRevision;
- if(!seiZipReady||!seiZipItems.length){status('Selecione arquivos e aguarde a listagem antes de identificar BMs.');return}
- const engine=window.PUCDocEngine;if(!engine?.read||!engine?.bmClass){status('Leitor de documentos indisponível.');return}
- button.disabled=true;let checked=0,errors=0;
+ if(!seiZipReady)return;
+ const eng=window.PUCDocEngine;
+ if(!eng?.read||!eng?.seiBMDecision){status('Filtro de BMs indisponível. Atualize a página.');return}
+ if(button)button.disabled=true;
+ const total=seiZipItems.length;let checked=0,errors=0,ignored=0;
  try{
   for(const record of seiZipItems){
-   if(generation!==seiZipRevision)break;
+   if(generation!==seiZipRevision)return;
    if(record.scanned)continue;
    try{
-    const result=await engine.read(record.item);
-    record.bmStatus=engine.bmClass(record.item.name,result.text||'');
-    record.bmNumber=engine.bmNumber?.(record.item.name,result.text||'')||'';
-    record.scanned=true;
-   }catch(e){errors++;record.scanned=true}
-   checked++;
-   if(checked%5===0&&count)count.textContent='Verificando conteúdo para possíveis BMs: '+checked+' de '+seiZipItems.length+' arquivo(s)...';
+    const result=await eng.read(record.item,{maxPages:8});
+    const decision=eng.seiBMDecision(record.item.name,result.text||'',result.quality||'');
+    record.eligible=decision.eligible;
+    record.bmStatus=decision.status;
+    record.ignoreReason=decision.reason;
+    record.bmNumber=eng.bmNumber?.(record.item.name,result.text||'')||'';
+    if(!record.eligible)ignored++;
+   }catch(e){errors++;record.eligible=false;record.ignoreReason=String(e.message||e)}
+   record.scanned=true;checked++;
+   if(count)count.textContent='Identificando apenas BMs legíveis: '+checked+' de '+total+' PDF(s)/planilha(s)...';
   }
-  if(generation===seiZipRevision){
-   // A leitura seleciona somente boletins identificados ou prováveis. Mera menção a BM não basta.
-   seiZipSelected=new Set(seiZipItems.filter(x=>x.bmStatus==='BM IDENTIFICADO'||x.bmStatus==='BM PROVÁVEL').map(x=>x.key));
-   $('puc3-sei-zip-search').value='BM';
-   renderSeiZipPreview();
-   const mentions=seiZipItems.filter(x=>x.bmStatus==='BM MENCIONADO').length;
-   status('Leitura preliminar concluída: '+seiZipSelected.size+' possível(is) BM(s) marcado(s), '+mentions+' menção(ões) desmarcada(s) e '+errors+' arquivo(s) sem leitura. Revise os boletins antes de confirmar valores.');
-  }
- }finally{button.disabled=false}
+  if(generation!==seiZipRevision)return;
+  const eligible=seiZipItems.filter(x=>x.eligible===true);
+  ignored=total-eligible.length;
+  seiZipItems=eligible;
+  seiZipSelected=new Set(eligible.map(x=>x.key));
+  const search=$('puc3-sei-zip-search');if(search)search.value='';
+  renderSeiZipPreview();
+  status('Triagem SEI: '+eligible.length+' BM(s) PDF/XLSX selecionado(s); '+ignored+
+   ' arquivo(s) excluído(s) da análise por não serem BMs legíveis. '+
+   (errors?errors+' falha(s) de leitura. ':'')+
+   'Os documentos antigos permanecem no arquivo local. Confira os BMs antes de importar.');
+ }finally{if(button)button.disabled=false}
 }
 
 function refreshAttachmentStatus(){
