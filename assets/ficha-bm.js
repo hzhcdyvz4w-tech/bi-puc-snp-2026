@@ -216,7 +216,11 @@ function loadSelectedSEIBMs(){
 }
 
 function eligible(id){return bmRows.filter(x=>x.project===id&&x.status!=='ignorado'&&seiActive(x));}
-function renderRows(){const id=$f('ficha-project').value,rows=eligible(id);$f('ficha-bm-count').textContent=`${rows.length} BM(s) identificado(s) · ${rows.filter(x=>x.status==='confirmado').length} conferido(s)`;
+function renderRows(){const id=$f('ficha-project').value,rows=eligible(id),n=rows.filter(x=>x.status==='pendente').length;
+ $f('ficha-bm-count').textContent=rows.length+' BM(s) identificado(s) · '+rows.filter(x=>x.status==='confirmado').length+' conferido(s)';
+ if($f('ficha-open-review'))$f('ficha-open-review').textContent='Conferir BMs ('+n+' pendentes)';
+ if($f('ficha-curve-status'))$f('ficha-curve-status').textContent=rows.length?
+   rows.length+' BM(s) associados ao empreendimento; '+n+' aguardam conferência.':'Nenhum BM associado. Confira os vínculos em Documentos → SEI.';
  $f('ficha-bms-rows').innerHTML=rows.map(x=>`<tr data-bmrow="${ef(x.id)}"><td><b>BM ${ef(x.number||'s/n')}</b><span class="bm-evidence" title="${ef(x.evidence)}">${ef(txt(x.evidence,110))}</span>${x.warning?`<span class="ficha-flag">${ef(x.warning)}</span>`:''}</td><td><input data-bmfield="date" aria-label="Data BM ${ef(x.number)}" type="date" value="${ef(x.date)}" /></td><td><input data-bmfield="contract" aria-label="Contrato BM ${ef(x.number)}" value="${ef(x.contract)}" /></td><td><input data-bmfield="physical" aria-label="Físico acumulado BM ${ef(x.number)}" inputmode="decimal" placeholder="—" value="${ef(x.physical??'')}" /></td><td><input data-bmfield="measured" aria-label="Medição período BM ${ef(x.number)}" inputmode="decimal" placeholder="—" value="${ef(x.measured??'')}" /></td><td><input data-bmfield="cumulative" aria-label="Medição acumulada BM ${ef(x.number)}" inputmode="decimal" placeholder="—" value="${ef(x.cumulative??'')}" /></td><td><span class="status-tag ${x.status==='confirmado'?'ok':'wait'}">${x.status==='confirmado'?'Conferido pelo operador':'A conferir'}</span></td><td><div class="bm-op"><button type="button" class="btn" data-bmconfirm="${ef(x.id)}">Conferir</button><button type="button" class="btn secondary" data-bmremove="${ef(x.id)}">Ignorar</button></div></td></tr>`).join('')||'<tr><td colspan="8" class="empty">Nenhum BM identificado neste empreendimento.</td></tr>';
 }
 function readBmForm(row){const x=bmRows.find(x=>x.id===row.dataset.bmrow);if(!x)return;const q=k=>row.querySelector(`[data-bmfield="${k}"]`)?.value??'';x.date=q('date').trim();x.contract=q('contract').trim();x.physical=numberBR(q('physical'));x.measured=numberBR(q('measured'));x.cumulative=numberBR(q('cumulative'));return x;}
@@ -224,8 +228,10 @@ function confirmBM(id){const row=[...$f('ficha-bms-rows').querySelectorAll('[dat
  if(!validDate(x.date))issues.push('informe uma data de medição válida');if(x.physical===null&&x.measured===null&&x.cumulative===null)issues.push('informe pelo menos uma medida física ou financeira');if(x.physical!==null&&(x.physical<0||x.physical>100))issues.push('o percentual físico deve estar entre 0 e 100');if([x.measured,x.cumulative].some(v=>v!==null&&v<0))issues.push('valores de medição não podem ser negativos');
  const dup=bmRows.some(o=>o.id!==id&&o.project===x.project&&o.status==='confirmado'&&o.contract===x.contract&&o.number&&o.number===x.number&&o.date===x.date);
  if(dup)issues.push('há BM do mesmo número, data e contrato já conferido; revise retificações');
- if(issues.length){$f('ficha-extraction-status').textContent='Não conferido: '+issues.join('; ')+'.';return}x.status='confirmado';x.confirmed_at=new Date().toISOString();x.warning='';$f('ficha-extraction-status').textContent=`BM ${x.number||'s/n'} conferido pelo operador. Dados disponíveis na ficha; não homologados.`;updateContractsOnly();renderRows();drawSheet();}
-function ignoredBM(id){const x=bmRows.find(x=>x.id===id);if(!x)return;x.status='ignorado';$f('ficha-extraction-status').textContent='BM removido da curva (mantido na sessão para rastreabilidade).';updateContractsOnly();renderRows();drawSheet()}
+ if(issues.length){$f('ficha-extraction-status').textContent='Não conferido: '+issues.join('; ')+'.';
+  if($f('ficha-bms-review-live'))$f('ficha-bms-review-live').textContent='BM '+(x.number||'s/n')+': '+issues.join('; ')+'.';return}
+ x.status='confirmado';x.confirmed_at=new Date().toISOString();x.warning='';$f('ficha-extraction-status').textContent=`BM ${x.number||'s/n'} conferido pelo operador. Dados disponíveis na ficha; não homologados.`;updateContractsOnly();renderRows();drawSheet();refreshSelectedSEIBMs();document.dispatchEvent(new CustomEvent('puc-ficha-bms-atualizados'));}
+function ignoredBM(id){const x=bmRows.find(x=>x.id===id);if(!x)return;x.status='ignorado';$f('ficha-extraction-status').textContent='BM removido da curva (mantido na sessão para rastreabilidade).';updateContractsOnly();renderRows();drawSheet();refreshSelectedSEIBMs();document.dispatchEvent(new CustomEvent('puc-ficha-bms-atualizados'))}
 async function pdfText(bytes){
  if(window.pdfjsLib&&typeof window.pdfjsLib.getDocument==='function'){
   window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -413,11 +419,12 @@ function simplifyFichasUI(){
  $f('ficha-source-panel').hidden=true;
  $f('ficha-balanco-review').hidden=true;
  $f('ficha-planned-review').hidden=true;
- const selectProject=$f('ficha-project')?.closest('label'),selectContract=$f('ficha-contract')?.closest('label');
+ const selectCompany=$f('ficha-company')?.closest('label'),selectProject=$f('ficha-project')?.closest('label'),selectContract=$f('ficha-contract')?.closest('label');
  const controls=document.createElement('div');
  controls.className='panel ficha-curve-controls';
- controls.innerHTML='<div><h2>Ficha do empreendimento e Curva S</h2><p class="muted">Histórico físico dos boletins selecionados em <strong>Documentos → SEI</strong>. Percentuais financeiros não substituem execução física.</p></div><div class="ficha-curve-pickers"></div><p class="ficha-status">Os BMs precisam ser conferidos para integrar o gráfico. Anexe documentos exclusivamente na página Documentos.</p>';
+ controls.innerHTML='<div><h2>Ficha do empreendimento e Curva S</h2><p class="muted">Filtro único: Companhia → Empreendimento → Contrato → BM. Os BMs são lidos da biblioteca Documentos → SEI; os percentuais físicos exigem conferência.</p></div><div class="ficha-curve-pickers"></div><div class="ficha-curve-actions"><button type="button" class="btn" id="ficha-open-review">Conferir BMs (0 pendentes)</button><button type="button" class="btn secondary" id="ficha-open-documents">Ver documentos SEI</button><p id="ficha-curve-status" role="status" class="ficha-status">Selecione a obra para localizar os BMs.</p></div>';
  const picker=controls.querySelector('.ficha-curve-pickers');
+ if(selectCompany)picker.appendChild(selectCompany);
  if(selectProject)picker.appendChild(selectProject);
  if(selectContract)picker.appendChild(selectContract);
  result.parentNode.insertBefore(controls,result);
@@ -428,15 +435,21 @@ function simplifyFichasUI(){
  const details=document.createElement('details');details.id='ficha-bms-conferencia';details.className='ficha-bms-conferencia';
  const summary=document.createElement('summary');summary.textContent='Conferir medições dos BMs selecionados (necessário para incluir pontos na curva)';
  details.appendChild(summary);
+ const live=document.createElement('p');live.className='ficha-status';live.id='ficha-bms-review-live';details.appendChild(live);
  while(review.firstChild)details.appendChild(review.firstChild);
  review.appendChild(details);
  review.querySelector('.section-header')?.setAttribute('hidden','');
  review.querySelector('p.muted')?.setAttribute('hidden','');
  review.querySelector('#ficha-manual-bm')?.closest('details')?.setAttribute('hidden','');
  review.querySelector('.ficha-actions')?.setAttribute('hidden','');
- result.insertAdjacentElement('afterend',review);
+ result.parentNode.insertBefore(review,result);
+ $f('ficha-open-review').onclick=()=>{
+  const d=$f('ficha-bms-conferencia');d.open=true;
+  refreshSelectedSEIBMs();review.scrollIntoView({behavior:'smooth',block:'start'});
+ };
+ $f('ficha-open-documents').onclick=()=>document.querySelector('#nav [data-page="documentos"]')?.click();
  const style=document.createElement('style');style.id='ficha-grafico-enxuto-css';
- style.textContent="\n #fichas.ficha-grafico-enxuto > .panel[hidden],#fichas.ficha-grafico-enxuto > .ficha-source-panel[hidden]{display:none!important}\n #fichas .ficha-curve-controls{padding:20px 24px!important;margin-bottom:15px}\n #fichas .ficha-curve-controls h2{margin:0 0 7px;font-size:23px}\n #fichas .ficha-curve-pickers{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:15px;margin-top:15px}\n #fichas .ficha-curve-pickers label{display:flex;flex-direction:column;min-width:0;gap:7px;font-size:13px;font-weight:650}\n #fichas .ficha-curve-pickers select{width:100%;min-width:0;padding:11px;font-size:14px}\n #fichas #ficha-result-panel{margin-top:12px}\n #fichas #ficha-review-bms{margin-top:15px}\n #fichas .ficha-bms-conferencia>summary{font-size:15px;font-weight:700;cursor:pointer;padding:8px 0;color:#184868}\n #fichas .ficha-bms-conferencia[open]>summary{margin-bottom:15px}\n #fichas #ficha-review-bms [hidden]{display:none!important}\n #fichas .ficha-chart{min-height:260px}\n @media(max-width:720px){#fichas .ficha-curve-pickers{grid-template-columns:minmax(0,1fr)}#fichas .ficha-curve-controls{padding:16px!important}}\n @media print{#fichas .ficha-curve-controls,#fichas #ficha-review-bms{display:none!important}}\n";
+ style.textContent="\n #fichas.ficha-grafico-enxuto > .panel[hidden],#fichas.ficha-grafico-enxuto > .ficha-source-panel[hidden]{display:none!important}\n #fichas .ficha-curve-controls{padding:20px 24px!important;margin-bottom:15px}\n #fichas .ficha-curve-controls h2{margin:0 0 7px;font-size:23px}\n #fichas .ficha-curve-pickers{display:grid;grid-template-columns:minmax(140px,1fr) minmax(0,2fr) minmax(140px,1fr);gap:12px;margin-top:15px}\n #fichas .ficha-curve-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:12px 0}\n #fichas .ficha-curve-actions .ficha-status{flex-basis:100%;margin:0}\n #fichas .ficha-curve-pickers label{display:flex;flex-direction:column;min-width:0;gap:7px;font-size:13px;font-weight:650}\n #fichas .ficha-curve-pickers select{width:100%;min-width:0;padding:11px;font-size:14px}\n #fichas #ficha-result-panel{margin-top:12px}\n #fichas #ficha-review-bms{margin-top:15px}\n #fichas .ficha-bms-conferencia>summary{font-size:15px;font-weight:700;cursor:pointer;padding:8px 0;color:#184868}\n #fichas .ficha-bms-conferencia[open]>summary{margin-bottom:15px}\n #fichas #ficha-review-bms [hidden]{display:none!important}\n #fichas .ficha-chart{min-height:260px}\n @media(max-width:720px){#fichas .ficha-curve-pickers{grid-template-columns:minmax(0,1fr)}#fichas .ficha-curve-controls{padding:16px!important}}\n @media print{#fichas .ficha-curve-controls,#fichas #ficha-review-bms{display:none!important}}\n";
  document.head.appendChild(style);
 }
 
@@ -450,7 +463,7 @@ function init(){
  $f('fichas').addEventListener('click',e=>{const b=e.target.closest('[data-open-ficha-sources]');if(b){sourcePanel(true,b.dataset.openFichaSources);$f('ficha-source-panel').scrollIntoView({behavior:'smooth',block:'start'});$f('ficha-toggle-sources').focus({preventScroll:true})}});
  const docasBar=$f('docas')?.querySelector('.filters');if(docasBar){const b=document.createElement('button');b.className='btn';b.id='docas-import-sources';b.type='button';b.textContent='＋ Inserir fontes (SEI · BMs · Balanço)';b.addEventListener('click',()=>{const proj=$f('docas-project').value,co=$f('docas-company').value;if(proj)openProject(proj);else{nav('fichas');if(co){$f('ficha-company').value=co;updateProjects()}}sourcePanel(true,'sei');$f('ficha-source-panel').scrollIntoView({behavior:'smooth',block:'start'});if(!selectedId)$f('ficha-top-status').textContent='Selecione o empreendimento nos filtros superiores para vincular os arquivos.'});docasBar.appendChild(b)}
 
- $f('ficha-company').addEventListener('change',()=>{selectedId='';updateProjects()});$f('ficha-project').addEventListener('change',()=>{selectedId=$f('ficha-project').value;updateContractsOnly();loadBalanceForm();renderRows();drawSheet();refreshSelectedSEIBMs()});$f('ficha-contract').addEventListener('change',drawSheet);
+ $f('ficha-company').addEventListener('change',()=>{selectedId='';updateProjects()});$f('ficha-project').addEventListener('change',()=>{selectedId=$f('ficha-project').value;stageLinkedBMs();updateContractsOnly();loadBalanceForm();renderRows();drawSheet();refreshSelectedSEIBMs()});$f('ficha-contract').addEventListener('change',drawSheet);
  $f('ficha-extract-bms').addEventListener('click',importProcesses);$f('ficha-manual-bm').addEventListener('submit',manualBM);$f('ficha-bms-rows').addEventListener('input',e=>{if(!e.target.matches('[data-bmfield]'))return;const row=e.target.closest('[data-bmrow]');const x=bmRows.find(v=>v.id===row?.dataset.bmrow);if(x&&x.status==='confirmado'){x.status='pendente';$f('ficha-extraction-status').textContent='BM alterado após conferência: clique em Conferir novamente.';const tag=row.querySelector('.status-tag');if(tag){tag.textContent='A conferir';tag.className='status-tag wait';}drawSheet()}});$f('ficha-bms-rows').addEventListener('click',e=>{const a=e.target.closest('[data-bmconfirm]');if(a)confirmBM(a.dataset.bmconfirm);const b=e.target.closest('[data-bmremove]');if(b)ignoredBM(b.dataset.bmremove)});
  $f('ficha-balanco-form').addEventListener('submit',saveBalance);$f('ficha-upload-bms-csv').addEventListener('change',e=>importBmCSV(e.target.files?.[0]));$f('ficha-balanco-file').addEventListener('change',e=>importBalance(e.target.files?.[0]));$f('ficha-use-balanco-row').onclick=useBalanceRow;$f('ficha-planned-file').addEventListener('change',e=>importPlan(e.target.files?.[0]));
  $f('ficha-export-bms').onclick=exportBMCSV;$f('ficha-sync-confront').onclick=syncConfront;$f('ficha-export-session').onclick=exportSession;$f('ficha-restore-session').addEventListener('change',e=>restoreSession(e.target.files?.[0]));
@@ -459,13 +472,13 @@ function init(){
  $f('ficha-planned-model').onclick=()=>model('MODELO_CURVA_S_PREVISTA.csv',['investimento','contrato','competencia','fisico_previsto_acumulado_pct','referencia']);
  $f('ficha-sei-refresh').onclick=refreshSelectedSEIBMs;
  $f('ficha-sei-load').onclick=loadSelectedSEIBMs;
- document.addEventListener('puc-documents-updated',()=>{refreshSelectedSEIBMs();drawSheet()});
- document.addEventListener('puc-sei-selection-updated',()=>{refreshSelectedSEIBMs();renderRows();drawSheet()});
+ document.addEventListener('puc-documents-updated',()=>{stageLinkedBMs();refreshSelectedSEIBMs();renderRows();drawSheet()});
+ document.addEventListener('puc-sei-selection-updated',()=>{stageLinkedBMs();refreshSelectedSEIBMs();renderRows();drawSheet()});
   $f('ficha-generate').onclick=drawSheet;
  $f('ficha-print-btn').onclick=()=>{if(!selectedId&&!document.getElementById('puc-curva-documental')?.querySelector('.puc-curva-report')){alert('Selecione um empreendimento ou um BM com Curva S em Documentos.');return}if(selectedId)drawSheet();document.body.classList.add('ficha-print');window.print()};window.addEventListener('afterprint',()=>document.body.classList.remove('ficha-print'));
  $f('ficha-open-critico').onclick=()=>{if(!selectedId){alert('Selecione empreendimento.');return}const p=data.projetos.find(x=>x.id===selectedId);nav('relatorio');$f('report-company').value=p.empresa;updateCompanyProject('report-company','report-project','Selecione o empreendimento');$f('report-project').value=selectedId;showCritical()};
  updateProjects();drawSheet();refreshSelectedSEIBMs();
- window.PUCFichasBM={openProject,openSources:(id,kind='sei')=>{if(id)openProject(id);else nav('fichas');sourcePanel(true,kind)},parseBmText,physicalSeries,drawSheet,getState:()=>({bmRows,balances,planned}),selectedSEIDocs,loadSelectedSEIBMs,refreshSelectedSEIBMs,importProcesses,syncConfront};
+ window.PUCFichasBM={openProject,stageLinkedBMs,openReview:()=>{$f('ficha-open-review')?.click()},openSources:(id,kind='sei')=>{if(id)openProject(id);else nav('fichas');sourcePanel(true,kind)},parseBmText,physicalSeries,drawSheet,getState:()=>({bmRows,balances,planned}),selectedSEIDocs,loadSelectedSEIBMs,refreshSelectedSEIBMs,importProcesses,syncConfront};
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
