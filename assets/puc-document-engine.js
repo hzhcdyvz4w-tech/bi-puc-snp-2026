@@ -24,7 +24,7 @@ function seiBMFileAllowed(name){
  const type=extension(n);
  if(!['pdf','xlsx'].includes(type))return false;
  // Tipo processual não é BM, mesmo que mencione medições.
- if(/(?:^|[_\s.-])(?:oficio|despacho|parecer|memorando|nota[_\s.-]?tecnica|processo|protocolo|email|e-mail|carta|decreto|portaria|contrato|aditivo|apostilamento|edital|termo[_\s.-]?de[_\s.-]?referencia)(?:[_\s.-]|$)/.test(n))return false;
+ if(/(?:^|[_\s.-])(?:oficio|despacho|parecer|memorando|nota[_\s.-]?tecnica|processo|protocolo|email|e-mail|carta|decreto|portaria|contrato|aditivo|apostilamento|edital|termo[_\s.-]?(?:de[_\s.-]?)?referencia)(?:[_\s.-]|$)/.test(n))return false;
  return true;
 }
 function seiBMDecision(name,text,quality){
