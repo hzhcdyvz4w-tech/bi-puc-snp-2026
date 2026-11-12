@@ -216,14 +216,16 @@ function selectedForProject(project){
  return seiCandidateSelected;
 }
 function candidateDocuments(){
- const project=data.projetos.find(p=>p.id===$f('ficha-project')?.value);
- if(!project)return [];
- return selectedSEIDocs().filter(d=>{
-  const assigned=associatedProjects(d);
-  return !assigned.length||assigned.includes(project.id);
+ const ids=selectedProjectIds();
+ if(!ids.length)return [];
+ const primary=data.projetos.find(p=>p.id===ids[0]);
+ return selectedSEIDocs().filter(doc=>{
+  const assigned=associatedProjects(doc);
+  return !assigned.length||assigned.some(id=>ids.includes(id));
  }).sort((a,b)=>{
-  const rank=d=>belongsTo(d,project.id)?2:workCandidateForProject(d,project)?1:0;
-  return rank(b)-rank(a)||String(a.name).localeCompare(String(b.name),'pt-BR',{numeric:true});
+  const score=doc=>associatedProjects(doc).some(id=>ids.includes(id))?2:
+    primary&&workCandidateForProject(doc,primary)?1:0;
+  return score(b)-score(a)||String(a.name).localeCompare(String(b.name),'pt-BR',{numeric:true});
  });
 }
 function visibleCandidateDocuments(){
@@ -232,7 +234,7 @@ function visibleCandidateDocuments(){
  const query=normal($f('ficha-sei-search')?.value||'');
  const scope=$f('ficha-sei-scope')?.value||'all';
  return candidateDocuments().filter(d=>{
-  const linked=belongsTo(d,project.id);
+  const linked=selectedProjectIds().some(id=>belongsTo(d,id));
   if(scope==='linked'&&!linked)return false;
   if(scope==='unlinked'&&linked)return false;
   return !query||normal([d.name,d.ref,d.bmNumber,d.bmPeriod,d.workName].join(' ')).includes(query);
@@ -249,11 +251,11 @@ function refreshSelectedSEIBMs(){
   if($f('ficha-sei-selection-count'))$f('ficha-sei-selection-count').textContent='0 selecionados';
   return;
  }
- const id=project.id,all=candidateDocuments(),visible=visibleCandidateDocuments();
+ const id=project.id,ids=selectedProjectIds(),all=candidateDocuments(),visible=visibleCandidateDocuments();
  const selectedSet=selectedForProject(id),valid=new Set(all.map(d=>d.id));
  for(const old of [...selectedSet])if(!valid.has(old))selectedSet.delete(old);
- const linked=all.filter(d=>belongsTo(d,id));
- const staged=bmRows.filter(x=>x.project===id&&x.status!=='ignorado'&&seiActive(x));
+ const linked=all.filter(d=>ids.some(x=>belongsTo(d,x)));
+ const staged=bmRows.filter(x=>ids.includes(x.project)&&x.status!=='ignorado'&&seiActive(x));
  const pending=staged.filter(x=>x.status==='pendente').length,confirmed=staged.filter(x=>x.status==='confirmado').length;
  const unlinked=all.length-linked.length;
  stat.textContent=linked.length+' vinculado(s) · '+unlinked+' sem vínculo · '+
@@ -262,11 +264,11 @@ function refreshSelectedSEIBMs(){
    ' aguardando conferência. '+unlinked+' sem vínculo podem ser avaliados e associados manualmente.';
  const short=(value,n=135)=>{const text=String(value||'').replace(/\s+/g,' ').trim();return text.length>n?text.slice(0,n-1)+'…':text};
  place.innerHTML=visible.map(d=>{
-  const previous=bmRows.find(x=>x.sourceDocId===d.id&&x.project===id);
-  const assigned=belongsTo(d,id),suggested=!assigned&&workCandidateForProject(d,project);
+  const previous=bmRows.find(x=>x.sourceDocId===d.id&&ids.includes(x.project));
+  const assigned=ids.some(x=>belongsTo(d,x)),suggested=!assigned&&workCandidateForProject(d,project);
   const statusLabel=previous?'Incorporado à ficha':assigned?'Vinculado à PUC':suggested?'Vínculo sugerido':'Sem vínculo';
   const tag=previous?'in-ficha':assigned?'linked':suggested?'suggested':'unlinked';
-  const details=[d.bmNumber?'BM '+d.bmNumber:'BM sem nº',d.bmPeriod||'Competência não identificada'].join(' · ');
+  const details=[d.bmNumber?'BM '+d.bmNumber:'BM sem nº',d.bmPeriod||'Competência não identificada',associatedProjects(d).filter(x=>ids.includes(x)).join(' + ')||'Sem PUC definida'].join(' · ');
   const disabled=!!previous;
   return '<label class="ficha-sei-biblioteca-item '+tag+'">'+
    '<input type="checkbox" data-sei-doc="'+ef(d.id)+'" '+(disabled?'disabled':selectedSet.has(d.id)?'checked':'')+'>'+
@@ -278,27 +280,36 @@ function refreshSelectedSEIBMs(){
    (d.ref?'<small>Referência: '+ef(short(d.ref,85))+'</small>':'')+
    '</span></label>';
  }).join('')||'<p class="ficha-sei-no-results">Nenhum BM corresponde à pesquisa. Ajuste o filtro ou verifique a biblioteca Documentos → SEI.</p>';
- const n=[...selectedSet].filter(x=>valid.has(x)&&!bmRows.some(r=>r.sourceDocId===x&&r.project===id)).length;
+ const n=[...selectedSet].filter(x=>valid.has(x)&&!bmRows.some(r=>r.sourceDocId===x&&ids.includes(r.project))).length;
  if($f('ficha-sei-selection-count'))$f('ficha-sei-selection-count').textContent=n+' BM(s) marcados para incorporar';
  if($f('ficha-open-review'))$f('ficha-open-review').textContent='Conferir BMs ('+pending+' pendentes)';
 }
 function loadSelectedSEIBMs(){
- const project=data.projetos.find(p=>p.id===$f('ficha-project')?.value),stat=$f('ficha-sei-biblioteca-status');
- if(!project){stat.textContent='Selecione primeiro o empreendimento.';return}
- const chosen=[...selectedForProject(project.id)].filter(id=>!bmRows.some(x=>x.project===project.id&&x.sourceDocId===id));
- if(!chosen.length){stat.textContent='Marque os documentos que deseja incorporar. Nenhum BM alterado.';return}
+ const primary=data.projetos.find(p=>p.id===$f('ficha-project')?.value),stat=$f('ficha-sei-biblioteca-status');
+ if(!primary){stat.textContent='Selecione primeiro o empreendimento.';return}
+ const ids=selectedProjectIds();
+ const chosen=[...selectedForProject(primary.id)].filter(docId=>
+   !bmRows.some(r=>r.sourceDocId===docId&&ids.includes(r.project)));
+ if(!chosen.length){stat.textContent='Marque os BMs a incorporar. Nenhum registro foi alterado.';return}
  const docs=selectedSEIDocs().filter(d=>chosen.includes(d.id));
- if(docs.some(d=>associatedProjects(d).length&&!belongsTo(d,project.id))){
-  stat.textContent='Foram selecionados BMs de outro empreendimento. Vinculação recusada.';return;
+ if(docs.some(d=>associatedProjects(d).length&&!associatedProjects(d).some(id=>ids.includes(id)))){
+  stat.textContent='BM associado a outra obra não selecionada. Vinculação recusada.';return;
  }
  const unlinked=docs.filter(d=>!associatedProjects(d).length);
- if(unlinked.length&&!window.confirm('Confirma, após conferir o objeto, contrato e processo, que estes '+unlinked.length+
-   ' BM(s) sem PUC indicada pertencem a '+project.id+'? Isto NÃO confere seus valores.'))return;
- const result=stageBMs(docs,project.id,true);
- for(const d of docs)seiCandidateSelected.delete(d.id);
+ if(unlinked.length&&!window.confirm('Confirma, após conferir objeto, contrato e processo, a vinculação dos '+
+   unlinked.length+' BM(s) sem PUC identificada ao empreendimento principal '+primary.id+
+   '? Esta ação não confere seus valores.'))return;
+ let added=0;
+ for(const d of docs){
+  const destinations=associatedProjects(d).filter(id=>ids.includes(id));
+  for(const id of (destinations.length?destinations:[primary.id])){
+   const result=stageBMs([d],id,true);added+=result.added;
+  }
+  seiCandidateSelected.delete(d.id);
+ }
  renderRows();drawSheet();refreshSelectedSEIBMs();
  if($f('ficha-bms-conferencia'))$f('ficha-bms-conferencia').open=true;
- stat.textContent=result.added+' BM(s) adicionados como candidatos pendentes. Confira data, contrato e físico acumulado na tabela; nenhum dado foi homologado.';
+ stat.textContent=added+' BM(s) incorporados como candidatos pendentes às PUCs correspondentes. Confira valores e contrato antes de gerar a Curva S.';
 }
 
 function eligible(id){return bmRows.filter(x=>x.project===id&&x.status!=='ignorado'&&seiActive(x));}
