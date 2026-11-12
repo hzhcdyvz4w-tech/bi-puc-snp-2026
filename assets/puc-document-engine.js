@@ -17,6 +17,34 @@ function bmClass(name,text){
  if(/\b(?:boletim\s+de\s+medic(?:ao|oes)|bm\s*(?:n[ºo.]?\s*)?\d{1,3})\b/.test(head))return 'BM MENCIONADO';
  return 'SEM INDICAÇÃO DE BM'
 }
+/* Filtro SEI estrito — apenas boletins e planilhas de medição legíveis.
+   ZIP é recipiente; cada arquivo interno é avaliado separadamente. */
+function seiBMFileAllowed(name){
+ const n=normal(String(name||'').split('/').pop());
+ const type=extension(n);
+ if(!['pdf','xlsx'].includes(type))return false;
+ // Tipo processual não é BM, mesmo que mencione medições.
+ if(/(?:^|[_\s.-])(?:oficio|despacho|parecer|memorando|nota[_\s.-]?tecnica|processo|protocolo|email|e-mail|carta|decreto|portaria|contrato|aditivo|apostilamento|edital|termo[_\s.-]?de[_\s.-]?referencia)(?:[_\s.-]|$)/.test(n))return false;
+ return true;
+}
+function seiBMDecision(name,text,quality){
+ if(!seiBMFileAllowed(name))return {eligible:false,status:'FORA DO ESCOPO SEI',reason:'Formato ou espécie documental excluída. Apenas PDF e XLSX de BM/medição.'};
+ const clean=String(text||'').replace(/PÁGINA\s+\d+/gi,'').trim();
+ if(clean.length<18||/NÃO EXTRAÍDO|SEM TEXTO|OCR NECESSÁRIO|NÃO LEGÍVEL|NÃO EXTRAÍDA/.test(String(quality||'').toUpperCase())){
+  return {eligible:false,status:'SEM TEXTO DE BM',reason:'Documento sem texto legível de medição; imagens e PDFs digitalizados não são analisados.'};
+ }
+ const cls=bmClass(name,clean);
+ if(!['BM IDENTIFICADO','BM PROVÁVEL'].includes(cls)){
+  return {eligible:false,status:'FORA DO ESCOPO SEI',reason:'Documento não contém identificação própria de BM/medição (mera menção não basta).'};
+ }
+ // O quadro de valores ou a identificação inequívoca de BM fundamenta a triagem.
+ const normalized=normal(clean.slice(0,25000));
+ const nameBM=/(?:^|[^a-z0-9])bm[\s._-]*(?:n[ºo°.]?[\s._-]*)?\d{1,4}(?!\d)|(?:boletim|planilha|quadro|relatorio)[\s._-]+(?:de[\s._-]+)?medic(?:ao|oes)/i.test(normal(name));
+ const measureEvidence=/\b(?:bm\s*(?:n[ºo°.]?\s*)?\d+|boletim\s+de\s+medic(?:ao|oes)|planilha\s+de\s+medic(?:ao|oes)|medic(?:ao|oes)\s+acumulad|fisic[ao]\s+acumulad|valor\s+da\s+medic(?:ao|oes)|periodo\s+de\s+medic(?:ao|oes))\b/.test(normalized);
+ if(!nameBM&&!measureEvidence)return {eligible:false,status:'FORA DO ESCOPO SEI',reason:'Sem evidência de conteúdo de BM/medição.'};
+ return {eligible:true,status:cls,reason:'BM ou planilha de medição legível; valores ainda dependem de conferência.'};
+}
+
 function bmNumber(name,text){
  // A exportação SEI costuma nomear arquivos como [065]-10870234_Anexo_BM06_2.pdf.
  // O sufixo "_2" indica uma versão/anexo, e NÃO deve virar número da medição.
@@ -267,5 +295,5 @@ async function read(item){
  }
  return {text:'',quality:ext==='xls'?'XLS LEGADO: ANEXADO, LEITURA NÃO DISPONÍVEL':'FORMATO ANEXADO, SEM LEITURA TEXTUAL'};
 }
-w.PUCDocEngine={extension,bmClass,bmNumber,bmPeriod,indicators,bmHeaderFromPDFItems,bmTotalsFromPDFItems,bmWorkName,unpack,read,cleanHTML};
+w.PUCDocEngine={extension,bmClass,seiBMFileAllowed,seiBMDecision,bmNumber,bmPeriod,indicators,bmHeaderFromPDFItems,bmTotalsFromPDFItems,bmWorkName,unpack,read,cleanHTML};
 })(window);
