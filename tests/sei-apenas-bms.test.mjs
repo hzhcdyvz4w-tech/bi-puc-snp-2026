@@ -7,13 +7,13 @@ const load=(window={})=>new Function('window','DOMParser',script+';return window
 const bmText='BOLETIM DE MEDIÇÃO 12\nCONTRATO 26/2025\nVALOR DA MEDIÇÃO R$ 1.200,00\nPERCENTUAL FÍSICO ACUMULADO: 41,25%';
 test('aceita boletins legíveis em PDF e planilhas de medição XLSX',()=>{
  const engine=load();
- for(const filename of ['BM_12.pdf','[113]-11498568_Anexo.pdf','Planilha_de_medicao_12.xlsx']){
+ for(const filename of ['BM_12.pdf','Boletim_de_medicao_12.pdf','Planilha_de_medicao_12.xlsx']){
   assert.equal(engine.seiBMDecision(filename,bmText,'TEXTO EXTRAÍDO (PDF)').eligible,true,filename);
  }
 });
 test('rejeita processos, ofícios, despachos, HTML, imagens e PDF sem texto',()=>{
  const engine=load();
- for(const name of ['Oficio_01_Sobre_BM.pdf','Processo_SEI_BM.pdf','Despacho_de_BM.pdf','Termo_Referencia.pdf','foto_BM.png','documento_BM.html','imagem_BM.jpg','Nota_Tecnica_BM.pdf']){
+ for(const name of ['Oficio_01_Sobre_BM.pdf','Processo_SEI_BM.pdf','Despacho_de_BM.pdf','Termo_Referencia.pdf','foto_BM.png','documento_BM.html','imagem_BM.jpg','Nota_Tecnica_BM.pdf','[113]-11498568_Anexo.pdf','Anexo_BM_12.pdf','BM_12_Anexo.pdf','BM_12_Anexo2.pdf','Anexos_de_medicao_12.xlsx','Anexo2_BM.pdf']){
   assert.equal(engine.seiBMDecision(name,bmText,'TEXTO EXTRAÍDO (PDF)').eligible,false,name);
  }
  assert.equal(engine.seiBMDecision('BM_13.pdf','PÁGINA 1\n','PDF SEM TEXTO — OCR NECESSÁRIO').eligible,false);
@@ -26,9 +26,9 @@ test('ZIP SEI só descompacta arquivos PDF e XLSX admitidos',async()=>{
  }
  const engine=load({JSZip:{loadAsync:async()=>({files})}});
  const parsed=await engine.unpack({name:'pacote.zip',arrayBuffer:async()=>new ArrayBuffer(1)},engine.seiBMFileAllowed);
- assert.deepEqual(parsed.map(x=>x.name),['BM_01.pdf','Planilha_de_medicao_02.xlsx','[113]-11498568_Anexo.pdf']);
+ assert.deepEqual(parsed.map(x=>x.name),['BM_01.pdf','Planilha_de_medicao_02.xlsx']);
  assert.deepEqual(called,parsed.map(x=>x.name));
- assert.equal(parsed.ignoredCount,5);
+ assert.equal(parsed.ignoredCount,6);
 });
 
 
@@ -40,4 +40,17 @@ test('a extração SEI considera indicadores dos BMs, mas não dotação/empenho
  assert.ok(types.includes('Valor Acumulado (BM)'));
  assert.ok(types.includes('Execução física (%)'));
  assert.ok(!types.some(x=>/Dotação|Empenhado|Pago|Liquidado|PUC recebida/i.test(x)));
+});
+
+
+test('arquivos de anexos dos BMs não entram, mesmo quando contêm quadro de medição',()=>{
+ const eng=load();
+ for(const filename of [
+  'Anexo_BM_01.pdf','BM_01_Anexo.pdf','BM_01_Anexo2.pdf',
+  '[113]-11498568_Anexo.pdf','ANEXOS_DE_MEDICAO_07.xlsx','ANEXO2_BM.pdf'
+ ]){
+  assert.equal(eng.seiBMFileAllowed(filename),false,filename);
+  assert.equal(eng.seiBMDecision(filename,bmText,'TEXTO EXTRAÍDO (PDF)').eligible,false,filename);
+ }
+ assert.equal(eng.seiBMDecision('BM_01.pdf',bmText,'TEXTO EXTRAÍDO (PDF)').eligible,true);
 });
