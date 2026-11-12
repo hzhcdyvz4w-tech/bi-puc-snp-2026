@@ -25,7 +25,7 @@ function rowsFromItems(items){
   if(!s||!Number.isFinite(x)||!Number.isFinite(y))continue;
   let row=rows.find(r=>Math.abs(r.y-y)<2.1);
   if(!row){row={y,parts:[]};rows.push(row)}
-  row.parts.push({s,x});
+  row.parts.push({s,x,width:Number(item.width)||0});
  }
  for(const r of rows){r.parts.sort((a,b)=>a.x-b.x);r.text=r.parts.map(x=>x.s).join(' ')}
  return rows.sort((a,b)=>b.y-a.y);
@@ -70,6 +70,86 @@ function parsePage(items,pageNo){
   }
  }
  return points;
+}
+
+/* Leitura geométrica da tabela larga do BM, inclusive colunas SUAPE/MPOR.
+   Linhas sem rótulo inequívoco permanecem como candidatas e exigem escolha
+   explícita da fonte de "previsto" e "realizado"; nunca se infere pela cor. */
+function widePageCandidates(items,pageNo){
+ const rows=rowsFromItems(items);
+ const allHeaders=rows.map(row=>{
+  const heads=[],seen=new Set();
+  for(let i=0;i<row.parts.length;i++){
+   const part=row.parts[i],matches=[...part.s.matchAll(/\bBM\s*(?:N[º°.]?\s*)?0*(\d{1,3})\b/gi)];
+   for(const m of matches){
+    const number=Number(m[1]),x=part.x+(Number(part.width)||part.s.length*4)*m.index/Math.max(part.s.length,1);
+    const key=number+':'+Math.round(x);
+    if(!seen.has(key)){heads.push({number,x});seen.add(key)}
+   }
+   if(/^\s*BM\s*$/i.test(part.s)&&row.parts[i+1]&&/^\d{1,3}$/.test(row.parts[i+1].s)){
+    const next=row.parts[i+1];
+    if(Math.abs(next.x-part.x)<32){
+     const number=Number(next.s),key=number+':'+Math.round(part.x);
+     if(!seen.has(key)){heads.push({number,x:part.x});seen.add(key)}
+    }
+   }
+  }
+  return {row,heads:heads.sort((a,b)=>a.x-b.x)};
+ }).filter(v=>v.heads.length>=2&&new Set(v.heads.map(h=>h.number)).size===v.heads.length);
+ const header=allHeaders.sort((a,b)=>b.heads.length-a.heads.length)[0];
+ if(!header)return [];
+ const heads=header.heads,n=heads.length;
+ const maxDistance=n>1?(heads.at(-1).x-heads[0].x)/(n-1):999;
+ const nearest=x=>heads.reduce((best,h,j)=>Math.abs(h.x-x)<Math.abs(heads[best].x-x)?j:best,0);
+ const lower=rows.filter(r=>r.y<header.row.y-3);
+ const raw=[];
+ for(const row of lower){
+  const byBM=new Map();
+  for(const part of row.parts){
+   const matches=[...part.s.matchAll(/(?:^|[^\d])(\d{1,3}(?:[.,]\d{1,3})?)\s*%/g)];
+   for(const m of matches){
+    const offset=m.index+(m[0].match(/^\D*/)?.[0].length||0);
+    const x=part.x+(Number(part.width)||part.s.length*4)*(offset/Math.max(part.s.length,1));
+    const ix=nearest(x);
+    if(Math.abs(x-heads[ix].x)>maxDistance*0.82)continue;
+    const value=Number(m[1].replace(',','.'));
+    if(!Number.isFinite(value)||value<0||value>100)continue;
+    if(!byBM.has(ix))byBM.set(ix,[]);
+    byBM.get(ix).push({number:heads[ix].number,value,x});
+   }
+  }
+  if(byBM.size<Math.min(3,n))continue;
+  for(const arr of byBM.values())arr.sort((a,b)=>a.x-b.x);
+  raw.push({row,byBM});
+ }
+ const result=[];
+ for(let rank=0;rank<raw.length;rank++){
+  const {row,byBM}=raw[rank],groups=new Map();
+  for(const [j,values] of byBM){
+   for(let k=0;k<Math.min(values.length,2);k++){
+    const group=values.length===1?'TOTAL':(k===0?'COLUNA 1':'COLUNA 2');
+    if(!groups.has(group))groups.set(group,[]);
+    groups.get(group).push({number:heads[j].number,value:values[k].value,page:pageNo});
+   }
+  }
+  const leading=row.parts.filter(p=>p.x<heads[0].x-maxDistance*.45).map(p=>p.s).join(' ');
+  const nearby=rows.filter(r=>r.y>row.y&&r.y<row.y+12).map(r=>r.text).join(' ');
+  const context=(leading+' '+nearby).slice(0,240);
+  const normalized=context.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+  let semantic='';
+  if(/ACUMULAD/.test(normalized)&&/(FISIC|EVOLU|EXECU|PERCENT)/.test(normalized)){
+   if(/PREVIST|PLANEJAD|PROGRAMAD/.test(normalized))semantic='percentualPrevistoAcumulado';
+   if(/REALIZAD|EXECUTAD|MEDID/.test(normalized))semantic='percentualRealizadoAcumulado';
+  }
+  for(const [group,values] of groups){
+   values.sort((a,b)=>a.number-b.number);
+   if(values.length<Math.min(2,n))continue;
+   const seriesKey='linha-'+String(rank+1).padStart(2,'0')+'-'+group.replace(/ /g,'');
+   result.push({key:seriesKey,rank:rank+1,group,page:pageNo,values,semantic,
+    note:context.trim().slice(0,100),sample:values.slice(0,4).map(v=>'BM '+v.number+': '+v.value.toLocaleString('pt-BR')+'%').join(' · ')});
+  }
+ }
+ return result;
 }
 function metadata(text){
  const src=String(text||'');
