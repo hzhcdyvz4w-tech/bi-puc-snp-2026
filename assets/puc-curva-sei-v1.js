@@ -278,16 +278,20 @@ async function consolidate(docs,progress=()=>{},stillCurrent=()=>true){
  const identifiable=[...new Set(codes.filter(x=>!x.conflict).map(x=>x.contract).filter(Boolean))];
  if(!currentContract()&&identifiable.length>1)throw Error('Há BMs com contratos distintos ('+identifiable.join(', ')+'). Selecione um contrato antes de consolidar.');
  const target=contractCode(currentContract())||identifiable[0]||'';
- const input=codes.filter(x=>!x.conflict&&((target&&x.contract===target)||(!target&&!x.contract)));
+ const input=codes.filter(x=>!x.conflict&&(target?
+    (x.contract===target||(!x.contract&&!!currentContract())):!x.contract));
+ const noContract=input.filter(x=>!x.contract);
+ const evidenceWarnings=noContract.map(x=>x.doc.name+
+   ': contrato não reconhecido automaticamente. Vinculação provisória ao filtro; confira o instrumento antes da validação.');
  const omissions=[...conflicts.map(x=>x.doc.name+': '+x.conflict),
    ...codes.filter(x=>!x.conflict&&(!input.some(d=>d.doc.id===x.doc.id)))
       .map(x=>x.doc.name+': contrato não identificado ou diferente; não consolidado.')];
- const parts=[],sources=[],wideCandidates=[],warningDetails=[...omissions];
+ const parts=[],sources=[],wideCandidates=[],warningDetails=[...omissions,...evidenceWarnings];
  let totalPages=0,usedHistorical=0;
  for(let i=0;i<input.length;i++){
   if(!stillCurrent())return null;
   const d=input[i].doc,review=reviewedRow(d),evidence={name:d.name,reference:d.ref||'',bm:review?.number||d.bmNumber||'',
-   contract:input[i].contract||'Não identificado',status:review?.status==='confirmado'?'Conferido':'Pendente',
+   contract:input[i].contract||'Não identificado — conferir',status:review?.status==='confirmado'?'Conferido':'Pendente',
    historic:'Não identificado',physical:'Ausente'};
   sources.push(evidence);
   const single=singleBmPoint(d);
@@ -454,7 +458,8 @@ function docContract(doc){
 function availableDocuments(){
  const docs=selected(),contract=contractCode(currentContract());
  if(!contract)return docs;
- return docs.filter(d=>docContract(d).contract===contract);
+ // PDFs sem número contratual reconhecível permanecem selecionáveis como candidatos, mas nunca são homologados.
+ return docs.filter(d=>{const c=docContract(d);return !c.conflict&&(c.contract===contract||!c.contract)});
 }
 function syncDocuments(){
  const list=byId('puc-curva-bms-list'),status=byId('puc-curva-document-status'),counter=byId('puc-curva-bms-counter');
