@@ -497,6 +497,23 @@ function invalidateSelection(){
  const status=byId('puc-curva-document-status');
  if(status)status.textContent='Seleção alterada. Clique em “Gerar Curva S dos BMs selecionados” para atualizar o gráfico.';
 }
+function updateMappingOptions(candidates){
+ availableCandidateRows=candidates||[];
+ const box=byId('puc-curva-line-mapping'),forecast=byId('puc-curva-line-previsto'),actual=byId('puc-curva-line-realizado');
+ if(!box||!forecast||!actual)return;
+ box.hidden=!availableCandidateRows.length;
+ for(const [select,selectedKey] of [[forecast,candidateMap.percentualPrevistoAcumulado],[actual,candidateMap.percentualRealizadoAcumulado]]){
+  select.replaceChildren(new Option('Não identificar automaticamente',''));
+  for(const c of availableCandidateRows){
+   const choice=new Option('Linha '+String(c.rank).padStart(2,'0')+' · '+c.group+' · '+c.sample+
+    ' · '+c.sourceName+' (p. '+c.page+')',c.key);
+   select.add(choice);
+  }
+  select.value=availableCandidateRows.some(c=>c.key===selectedKey)?selectedKey:'';
+ }
+ const sum=byId('puc-curva-line-info');
+ if(sum)sum.textContent=availableCandidateRows.length+' linhas percentuais detectadas na tabela. Confira no PDF qual representa a execução física prevista e/ou realizada. Colunas financeiras não podem ser usadas como físico.';
+}
 function showLegacy(note){
  const box=byId('puc-curva-documental'),legacy=byId('ficha-print-area');
  if(box)box.replaceChildren();
@@ -517,6 +534,9 @@ async function render(){
  const panel=byId('puc-curva-documental');
  if(!panel)return;
  const id=++generation,selection=syncDocuments();
+ const mappingScope=currentProject()+'|'+contractCode(currentContract());
+ if(candidateScope!==mappingScope){candidateScope=mappingScope;candidateMap={percentualPrevistoAcumulado:'',percentualRealizadoAcumulado:''};updateMappingOptions([])}
+
  if(!currentProject())return showLegacy('Escolha o empreendimento antes de gerar o histórico dos BMs.');
  if(!selection)return showLegacy('Nenhum BM elegível identificado no projeto e contrato selecionados.');
  const docs=selection.docs;
@@ -540,8 +560,14 @@ async function render(){
    if(id===generation)status.textContent=text+' ('+(i+1)+'/'+total+')';
   },()=>id===generation);
   if(id!==generation||!result)return;
+  updateMappingOptions(result.candidateRows||[]);
   if(!result.points.length){
-   showLegacy('Examinados '+result.scanned+' BM(s), mas nenhum percentual físico acumulado ou histórico acumulado válido pôde ser extraído.');
+   activeReport=null;
+   const old=byId('ficha-print-area');if(old)old.hidden=true;
+   const state=byId('puc-curva-document-status');
+   if(state)state.textContent='Foram examinados '+result.scanned+' BM(s), mas ainda não existe uma série física identificada. '+
+     ((result.candidateRows||[]).length?'Selecione a linha percentual correta na tabela acima.':'Confira os BMs originais: valores podem estar somente em imagem ou sem rótulo físico.');
+   panel.replaceChildren();
    panel.innerHTML='<div class="puc-curva-empty-audit"><h4>Diagnóstico dos BMs examinados</h4>'+
      sourceAudit(result)+
      '<p class="puc-curva-alert">'+(result.warnings.length?
@@ -573,7 +599,11 @@ function setup(){
  '<button type="button" class="btn secondary" id="puc-curva-select-all">Selecionar todos</button>'+
  '<button type="button" class="btn secondary" id="puc-curva-select-none">Limpar seleção</button></div>'+
  '<div id="puc-curva-bms-list" class="puc-curva-bms-list" role="group" aria-label="Boletins selecionáveis para Curva S"></div>'+
- '<div class="puc-curva-bm-toolbar"><button type="button" class="btn" id="puc-curva-refresh">Gerar Curva S dos BMs selecionados</button></div>'+
+ '<div class="puc-curva-line-mapping" id="puc-curva-line-mapping" hidden><strong>Identificação das linhas da tabela horizontal</strong><p class="puc-curva-note" id="puc-curva-line-info"></p>'+
+ '<div class="puc-curva-mapping-fields"><label>Previsto físico acumulado<select id="puc-curva-line-previsto"></select></label>'+
+ '<label>Realizado físico acumulado<select id="puc-curva-line-realizado"></select></label></div>'+
+ '<p class="puc-curva-note">Selecione apenas a linha comprovada pelo título do documento. Os valores continuam identificados como extração não homologada.</p></div>'+
+  '<div class="puc-curva-bm-toolbar"><button type="button" class="btn" id="puc-curva-refresh">Gerar Curva S dos BMs selecionados</button></div>'+
  '<p id="puc-curva-document-status" role="status" aria-live="polite"></p></div><div id="puc-curva-documental"></div>';
  root.insertBefore(box,byId('ficha-print-area'));
  byId('puc-curva-bms-list').addEventListener('change',e=>{
@@ -588,6 +618,17 @@ function setup(){
   selectionEdited=true;syncDocuments();invalidateSelection();
  };
  byId('puc-curva-select-none').onclick=()=>{selectedBmIds.clear();selectionEdited=true;syncDocuments();invalidateSelection()};
+ const mappingChange=(key,id)=>{
+  const choice=byId(id)?.value||'';
+  candidateMap[key]=choice;
+  if(choice&&candidateMap.percentualPrevistoAcumulado&&candidateMap.percentualPrevistoAcumulado===candidateMap.percentualRealizadoAcumulado){
+    candidateMap.percentualPrevistoAcumulado='';
+    const previous=byId('puc-curva-line-previsto');if(previous)previous.value='';
+  }
+  render();
+ };
+ byId('puc-curva-line-previsto').onchange=()=>mappingChange('percentualPrevistoAcumulado','puc-curva-line-previsto');
+ byId('puc-curva-line-realizado').onchange=()=>mappingChange('percentualRealizadoAcumulado','puc-curva-line-realizado');
  byId('puc-curva-refresh').onclick=render;
  byId('ficha-generate')?.addEventListener('click',render);
  byId('ficha-project')?.addEventListener('change',()=>{selectionScope='';selectedBmIds.clear();render()});
@@ -613,6 +654,7 @@ function setup(){
  style.textContent += '.puc-curva-audit{margin:14px 0}.puc-curva-audit .puc-curva-table th{position:static;white-space:nowrap;text-align:left}.puc-curva-audit .puc-curva-table td{text-align:left;white-space:normal;min-width:100px;overflow-wrap:anywhere}.puc-curva-empty-audit{margin:12px 0;padding:14px;border:1px solid #cbdde9;border-radius:8px}.puc-curva-audit .puc-curva-table{min-width:750px}';
  style.textContent += '#puc-curva-documental-wrap{margin-top:14px}.puc-curva-chooser{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.puc-curva-chooser select{flex:1;min-width:240px}.puc-curva-chooser p{flex-basis:100%;margin:0}.puc-curva-report header{background:white;color:#20354b;flex-wrap:wrap}.puc-curva-row-real{background:#e7f5eb}.puc-curva-alert{padding:10px;background:#fff3dd;border-left:3px solid #bd873b;font-size:12px}@media(max-width:720px){.puc-curva-chooser{display:block}.puc-curva-chooser select,.puc-curva-chooser button{width:100%;margin:6px 0}}@media print{body.ficha-print.puc-curva-print #fichas,body.ficha-print.puc-curva-print #ficha-result-panel,body.ficha-print.puc-curva-print #puc-curva-documental-wrap,body.ficha-print.puc-curva-print #puc-curva-documental{display:block!important}body.ficha-print.puc-curva-print #ficha-print-area{display:none!important}body.ficha-print.puc-curva-print .puc-curva-chooser{display:none!important}body.ficha-print.puc-curva-print #ficha-result-panel{border:0!important;padding:0!important}body.ficha-print.puc-curva-print .puc-curva-report{border:0!important;padding:0!important}.puc-curva-report{print-color-adjust:exact;-webkit-print-color-adjust:exact}.puc-curva-table-block{break-inside:avoid}.puc-curva-table-scroll{overflow:visible}}';
 
+ style.textContent += '.puc-curva-line-mapping{background:#fff;border:1px solid #9fc1d6;padding:13px;border-radius:9px}.puc-curva-line-mapping strong{font-size:14px}.puc-curva-mapping-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}.puc-curva-mapping-fields label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700}.puc-curva-mapping-fields select{width:100%;min-width:0;padding:9px}@media(max-width:700px){.puc-curva-mapping-fields{grid-template-columns:1fr}}';
  style.textContent += '.puc-curva-bm-heading{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}.puc-curva-bm-heading label{font-size:14px;font-weight:700}.puc-curva-bm-toolbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center}.puc-curva-bm-toolbar input{flex:1;min-width:210px;max-width:100%;padding:10px;border:1px solid #cbdce8;border-radius:7px}.puc-curva-bms-list{width:100%;max-height:265px;overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:9px;border:1px solid #ccdae7;border-radius:9px;background:white}.puc-curva-bm-option{display:flex;align-items:flex-start;gap:9px;min-width:0;padding:10px;border:1px solid #dde6ef;border-radius:8px;background:#f8fbfe;cursor:pointer}.puc-curva-bm-option input{margin-top:4px;width:17px;height:17px;flex:none}.puc-curva-bm-detail{min-width:0;overflow-wrap:anywhere}.puc-curva-bm-detail strong{font-size:12px;display:block}.puc-curva-bm-detail small{font-size:11px;color:#506b80;display:block;margin-top:4px}.puc-curva-bm-option:has(input:checked){border-color:#5793ba;background:#eff7fd}@media(max-width:700px){.puc-curva-bms-list{grid-template-columns:1fr}.puc-curva-bm-toolbar button{width:100%}}@media print{.puc-curva-bm-toolbar,.puc-curva-bms-list,.puc-curva-bm-heading{display:none!important}}';
  document.head.appendChild(style);render();
 }
