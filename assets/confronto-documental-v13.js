@@ -164,7 +164,7 @@ function renderSeiSelector(){
  if(!shown)area.textContent=available.length?'Nenhum documento corresponde à pesquisa.':'Nenhum documento SEI armazenado neste navegador.';
  counter.textContent=(available.length-seiExcluded.size)+' de '+available.length+' documento(s) selecionado(s) para o confronto.';
 }
-let seiZipSelected=new Set(),seiZipItems=[],seiZipRevision=0,seiZipReady=false;
+let seiZipSelected=new Set(),seiZipItems=[],seiZipRevision=0,seiZipReady=false,seiZipIgnored=0;
 function seiNameMatch(item,q){
  const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
  if(!q)return true;
@@ -190,11 +190,12 @@ function renderSeiZipPreview(){
 }
 async function refreshSeiZipPreview(){
  const generation=++seiZipRevision,files=[...($('puc3-files-SEI')?.files||[])],count=$('puc3-sei-zip-count');
- seiZipItems=[];seiZipSelected.clear();seiZipReady=false;
+ seiZipItems=[];seiZipSelected.clear();seiZipReady=false;seiZipIgnored=0;
  const eng=window.PUCDocEngine;
  // Arquivos enviados diretamente aparecem imediatamente, sem precisar de ZIP.
  files.forEach((file,index)=>{
-  if(/\.zip$/i.test(file.name)||!eng?.seiBMFileAllowed?.(file.name))return;
+  if(/\.zip$/i.test(file.name))return;
+  if(!eng?.seiBMFileAllowed?.(file.name)){seiZipIgnored++;return}
   const bmStatus=eng?.bmClass?.(file.name,'')||'SEM INDICAÇÃO DE BM';
   seiZipItems.push({key:'avulso:'+index,title:file.name,fileIndex:index,item:{name:file.name,blob:file},bmStatus,bmNumber:eng?.bmNumber?.(file.name,'')||''});
  });
@@ -207,6 +208,7 @@ async function refreshSeiZipPreview(){
   const entries=[];
   for(const file of zipFiles){
    const unpacked=await eng.unpack(file,eng.seiBMFileAllowed);
+   seiZipIgnored+=Number(unpacked.ignoredCount||0);
    for(const item of unpacked){
     const key=file.name+'\u0001'+item.container+'\u0001'+item.name;
     const bmStatus=eng.bmClass?.(item.name,'')||'SEM INDICAÇÃO DE BM';
@@ -242,7 +244,7 @@ async function scanPendingSeiBMs(){
   }
   if(generation!==seiZipRevision)return;
   const eligible=seiZipItems.filter(x=>x.eligible===true);
-  ignored=total-eligible.length;
+  ignored=seiZipIgnored+total-eligible.length;
   seiZipItems=eligible;
   seiZipSelected=new Set(eligible.map(x=>x.key));
   const search=$('puc3-sei-zip-search');if(search)search.value='';
