@@ -387,6 +387,44 @@ function horizontalTable(points){
  };
  return chunks.map((items,i)=>'<section class="puc-curva-table-block"><h5>Histórico BM '+items[0].number+' a BM '+items[items.length-1].number+'</h5>'+build(items)+'</section>').join('');
 }
+
+function parseTranscribedHistory(text,reference){
+ const src=String(text||'').trim(),ref=String(reference||'').trim();
+ if(!ref)throw Error('Informe a referência do BM ou processo SEI para rastreabilidade.');
+ const rows=src.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+ if(rows.length<2||rows.length>500)throw Error('Informe entre 2 e 500 medições, uma por linha.');
+ const points=[],seen=new Set();
+ for(const line of rows){
+  const cols=line.includes('\t')?line.split('\t'):line.split(';');
+  if(cols.length<3||cols.length>5)throw Error('Formato: BM; previsto acumulado (%); realizado acumulado (%).');
+  const bm=(cols[0]||'').trim().match(/^(?:BM\s*)?0*(\d{1,3})$/i);
+  if(!bm){
+   if(points.length===0&&/BM|MEDI[CÇ][ÃA]O|N[ÚU]MERO/i.test(cols[0]||''))continue;
+   throw Error('Número de BM inválido: '+String(cols[0]).slice(0,35));
+  }
+  const number=Number(bm[1]);
+  if(seen.has(number))throw Error('BM repetido: '+number+'. Confira retificações antes de consolidar.');
+  seen.add(number);
+  const readPercent=(value)=>{
+   const v=String(value||'').trim();
+   if(!v)return null;
+   if(!/^\d{1,3}(?:[,.]\d{1,3})?\s*%?$/.test(v))throw Error('Percentual inválido no BM '+number+': '+v.slice(0,25));
+   const num=Number(v.replace('%','').replace(',','.'));
+   if(!Number.isFinite(num)||num>100)throw Error('Percentual acima de 100% no BM '+number);
+   return num;
+  };
+  const prev=readPercent(cols[1]),real=readPercent(cols[2]);
+  if(prev===null&&real===null)continue;
+  const point={number,sourceName:ref,confidence:'Transcrição do operador',page:null};
+  if(prev!==null)point.percentualPrevistoAcumulado=prev;
+  if(real!==null)point.percentualRealizadoAcumulado=real;
+  points.push(point);
+ }
+ points.sort((a,b)=>a.number-b.number);
+ if(points.length<2)throw Error('São necessários dois ou mais BMs com percentuais para traçar a Curva S.');
+ return {points,reference:ref};
+}
+
 function sourceAudit(result){
  const sources=result.sources||[];
  if(!sources.length)return '';
@@ -411,7 +449,7 @@ function layout(result){
  const source=[doc.ref,doc.name].filter(Boolean).join(' · ');
  const alert=warnings.length?'<p class="puc-curva-alert">'+[...new Set(warnings)].map(esc).join(' · ')+'</p>':'';
  return '<div class="puc-curva-report" data-doc-id="'+esc(doc.id)+'">'+
- '<header><div><h3>CURVA S — Acompanhamento contratual</h3><small>Documento: '+esc(source)+'</small></div><span class="puc-curva-warning">EXTRAÇÃO A CONFERIR · NÃO HOMOLOGADA</span></header>'+
+ '<header><div><h3>CURVA S — Acompanhamento contratual</h3><small>Documento: '+esc(source)+'</small></div><span class="puc-curva-warning">'+(result.manual?'TRANSCRIÇÃO':'EXTRAÇÃO')+' A CONFERIR · NÃO HOMOLOGADA</span></header>'+
  '<div class="puc-curva-meta">'+
  box('Empreendimento',esc(project?.empreendimento||doc.workName||'Vínculo não comprovado'))+
  box('Contrato',esc(meta.contract||currentContract()||'Não identificado'))+
@@ -610,6 +648,11 @@ function setup(){
  '<div class="puc-curva-mapping-fields"><label>Previsto físico acumulado<select id="puc-curva-line-previsto"></select></label>'+
  '<label>Realizado físico acumulado<select id="puc-curva-line-realizado"></select></label></div>'+
  '<p class="puc-curva-note">Selecione apenas a linha comprovada pelo título do documento. Os valores continuam identificados como extração não homologada.</p></div>'+
+  '<details class="puc-curva-manual"><summary>PDF digitalizado sem texto? Inserir percentuais conferidos do documento</summary>'+
+ '<p class="puc-curva-note">Alternativa para tabela que não possa ser lida automaticamente: cole os dados do quadro oficial, uma linha por BM, sem inventar valores. Os registros permanecem somente nesta sessão.</p>'+
+ '<label>Referência do BM/SEI <input id="puc-curva-manual-ref" type="text" placeholder="Documento SEI, contrato e página" maxlength="220"></label>'+
+ '<label>BM; previsto físico acumulado (%); realizado físico acumulado (%)<textarea id="puc-curva-manual-data" rows="6" placeholder="BM;Previsto;Realizado&#10;25;55,00%;48,70%&#10;26;58,00%;51,27%" spellcheck="false"></textarea></label>'+
+ '<button type="button" class="btn secondary" id="puc-curva-manual-generate">Gerar prévia com valores transcritos</button><p class="puc-curva-note" id="puc-curva-manual-status" role="status"></p></details>'+
   '<div class="puc-curva-bm-toolbar"><button type="button" class="btn" id="puc-curva-refresh">Gerar Curva S dos BMs selecionados</button></div>'+
  '<p id="puc-curva-document-status" role="status" aria-live="polite"></p></div><div id="puc-curva-documental"></div>';
  root.insertBefore(box,byId('ficha-print-area'));
@@ -636,6 +679,27 @@ function setup(){
  };
  byId('puc-curva-line-previsto').onchange=()=>mappingChange('percentualPrevistoAcumulado','puc-curva-line-previsto');
  byId('puc-curva-line-realizado').onchange=()=>mappingChange('percentualRealizadoAcumulado','puc-curva-line-realizado');
+ byId('puc-curva-manual-generate').onclick=()=>{
+  const status=byId('puc-curva-manual-status');
+  if(!currentProject()){status.textContent='Selecione primeiro o empreendimento.';return}
+  try{
+   const input=parseTranscribedHistory(byId('puc-curva-manual-data')?.value||'',
+       byId('puc-curva-manual-ref')?.value||'');
+   const result={manual:true,points:input.points,meta:{contract:currentContract()},
+     doc:{id:'transcricao',name:'Quadro do documento transcrito pelo operador',ref:input.reference},
+     scanned:0,pages:0,sources:input.points.map(p=>({name:input.reference,bm:String(p.number),
+       physical:Number.isFinite(p.percentualRealizadoAcumulado)?pct(p.percentualRealizadoAcumulado):'Não informado',
+       historic:'Transcrição do quadro original',contract:currentContract()||'Não identificado',
+       status:'Pendente de validação'})),
+     warnings:['Valores transcritos pelo operador a partir da fonte indicada; não substituem conferência do BM original.']};
+   generation++;activeReport=result;
+   const old=byId('ficha-print-area');if(old)old.hidden=true;
+   byId('puc-curva-documental').innerHTML=layout(result);
+   const info=byId('puc-curva-document-status');
+   if(info)info.textContent=input.points.length+' BM(s) transcritos na prévia. Confira cada valor com o original antes de utilizar em decisão.';
+   status.textContent='Prévia da tabela transcrita gerada. Verifique a referência e todos os percentuais.';
+  }catch(e){status.textContent='Não foi possível gerar a prévia: '+String(e.message||e)}
+ };
  byId('puc-curva-refresh').onclick=render;
  byId('ficha-generate')?.addEventListener('click',render);
  byId('ficha-project')?.addEventListener('change',()=>{selectionScope='';selectedBmIds.clear();render()});
@@ -661,11 +725,12 @@ function setup(){
  style.textContent += '.puc-curva-audit{margin:14px 0}.puc-curva-audit .puc-curva-table th{position:static;white-space:nowrap;text-align:left}.puc-curva-audit .puc-curva-table td{text-align:left;white-space:normal;min-width:100px;overflow-wrap:anywhere}.puc-curva-empty-audit{margin:12px 0;padding:14px;border:1px solid #cbdde9;border-radius:8px}.puc-curva-audit .puc-curva-table{min-width:750px}';
  style.textContent += '#puc-curva-documental-wrap{margin-top:14px}.puc-curva-chooser{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.puc-curva-chooser select{flex:1;min-width:240px}.puc-curva-chooser p{flex-basis:100%;margin:0}.puc-curva-report header{background:white;color:#20354b;flex-wrap:wrap}.puc-curva-row-real{background:#e7f5eb}.puc-curva-alert{padding:10px;background:#fff3dd;border-left:3px solid #bd873b;font-size:12px}@media(max-width:720px){.puc-curva-chooser{display:block}.puc-curva-chooser select,.puc-curva-chooser button{width:100%;margin:6px 0}}@media print{body.ficha-print.puc-curva-print #fichas,body.ficha-print.puc-curva-print #ficha-result-panel,body.ficha-print.puc-curva-print #puc-curva-documental-wrap,body.ficha-print.puc-curva-print #puc-curva-documental{display:block!important}body.ficha-print.puc-curva-print #ficha-print-area{display:none!important}body.ficha-print.puc-curva-print .puc-curva-chooser{display:none!important}body.ficha-print.puc-curva-print #ficha-result-panel{border:0!important;padding:0!important}body.ficha-print.puc-curva-print .puc-curva-report{border:0!important;padding:0!important}.puc-curva-report{print-color-adjust:exact;-webkit-print-color-adjust:exact}.puc-curva-table-block{break-inside:avoid}.puc-curva-table-scroll{overflow:visible}}';
 
+ style.textContent += '.puc-curva-manual{padding:13px;background:#fff;border:1px solid #d1dfea;border-radius:9px}.puc-curva-manual summary{cursor:pointer;font-weight:700;font-size:13px}.puc-curva-manual label{display:flex;flex-direction:column;gap:6px;margin:10px 0;font-size:12px;font-weight:650}.puc-curva-manual input,.puc-curva-manual textarea{width:100%;box-sizing:border-box;border:1px solid #b9d0e1;border-radius:7px;padding:10px;font-family:inherit}.puc-curva-manual textarea{font-family:ui-monospace,monospace}';
  style.textContent += '.puc-curva-line-mapping{background:#fff;border:1px solid #9fc1d6;padding:13px;border-radius:9px}.puc-curva-line-mapping strong{font-size:14px}.puc-curva-mapping-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}.puc-curva-mapping-fields label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700}.puc-curva-mapping-fields select{width:100%;min-width:0;padding:9px}@media(max-width:700px){.puc-curva-mapping-fields{grid-template-columns:1fr}}';
  style.textContent += '.puc-curva-bm-heading{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}.puc-curva-bm-heading label{font-size:14px;font-weight:700}.puc-curva-bm-toolbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center}.puc-curva-bm-toolbar input{flex:1;min-width:210px;max-width:100%;padding:10px;border:1px solid #cbdce8;border-radius:7px}.puc-curva-bms-list{width:100%;max-height:265px;overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:9px;border:1px solid #ccdae7;border-radius:9px;background:white}.puc-curva-bm-option{display:flex;align-items:flex-start;gap:9px;min-width:0;padding:10px;border:1px solid #dde6ef;border-radius:8px;background:#f8fbfe;cursor:pointer}.puc-curva-bm-option input{margin-top:4px;width:17px;height:17px;flex:none}.puc-curva-bm-detail{min-width:0;overflow-wrap:anywhere}.puc-curva-bm-detail strong{font-size:12px;display:block}.puc-curva-bm-detail small{font-size:11px;color:#506b80;display:block;margin-top:4px}.puc-curva-bm-option:has(input:checked){border-color:#5793ba;background:#eff7fd}@media(max-width:700px){.puc-curva-bms-list{grid-template-columns:1fr}.puc-curva-bm-toolbar button{width:100%}}@media print{.puc-curva-bm-toolbar,.puc-curva-bms-list,.puc-curva-bm-heading{display:none!important}}';
  document.head.appendChild(style);render();
 }
-window.PUCCurvaSEI={parsePage,widePageCandidates,extract,render,selected,setup,consolidate,uniteHistory,singleBmPoint,
+window.PUCCurvaSEI={parsePage,widePageCandidates,extract,render,selected,setup,consolidate,uniteHistory,singleBmPoint,parseTranscribedHistory,
  selectDocumentRow:(field,key)=>{
   if(!['percentualPrevistoAcumulado','percentualRealizadoAcumulado'].includes(field))return false;
   if(typeof key!=='string'||key.length>240)return false;
