@@ -88,7 +88,7 @@ async function extract(doc){
  if(window.pdfjsLib.GlobalWorkerOptions)window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
  if(blob.size>35*1024*1024)throw Error('PDF acima de 35 MB; confira o arquivo original.');
  const pdf=await window.pdfjsLib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise;
- const pages=Math.min(pdf.numPages,65),records=[],meta=[];
+ const pages=Math.min(pdf.numPages,65),truncated=pdf.numPages>65,records=[],meta=[];
  try{
   for(let p=1;p<=pages;p++){
    const items=(await (await pdf.getPage(p)).getTextContent()).items;
@@ -97,6 +97,7 @@ async function extract(doc){
   }
  }finally{try{await pdf.destroy()}catch(e){}}
  const byNumber=new Map(),warnings=[];
+ if(truncated)warnings.push('PDF com '+pdf.numPages+' páginas: leitura limitada a 65 páginas; histórico pode estar incompleto.');
  for(const row of records){
   if(!Number.isInteger(row.number)||row.number<0||row.number>999)continue;
   for(const key of ['percentualPrevistoParcial','percentualRealizadoParcial','percentualPrevistoAcumulado','percentualRealizadoAcumulado']){
@@ -218,6 +219,8 @@ async function consolidate(docs,progress=()=>{},stillCurrent=()=>true){
     for(const point of history.points)parts.push({...point,sourceName:d.name,originDoc:d.id,
       confidence:review?.status==='confirmado'?'Conferido pelo operador':'Extração não conferida'});
     evidence.historic=history.points.length+' ponto(s) históricos';
+    const latest=[...history.points].reverse().find(p=>Number.isFinite(p.percentualRealizadoAcumulado));
+    if(latest&&!single)evidence.physical=pct(latest.percentualRealizadoAcumulado)+' (tabela histórica)';
     totalPages+=history.pages;
     usedHistorical++;
     warningDetails.push(...history.warnings.map(w=>d.name+': '+w));
@@ -425,11 +428,12 @@ async function render(){
   activeReport=result;
   if(legacy)legacy.hidden=true;
   const pending=(result.sources||[]).filter(x=>x.status!=='Conferido').length;
+  const missing=(result.sources||[]).filter(x=>x.physical==='Ausente'&&x.historic==='Sem quadro histórico extraível').length;
   const planned=result.points.filter(p=>Number.isFinite(p.percentualPrevistoAcumulado)).length;
   const actual=result.points.filter(p=>Number.isFinite(p.percentualRealizadoAcumulado)).length;
   status.textContent='Histórico reunido: '+result.scanned+' BM(s) examinados; '+
     result.points.length+' medições com dados utilizáveis, '+planned+' pontos previstos, '+
-    actual+' realizados. '+pending+' documento(s) sem conferência. Extração sujeita à validação técnica.';
+    actual+' realizados. '+pending+' documento(s) sem conferência; '+missing+' sem percentual utilizável. Extração sujeita à validação técnica.';
  }catch(e){
   if(id!==generation)return;
   showLegacy('Falha na consolidação do histórico dos BMs: '+String(e.message||e));
