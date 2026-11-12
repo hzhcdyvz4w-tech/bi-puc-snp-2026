@@ -30,3 +30,14 @@ test('ZIP SEI só descompacta arquivos PDF e XLSX admitidos',async()=>{
  assert.deepEqual(called,parsed.map(x=>x.name));
  assert.equal(parsed.ignoredCount,5);
 });
+
+
+test('a extração SEI considera indicadores dos BMs, mas não dotação/empenho/pago',()=>{
+ const engine=load();
+ const raw='VALOR DA MEDIÇÃO (BM): R$ 1.200,00\nVALOR ACUMULADO (BM): R$ 6.200,00\nEXECUÇÃO FÍSICA: 44,55%\nDOTAÇÃO ATUAL: R$ 9.000,00\nEMPENHADO: R$ 7.500,00\nPAGO: R$ 2.000,00';
+ const types=engine.seiBMIndicators(raw).map(x=>x.type);
+ assert.ok(types.includes('Valor da Medição (BM)'));
+ assert.ok(types.includes('Valor Acumulado (BM)'));
+ assert.ok(types.includes('Execução física (%)'));
+ assert.ok(!types.some(x=>/Dotação|Empenhado|Pago|Liquidado|PUC recebida/i.test(x)));
+});
