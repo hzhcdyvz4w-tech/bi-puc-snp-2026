@@ -24,6 +24,10 @@ let bmRows=[],balances={},planned={},selectedId='',importLog=[],lastZipFile='',b
 const capFiles=350,capCandidates=120,capPdfPages=10,capPdfBytes=24*1024*1024;
 const seiActive=row=>{
  if(!row.sourceDocId)return true;
+ // A ficha conserva as linhas antigas no arquivo local, mas não as usa em
+ // curvas e relatórios se o documento saiu do escopo (p.ex. anexos dos BMs).
+ const library=window.PUCDocLibrary;
+ if(library?.list&&!(library.list()||[]).some(doc=>doc.origin==='SEI'&&doc.id===row.sourceDocId))return false;
  try{return !new Set(JSON.parse(localStorage.getItem('BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1')||'[]')).has(row.sourceDocId)}
  catch(e){return true}
 };
@@ -562,7 +566,7 @@ function init(){
  $f('ficha-print-btn').onclick=()=>{if(!selectedId&&!document.getElementById('puc-curva-documental')?.querySelector('.puc-curva-report')){alert('Selecione um empreendimento ou um BM com Curva S em Documentos.');return}if(selectedId)drawSheet();document.body.classList.add('ficha-print');window.print()};window.addEventListener('afterprint',()=>document.body.classList.remove('ficha-print'));
  $f('ficha-open-critico').onclick=()=>{if(!selectedId){alert('Selecione empreendimento.');return}const p=data.projetos.find(x=>x.id===selectedId);nav('relatorio');$f('report-company').value=p.empresa;updateCompanyProject('report-company','report-project','Selecione o empreendimento');$f('report-project').value=selectedId;showCritical()};
  updateProjects();drawSheet();refreshSelectedSEIBMs();
- window.PUCFichasBM={openProject,stageLinkedBMs,openReview:()=>{$f('ficha-open-review')?.click()},openSources:(id,kind='sei')=>{if(id)openProject(id);else nav('fichas');sourcePanel(true,kind)},parseBmText,physicalSeries,drawSheet,getState:()=>({bmRows,balances,planned}),selectedSEIDocs,loadSelectedSEIBMs,refreshSelectedSEIBMs,importProcesses,syncConfront};
+ window.PUCFichasBM={openProject,stageLinkedBMs,openReview:()=>{$f('ficha-open-review')?.click()},openSources:(id,kind='sei')=>{if(id)openProject(id);else nav('fichas');sourcePanel(true,kind)},parseBmText,physicalSeries,drawSheet,getState:()=>({bmRows:bmRows.filter(seiActive),balances,planned}),selectedSEIDocs,loadSelectedSEIBMs,refreshSelectedSEIBMs,importProcesses,syncConfront};
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
