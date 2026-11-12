@@ -266,7 +266,11 @@ function horizontalTable(points){
  const build=items=>{
   const header=items.map(p=>'<th>BM '+String(p.number).padStart(2,'0')+'</th>').join('');
   const line=(title,key,formatter,kind)=>'<tr class="puc-curva-row-'+kind+'"><th>'+title+'</th>'+items.map(p=>'<td>'+formatter(Number.isFinite(p[key])?p[key]:null)+'</td>').join('')+'</tr>';
+  const rawLine=(title,key)=>'<tr class="puc-curva-row-neutral"><th>'+title+'</th>'+items.map(p=>'<td title="'+esc(p[key]||'')+'">'+esc(String(p[key]||'—').slice(0,32))+'</td>').join('')+'</tr>';
   return '<div class="puc-curva-table-scroll"><table class="puc-curva-table"><thead><tr><th>Indicador</th>'+header+'</tr></thead><tbody>'+
+   rawLine('Arquivo de origem','sourceName')+
+   rawLine('Conferência','confidence')+
+   rawLine('Data identificada','date')+
    line('Página do PDF','page',v=>v===null?'—':v,'neutral')+
    line('Período (dias)','day',v=>v===null?'—':v,'neutral')+
    line('Previsto (parcial) — R$','financeiroPrevistoParcial',money,'plan')+
@@ -281,6 +285,18 @@ function horizontalTable(points){
  };
  return chunks.map((items,i)=>'<section class="puc-curva-table-block"><h5>Histórico BM '+items[0].number+' a BM '+items[items.length-1].number+'</h5>'+build(items)+'</section>').join('');
 }
+function sourceAudit(result){
+ const sources=result.sources||[];
+ if(!sources.length)return '';
+ const rows=sources.map(s=>'<tr><td>'+esc(s.bm||'—')+'</td><td>'+esc(s.name)+'</td><td>'+esc(s.contract)+'</td>'+
+  '<td>'+esc(s.physical)+'</td><td>'+esc(s.historic)+'</td><td>'+esc(s.status)+'</td></tr>').join('');
+ return '<section class="puc-curva-audit"><h4>Documentos examinados e rastreabilidade</h4>'+
+  '<p class="puc-curva-note">Cada linha corresponde a um BM da biblioteca local. Os candidatos não conferidos são usados apenas na prévia documental; não constituem medição validada.</p>'+
+  '<div class="puc-curva-table-scroll"><table class="puc-curva-table"><thead><tr>'+
+  '<th>BM</th><th>Arquivo SEI</th><th>Contrato</th><th>Físico acumulado</th><th>Histórico no PDF</th><th>Situação</th>'+
+  '</tr></thead><tbody>'+rows+'</tbody></table></div></section>';
+}
+
 function layout(result){
  const {points,meta,doc,warnings}=result;
  let projects=[];try{projects=JSON.parse(byId('embedded-data')?.textContent||'{}').projetos||[]}catch(e){}
@@ -299,19 +315,20 @@ function layout(result){
  box('Contrato',esc(meta.contract||currentContract()||'Não identificado'))+
  box('Contratada',esc(meta.contractor||'Não identificada'))+
  box('Ordem de serviço',esc(meta.serviceOrder||'Não identificada'))+
- box('BM de referência',esc(meta.bm||doc.bmNumber||'Não identificado'))+
+ box('BM de referência',result.scanned?'Consolidado de '+result.scanned+' arquivo(s)':esc(meta.bm||doc.bmNumber||'Não identificado'))+
  box('PUC / UF',esc((currentProject()||'—')+' / '+(project?.uf||'—')))+
  '<div class="puc-curva-obj"><small>Objeto contratual</small><strong>'+esc(meta.object||doc.workName||project?.empreendimento||'Não identificado')+'</strong></div></div>'+
  '<div class="puc-curva-kpis">'+
- box('Boletins no histórico',String(points.length))+
+ box('Pontos consolidados',String(points.length))+
+ box('Documentos BM examinados',String(result.scanned??1))+
  box('Último realizado acumulado',actual?pct(actual.percentualRealizadoAcumulado):'—')+
  box('Previsto na mesma medição',comparable?pct(planned.percentualPrevistoAcumulado):'—')+
  box('Desvio realizado – previsto',delta===null?'Não comparável':(delta>0?'+':'')+delta.toLocaleString('pt-BR',{maximumFractionDigits:2})+' p.p.')+
  '</div>'+alert+
  '<h4>Curva S — percentuais acumulados documentados</h4>'+svgChart(points)+
  '<div class="puc-curva-legend"><span><i style="background:#3977c5"></i> Previsto acumulado</span><span><i style="background:#5cbb83"></i> Realizado acumulado</span></div>'+
- '<h4>Histórico das medições — previsto e realizado</h4>'+horizontalTable(points)+
- '<p class="puc-curva-note">Percentuais extraídos da tabela do BM, sem estimativas, somas de BMs repetidos ou interpolação de períodos ausentes. Não presumir que a tabela contratual corresponde à execução física oficial, ao SIOP ou a valores pagos.</p>'+
+ '<h4>Histórico das medições — previsto e realizado</h4>'+horizontalTable(points)+sourceAudit(result)+
+ '<p class="puc-curva-note">Histórico consolidado dos BMs vinculados ao empreendimento/contrato. Percentuais históricos são extraídos das tabelas nos PDFs; percentuais físicos individuais podem aparecer como prévia documental não conferida. Sem estimativas, somatório de percentuais de BMs ou interpolação de períodos ausentes. O gráfico não constitui execução física homologada, pagamento ou lançamento no SIOP.</p>'+
  '<p class="puc-curva-note">Fonte: '+esc(source)+' · '+result.pages+' página(s) examinada(s) · Emitido em '+new Date().toLocaleString('pt-BR')+'. Conferir contrato, objeto, sequência e valores com o documento original antes de usar na decisão.</p></div>';
 }
 let chosen='',generation=0,activeReport=null;
