@@ -94,6 +94,29 @@ function ui(){
  const p=$f('documentos')?.querySelector('.panel');if(p){let bar=document.createElement('div');bar.className='ficha-tip';bar.style.margin='12px 0';bar.innerHTML='<b>Novidade:</b> para extrair apenas BMs de um processo SEI (ZIP/PDF), revisar as medições e gerar a ficha com curva S, abra <b>Fichas e Curva S</b>. Balanços internos devem ser tratados apenas na sessão local.';p.insertBefore(bar,p.children[2]||null)}
  const report=$f('relatorio')?.querySelector('.panel');if(report){const btn=document.createElement('button');btn.className='btn secondary hide-print';btn.id='ficha-from-report';btn.type='button';btn.textContent='Abrir ficha de BMs e Curva S';report.querySelector('.filters')?.appendChild(btn);btn.onclick=()=>{const id=$f('report-project').value;if(!id){alert('Selecione um empreendimento no relatório.');return}openProject(id)}}
 }
+
+const extraProjects=new Set();
+function selectedProjectIds(){
+ const main=$f('ficha-project')?.value||'',p=data.projetos.find(x=>x.id===main);
+ if(!p)return [];
+ return [main,...[...extraProjects].filter(id=>id!==main&&data.projetos.some(x=>x.id===id&&x.empresa===p.empresa))];
+}
+function refreshProjectGroup(){
+ const list=$f('ficha-project-group-list'),count=$f('ficha-project-group-count');
+ if(!list)return;
+ const ids=selectedProjectIds(),main=data.projetos.find(x=>x.id===ids[0]);
+ for(const id of [...extraProjects])if(!main||id===main.id||
+  !data.projetos.some(x=>x.id===id&&x.empresa===main.empresa))extraProjects.delete(id);
+ const others=main?data.projetos.filter(x=>x.empresa===main.empresa&&x.id!==main.id):[];
+ list.innerHTML=others.map(p=>'<label class="ficha-group-option"><input type="checkbox" data-extra-puc="'+ef(p.id)+'"'+
+  (extraProjects.has(p.id)?' checked':'')+'><span><b>'+ef(p.id)+'</b><small>'+ef(p.empreendimento)+'</small></span></label>').join('')||
+  '<p class="muted">Escolha um empreendimento principal.</p>';
+ if(count)count.textContent=ids.length?ids.length+' selecionada(s): '+ids.join(', '):'Nenhuma PUC';
+}
+function notifyProjectGroup(){
+ document.dispatchEvent(new CustomEvent('puc-projetos-agrupados-atualizados',{detail:{ids:selectedProjectIds()}}));
+}
+
 function updateProjects(){const co=$f('ficha-company'),p=$f('ficha-project'),prev=selectedId;
  const company=co.value;option(co,data.projetos.map(x=>x.empresa));if([...co.options].some(x=>x.value===company))co.value=company;
  const rows=co.value?data.projetos.filter(x=>x.empresa===co.value):data.projetos;
@@ -469,6 +492,20 @@ function simplifyFichasUI(){
  if(selectCompany)picker.appendChild(selectCompany);
  if(selectProject)picker.appendChild(selectProject);
  if(selectContract)picker.appendChild(selectContract);
+ const multi=document.createElement('details');
+ multi.id='ficha-project-group';multi.className='ficha-project-group';
+ multi.innerHTML='<summary>Incluir outras PUCs do mesmo projeto <span id="ficha-project-group-count"></span></summary>'+
+  '<p class="muted">Marque outros empreendimentos da Companhia quando fizerem parte do projeto acompanhado. Fichas, contratos e Curvas S permanecem separados, sem somar percentuais.</p>'+
+  '<div id="ficha-project-group-list" class="ficha-project-group-list"></div>';
+ controls.insertBefore(multi,controls.querySelector('.ficha-curve-actions'));
+ multi.addEventListener('change',e=>{
+  const input=e.target.closest('input[data-extra-puc]');if(!input)return;
+  const id=input.dataset.extraPuc,primary=data.projetos.find(p=>p.id===$f('ficha-project').value);
+  if(!primary||!data.projetos.some(p=>p.id===id&&p.empresa===primary.empresa))return;
+  if(input.checked)extraProjects.add(id);else extraProjects.delete(id);
+  refreshProjectGroup();stageLinkedBMs();updateContractsOnly();
+  renderRows();drawSheet();refreshSelectedSEIBMs();notifyProjectGroup();
+ });
  result.parentNode.insertBefore(controls,result);
  result.querySelector('.ficha-lead h2').textContent='Ficha de acompanhamento e evolução das medições';
  result.querySelector('.ficha-lead .muted').textContent='Identificação da obra, indicadores e histórico acumulado dos BMs confirmados.';
@@ -521,6 +558,7 @@ function simplifyFichasUI(){
  @media(max-width:600px){#fichas .ficha-sei-toolbar{grid-template-columns:1fr}#fichas .ficha-sei-biblioteca-list{max-height:380px;padding:7px}#fichas .ficha-sei-bulk button{flex:1}#fichas .ficha-sei-biblioteca-item{padding:10px!important}}
  @media print{#fichas .ficha-sei-toolbar,#fichas .ficha-sei-bulk,#fichas .ficha-sei-biblioteca-list{display:none!important}}
 `;
+ style.textContent += '#fichas .ficha-project-group{margin:12px 0;padding:12px;border:1px solid #c5d7e5;border-radius:9px;background:#f5f9fd}#fichas .ficha-project-group summary{font-weight:700;cursor:pointer}#fichas #ficha-project-group-count{font-size:12px;font-weight:400;color:#416078;margin-left:10px}#fichas .ficha-project-group-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}#fichas .ficha-group-option{display:flex;flex-direction:row!important;align-items:flex-start!important;gap:8px;padding:10px;background:white;border:1px solid #d0dfec;border-radius:8px;min-width:0;cursor:pointer}#fichas .ficha-group-option input{flex:none;margin-top:3px}#fichas .ficha-group-option span{min-width:0;overflow-wrap:anywhere}#fichas .ficha-group-option small{display:block;margin-top:4px;color:#5a7083}#fichas .ficha-group-sheet{padding:14px;margin:16px 0 26px;border:1px solid #bed3e2;border-radius:9px}#fichas .ficha-group-sheet>h2{font-size:17px}#fichas .ficha-group-warning{border-left:3px solid #2a7198;padding:10px;background:#eef7fe}@media(max-width:690px){#fichas .ficha-project-group-list{grid-template-columns:1fr}}';
  document.head.appendChild(style);
 }
 
@@ -566,7 +604,7 @@ function init(){
  $f('ficha-print-btn').onclick=()=>{if(!selectedId&&!document.getElementById('puc-curva-documental')?.querySelector('.puc-curva-report')){alert('Selecione um empreendimento ou um BM com Curva S em Documentos.');return}if(selectedId)drawSheet();document.body.classList.add('ficha-print');window.print()};window.addEventListener('afterprint',()=>document.body.classList.remove('ficha-print'));
  $f('ficha-open-critico').onclick=()=>{if(!selectedId){alert('Selecione empreendimento.');return}const p=data.projetos.find(x=>x.id===selectedId);nav('relatorio');$f('report-company').value=p.empresa;updateCompanyProject('report-company','report-project','Selecione o empreendimento');$f('report-project').value=selectedId;showCritical()};
  updateProjects();drawSheet();refreshSelectedSEIBMs();
- window.PUCFichasBM={openProject,stageLinkedBMs,openReview:()=>{$f('ficha-open-review')?.click()},openSources:(id,kind='sei')=>{if(id)openProject(id);else nav('fichas');sourcePanel(true,kind)},parseBmText,physicalSeries,drawSheet,getState:()=>({bmRows:bmRows.filter(seiActive),balances,planned}),selectedSEIDocs,loadSelectedSEIBMs,refreshSelectedSEIBMs,importProcesses,syncConfront};
+ window.PUCFichasBM={openProject,selectedProjectIds,stageLinkedBMs,openReview:()=>{$f('ficha-open-review')?.click()},openSources:(id,kind='sei')=>{if(id)openProject(id);else nav('fichas');sourcePanel(true,kind)},parseBmText,physicalSeries,drawSheet,getState:()=>({bmRows:bmRows.filter(seiActive),balances,planned}),selectedSEIDocs,loadSelectedSEIBMs,refreshSelectedSEIBMs,importProcesses,syncConfront};
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
