@@ -33,7 +33,11 @@ const SEI_EXCLUSIONS_KEY='BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1';
 let seiExcluded=new Set();
 try{seiExcluded=new Set(JSON.parse(localStorage.getItem(SEI_EXCLUSIONS_KEY)||'[]'))}catch(e){seiExcluded=new Set()}
 function saveSeiSelection(){try{localStorage.setItem(SEI_EXCLUSIONS_KEY,JSON.stringify([...seiExcluded]))}catch(e){}document.dispatchEvent(new CustomEvent('puc-sei-selection-updated'))}
-function seiIncluded(d){return d.origin!=='SEI'||!seiExcluded.has(d.id)}
+function seiIncluded(d){
+ if(d.origin!=='SEI')return true;
+ return !seiExcluded.has(d.id)&&d.seiScope!=='IGNORADO'&&
+  !!window.PUCDocEngine?.seiBMDecision?.(d.name,d.text,d.quality)?.eligible;
+}
 function filesForReview(){
  return docs().filter(d=>sources.includes(d.origin)&&seiIncluded(d)&&(!selected.size||!d.project||selected.has(d.project)||(d.projects||[]).some(id=>selected.has(id))||(d.findings||[]).some(f=>selected.has(f.project))));
 }
@@ -143,7 +147,7 @@ function sourceCards(){
 
 function renderSeiSelector(){
  const area=$('puc3-sei-choices'),counter=$('puc3-sei-selected-count');if(!area||!counter)return;
- const available=docs().filter(d=>d.origin==='SEI'),valid=new Set(available.map(d=>d.id));
+ const available=docs().filter(d=>d.origin==='SEI'&&d.seiScope!=='IGNORADO'&&window.PUCDocEngine?.seiBMDecision?.(d.name,d.text,d.quality)?.eligible),valid=new Set(available.map(d=>d.id));
  seiExcluded=new Set([...seiExcluded].filter(id=>valid.has(id)));saveSeiSelection();
  const query=($('puc3-sei-search')?.value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
  area.replaceChildren();let shown=0;
