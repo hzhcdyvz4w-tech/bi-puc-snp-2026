@@ -82,6 +82,7 @@ async function ingest(files,origin,project,ref,selectedZipEntries=null){
   try{
    if(file.size>90*1024*1024)throw Error('arquivo acima de 90 MB');
    const inner=await extract(file,origin);
+   if(origin==='SEI')ignored+=Number(inner.ignoredCount||0);
    for(const item of inner){
     if(origin==='SEI'&&/\.zip$/i.test(file.name)&&selectedZipEntries&&!selectedZipEntries.has(file.name+'\u0001'+item.container+'\u0001'+item.name))continue;
     if(origin==='SEI'&&!engine()?.seiBMFileAllowed?.(item.name)){ignored++;continue}
