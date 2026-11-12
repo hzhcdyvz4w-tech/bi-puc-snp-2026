@@ -250,7 +250,7 @@ function basicPDF(bytes){
  }return segments.join(' ').slice(0,300000)
 }
 
-async function read(item){
+async function read(item,options={}){
  const ext=extension(item.name),blob=item.blob;
  if(['html','htm'].includes(ext))return {text:cleanHTML(await blob.text()),quality:'TEXTO EXTRAÍDO (HTML)'};
  if(['txt','csv','json','xml','md'].includes(ext))return {text:(await blob.text()).slice(0,300000),quality:'TEXTO EXTRAÍDO'};
@@ -288,7 +288,7 @@ async function read(item){
  }
  if(ext==='pdf'){
   if(!w.pdfjsLib){let txt=basicPDF(new Uint8Array(await blob.arrayBuffer()));return {text:txt,quality:txt?'PDF BÁSICO — LEITURA PARCIAL, CONFERIR':'PDF NÃO EXTRAÍDO: PDF.js indisponível ou PDF digitalizado'}};
-  try{let pdf=await w.pdfjsLib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise,lines=[];let cap=Math.min(70,pdf.numPages);
+  try{let pdf=await w.pdfjsLib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise,lines=[];let cap=Math.min(Number.isInteger(options.maxPages)&&options.maxPages>0?options.maxPages:70,pdf.numPages);
    for(let p=1;p<=cap;p++){let page=await pdf.getPage(p);let content=await page.getTextContent();const layout=bmHeaderFromPDFItems(content.items),totals=layout.lines.length?[]:bmTotalsFromPDFItems(content.items);lines.push('PÁGINA '+p+'\n'+layout.lines.join('\n')+'\n'+totals.join('\n')+'\n'+layout.visualLines.join('\n'))}
    const text=lines.join('\n').slice(0,300000);
    const quality=text.replace(/PÁGINA \d+/g,'').trim()?'TEXTO EXTRAÍDO (PDF'+(pdf.numPages>cap?'; LEITURA PARCIAL '+cap+'/'+pdf.numPages+' PÁGINAS':'')+')':'PDF SEM TEXTO — OCR NECESSÁRIO';
