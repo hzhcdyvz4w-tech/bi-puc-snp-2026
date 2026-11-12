@@ -65,7 +65,7 @@ function ui(){
   <div class="panel"><div class="ficha-lead"><div><h2>Fichas de Obras · BMs e Curva S</h2><p class="muted">Selecione uma Companhia Docas e um empreendimento. O processo SEI ZIP será pesquisado <b>somente em busca de boletins de medição (BMs)</b>; dados sugeridos exigem conferência antes de entrar na curva.</p></div><button class="btn secondary" id="ficha-print-btn" type="button">Imprimir ficha / PDF</button></div>
   <div class="ficha-tip">A curva S representa a evolução física acumulada registrada nos BMs conferidos, por data de medição. <b>Não</b> é calculada a partir de pagamentos ou de uma distribuição estimada. PDFs digitalizados sem texto selecionável serão sinalizados para revisão manual. <b>Processamento local:</b> arquivos não são transmitidos ao GitHub.</div>
   <div class="ficha-filterbar">
-    <div class="ficha-form ficha-main-filters"><label>Companhia Docas<select id="ficha-company"><option value="">Selecione a companhia</option></select></label><label class="span2">Empreendimento<select id="ficha-project"><option value="">Selecione o empreendimento</option></select></label><label>Contrato dos BMs<select id="ficha-contract"><option value="">Todos / um único contrato</option></select></label><label>Referência SEI do processo<input id="ficha-sei" placeholder="Ex.: 50020.00.../2026-00"/></label><label>ID Governa (Balanço)<input id="ficha-id-governa" placeholder="Código oficial comprovado"/></label></div>
+    <div class="ficha-form ficha-main-filters"><label>Companhia Docas<select id="ficha-company"><option value="">Selecione a companhia</option></select></label><label class="span2">Empreendimento principal<select id="ficha-project"><option value="">Selecione o empreendimento</option></select></label><label>Contrato dos BMs<select id="ficha-contract"><option value="">Todos / um único contrato</option></select></label><label>Referência SEI do processo<input id="ficha-sei" placeholder="Ex.: 50020.00.../2026-00"/></label><label>ID Governa (Balanço)<input id="ficha-id-governa" placeholder="Código oficial comprovado"/></label></div>
     <div class="ficha-source-toggle-wrap"><button class="btn ficha-source-trigger" id="ficha-toggle-sources" type="button" aria-expanded="false" aria-controls="ficha-source-panel"><span aria-hidden="true">＋</span> Inserir fontes</button><small>SEI · BMs · Balanço · Curva S</small><span class="ficha-upload-badge" id="ficha-upload-badge" aria-live="polite">Selecione o empreendimento</span></div>
   </div>
   <div class="ficha-source-panel" id="ficha-source-panel" hidden>
@@ -530,7 +530,7 @@ function simplifyFichasUI(){
  if(selectProject)picker.appendChild(selectProject);
  if(selectContract)picker.appendChild(selectContract);
  const multi=document.createElement('details');
- multi.id='ficha-project-group';multi.className='ficha-project-group';
+ multi.id='ficha-project-group';multi.className='ficha-project-group';multi.open=true;
  multi.innerHTML='<summary>Incluir outras PUCs do mesmo projeto <span id="ficha-project-group-count"></span></summary>'+
   '<p class="muted">Marque outros empreendimentos da Companhia quando fizerem parte do projeto acompanhado. Fichas, contratos e Curvas S permanecem separados, sem somar percentuais.</p>'+
   '<div id="ficha-project-group-list" class="ficha-project-group-list"></div>';
