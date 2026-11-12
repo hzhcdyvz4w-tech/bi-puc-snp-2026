@@ -450,7 +450,6 @@ function setup(){
  document.addEventListener('puc-documents-updated',schedule);
  document.addEventListener('puc-sei-selection-updated',schedule);
  document.addEventListener('puc-ficha-bms-atualizados',schedule);
- window.PUCCurvaSEI={parsePage,extract,selected,consolidate,uniteHistory,singleBmPoint};
  document.addEventListener('click',event=>{
    if(!event.target.closest?.('#ficha-print-btn')||!activeReport||!byId('puc-curva-documental')?.querySelector('.puc-curva-report'))return;
    event.preventDefault();event.stopImmediatePropagation();event.stopPropagation();
@@ -465,6 +464,6 @@ function setup(){
  style.textContent += '#puc-curva-documental-wrap{margin-top:14px}.puc-curva-chooser{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.puc-curva-chooser select{flex:1;min-width:240px}.puc-curva-chooser p{flex-basis:100%;margin:0}.puc-curva-report header{background:white;color:#20354b;flex-wrap:wrap}.puc-curva-row-real{background:#e7f5eb}.puc-curva-alert{padding:10px;background:#fff3dd;border-left:3px solid #bd873b;font-size:12px}@media(max-width:720px){.puc-curva-chooser{display:block}.puc-curva-chooser select,.puc-curva-chooser button{width:100%;margin:6px 0}}@media print{body.ficha-print.puc-curva-print #fichas,body.ficha-print.puc-curva-print #ficha-result-panel,body.ficha-print.puc-curva-print #puc-curva-documental-wrap,body.ficha-print.puc-curva-print #puc-curva-documental{display:block!important}body.ficha-print.puc-curva-print #ficha-print-area{display:none!important}body.ficha-print.puc-curva-print .puc-curva-chooser{display:none!important}body.ficha-print.puc-curva-print #ficha-result-panel{border:0!important;padding:0!important}body.ficha-print.puc-curva-print .puc-curva-report{border:0!important;padding:0!important}.puc-curva-report{print-color-adjust:exact;-webkit-print-color-adjust:exact}.puc-curva-table-block{break-inside:avoid}.puc-curva-table-scroll{overflow:visible}}';
  document.head.appendChild(style);render();
 }
-window.PUCCurvaSEI={parsePage,extract,render,selected,setup};
+window.PUCCurvaSEI={parsePage,extract,render,selected,setup,consolidate,uniteHistory,singleBmPoint};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup);else setup();
 })();
