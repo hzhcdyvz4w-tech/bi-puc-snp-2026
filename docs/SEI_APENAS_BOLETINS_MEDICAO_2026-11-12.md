@@ -7,7 +7,7 @@
 
 - Aceita, na origem SEI, **PDF com texto selecionável** e **XLSX contendo boletim, planilha ou quadro de medição**.
 - **ZIP** é mantido somente como recipiente: o sistema inspeciona os nomes dos membros e **não descompacta** arquivos de imagem, HTML, ofícios, despachos, processos, pareceres, memorandos, notas técnicas, termos de referência, contratos e demais extensões fora do escopo de BM.
-- Um nome genérico exportado do SEI (por exemplo `[113]-11498568_Anexo.pdf`) **pode ser aceito** quando o conteúdo textual identificar o próprio BM/medição. Mera menção a BM em documento processual não o torna elegível.
+- **Anexos dos BMs foram excluídos da análise (ajuste de 12/11/2026).** São rejeitados nomes como `[113]-11498568_Anexo.pdf`, `Anexo_BM_01.pdf`, `BM_01_Anexo2.pdf`, `Anexos_de_medicao.xlsx` e PDFs cujo cabeçalho textual identifica a peça como anexo. Mesmo que contenham percentuais ou uma cópia do BM, não compõem Curva S, ficha ou confronto. BMs principais continuam elegíveis.
 - PDF digitalizado sem texto extraível e arquivo de imagem **não entram na análise SEI**. Não há OCR nessa etapa; nenhuma porcentagem é inferida de imagens.
 - Arquivos não elegíveis não entram na lista de seleção analítica, não compõem indicadores nem podem produzir novas evidências de confronto pela API da biblioteca.
 - Anexos antigos fora do escopo são **preservados no IndexedDB local**, categorizados como fora da análise, e ficam indisponíveis às consultas analíticas. Não ocorre exclusão automática.
@@ -18,7 +18,7 @@ Na origem SEI, os indicadores indexados ficam restritos aos campos de BM e medi�
 - valor do contrato, valor da medição, valor acumulado, saldo contratual e percentuais do quadro de BM;
 - valor medido no período / acumulado e execução física (%) ou financeira (%) quando claramente identificados.
 
-**Não são indexados como evidência SEI de medição** dados de dotação, empenho, liquidação, pagamento ou PUC recebida/aplicada detectados incidentalmente nos anexos. Esses indicadores mantêm suas fontes próprias no BI.
+**Não são indexados como evidência SEI de medição** dados de dotação, empenho, liquidação, pagamento ou PUC recebida/aplicada detectados incidentalmente nos boletins. Esses indicadores mantêm suas fontes próprias no BI.
 
 ## Fluxo
 
@@ -32,8 +32,8 @@ Na origem SEI, os indicadores indexados ficam restritos aos campos de BM e medi�
 ## Testes realizados
 
 - Sintaxe JavaScript verificada para motor, biblioteca e painel SEI.
-- Regras de elegibilidade simuladas com arquivos BM, planilha de medição, Anexo de nome genérico contendo BM, ofício, processo, termo de referência, imagem, HTML e PDF sem texto.
-- ZIP sintético com 8 itens: **3 BMs/planilhas admitidos, 5 itens recusados sem descompactação**, com contagem verificável.
+- Regras de elegibilidade simuladas com BMs principais, planilhas principais, anexos de BMs de várias nomenclaturas, ofício, processo, termo de referência, imagem, HTML e PDF sem texto.
+- ZIP sintético com 8 itens: **2 BMs/planilhas principais admitidos, 6 itens recusados sem descompactação**, incluindo um Anexo do BM. Foram aprovados também 13 casos de aceitação/exclusão.
 - Extração contextual simulada: mantém valor da medição, acumulado e execução física; retira dotação, empenho e valor pago.
 - Testes de regressão guardados em `tests/sei-apenas-bms.test.mjs` para execução com `node --test tests/sei-apenas-bms.test.mjs`.
 - O teste de interface ponta a ponta com os BMs armazenados no navegador do gestor deve ser realizado no próprio ambiente; dados reais não estão incluídos no repositório.
