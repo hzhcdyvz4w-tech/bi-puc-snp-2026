@@ -76,7 +76,7 @@ function ui(){
   <p class="ficha-status" id="ficha-top-status"></p>
   <div class="ficha-actions"><button class="btn secondary" id="ficha-open-critico">Abrir Relatório Crítico</button><button class="btn secondary" id="ficha-sync-confront">Enviar BMs e Balanço conferidos ao Confronto</button><button class="btn secondary" id="ficha-export-session">Salvar sessão da ficha (JSON)</button><label style="font-size:12px">Restaurar sessão <input id="ficha-restore-session" type="file" accept=".json,application/json" style="max-width:210px"/></label></div></div>
   <div class="panel" id="ficha-review-bms"><div class="section-header"><h3>1. BMs localizados nos processos SEI</h3><button class="btn secondary" type="button" data-open-ficha-sources="sei">Inserir mais arquivos SEI/BMs</button></div><p class="muted">A varredura é iniciada pelo botão <b>Inserir fontes</b>, junto dos filtros acima. Aqui ficam os boletins encontrados e o histórico para revisão dos dados físicos e financeiros. Nenhum candidato entra na curva S antes de ser conferido.</p>
-  <div class="ficha-sei-biblioteca" id="ficha-biblioteca-sei"><h4>Boletins selecionados em Documentos → SEI</h4><p class="muted">A lista acompanha a seleção da biblioteca local. Escolha os BMs desta obra e incorpore os candidatos à ficha; todos exigem conferência. Percentuais financeiros não são utilizados como avanço físico.</p><div class="ficha-sei-biblioteca-actions"><button type="button" class="btn secondary" id="ficha-sei-refresh">Atualizar BMs selecionados</button><button type="button" class="btn" id="ficha-sei-load">Carregar candidatos à ficha</button></div><p class="ficha-status" id="ficha-sei-biblioteca-status"></p><label class="ficha-sei-search">Filtrar BMs anexados <input type="search" id="ficha-sei-search" placeholder="Número do BM, arquivo, processo ou obra" autocomplete="off"></label><div class="ficha-sei-biblioteca-list" id="ficha-sei-biblioteca-list"></div></div>
+  <div class="ficha-sei-biblioteca" id="ficha-biblioteca-sei"><h4>Boletins selecionados em Documentos → SEI</h4><p class="muted">A lista acompanha a seleção da biblioteca local. Escolha os BMs desta obra e incorpore os candidatos à ficha; todos exigem conferência. Percentuais financeiros não são utilizados como avanço físico.</p><div class="ficha-sei-biblioteca-actions"><button type="button" class="btn secondary" id="ficha-sei-refresh">Atualizar BMs selecionados</button><button type="button" class="btn" id="ficha-sei-load">Carregar candidatos à ficha</button></div><p class="ficha-status" id="ficha-sei-biblioteca-status"></p><div class="ficha-sei-toolbar"><label class="ficha-sei-search">Pesquisar boletins<input type="search" id="ficha-sei-search" placeholder="BM, nome do PDF, processo ou empreendimento" autocomplete="off"></label><label class="ficha-sei-scope">Exibir<select id="ficha-sei-scope"><option value="all">Todos os BMs</option><option value="linked">Vinculados à obra</option><option value="unlinked">Sem vínculo</option></select></label></div><div class="ficha-sei-bulk"><button class="btn secondary" type="button" id="ficha-sei-select-visible">Marcar visíveis</button><button class="btn secondary" type="button" id="ficha-sei-clear-selection">Limpar seleção</button><span id="ficha-sei-selection-count" class="ficha-status"></span></div><div class="ficha-sei-biblioteca-list" id="ficha-sei-biblioteca-list" role="group" aria-label="Lista de Boletins SEI para vinculação"></div></div>
   <div class="scroll"><table class="bm-table"><thead><tr><th>BM / origem</th><th>Data de medição</th><th>Contrato</th><th>Físico acum. (%)</th><th>Medido no BM (R$)</th><th>Medido acum. (R$)</th><th>Conferência</th><th>Ação</th></tr></thead><tbody id="ficha-bms-rows"><tr><td colspan="8" class="empty">Ainda não há BMs identificados. Selecione um projeto e importe o processo SEI.</td></tr></tbody></table></div>
   <details style="margin-top:14px"><summary><b>Adicionar BM manualmente (PDF digitalizado ou não reconhecido)</b></summary><form id="ficha-manual-bm" class="ficha-form" style="margin-top:13px"><label>Nº do BM<input name="bm" placeholder="Ex.: 05" required/></label><label>Data da medição<input name="date" type="date" required/></label><label>Contrato<input name="contract" placeholder="Ex.: 01/2025"/></label><label>Físico acumulado (%)<input name="physical" type="number" step="any" min="0" max="100"/></label><label>Valor medido no BM (R$)<input name="med" inputmode="decimal" placeholder="Ex.: 12500,40"/></label><label>Valor medido acumulado (R$)<input name="acc" inputmode="decimal" placeholder="Ex.: 345000,40"/></label><label class="span2">Referência do documento SEI<input name="evidence" placeholder="Documento SEI nº..., fls. ..." required/></label><div style="display:flex;align-items:end"><button class="btn" type="submit">Incluir BM para conferência</button></div></form></details>
   <div class="ficha-actions"><button class="btn secondary" id="ficha-export-bms">Exportar BMs conferidos e pendentes (CSV)</button><span class="muted" id="ficha-bm-count"></span></div></div>
@@ -162,50 +162,82 @@ function stageLinkedBMs(){
  if(!id)return {added:0,skipped:0};
  return stageBMs(selectedSEIDocs().filter(d=>belongsTo(d,id)),id,false);
 }
+let seiCandidateSelected=new Set(),seiSelectionProject='';
+function selectedForProject(project){
+ if(seiSelectionProject!==project){seiCandidateSelected.clear();seiSelectionProject=project}
+ return seiCandidateSelected;
+}
+function candidateDocuments(){
+ const project=data.projetos.find(p=>p.id===$f('ficha-project')?.value);
+ if(!project)return [];
+ return selectedSEIDocs().filter(d=>{
+  const assigned=associatedProjects(d);
+  return !assigned.length||assigned.includes(project.id);
+ }).sort((a,b)=>{
+  const rank=d=>belongsTo(d,project.id)?2:workCandidateForProject(d,project)?1:0;
+  return rank(b)-rank(a)||String(a.name).localeCompare(String(b.name),'pt-BR',{numeric:true});
+ });
+}
+function visibleCandidateDocuments(){
+ const project=data.projetos.find(p=>p.id===$f('ficha-project')?.value);
+ if(!project)return [];
+ const query=normal($f('ficha-sei-search')?.value||'');
+ const scope=$f('ficha-sei-scope')?.value||'all';
+ return candidateDocuments().filter(d=>{
+  const linked=belongsTo(d,project.id);
+  if(scope==='linked'&&!linked)return false;
+  if(scope==='unlinked'&&linked)return false;
+  return !query||normal([d.name,d.ref,d.bmNumber,d.bmPeriod,d.workName].join(' ')).includes(query);
+ });
+}
 function refreshSelectedSEIBMs(){
  const place=$f('ficha-sei-biblioteca-list'),stat=$f('ficha-sei-biblioteca-status'),inline=$f('ficha-bms-review-live');
  if(!place||!stat)return;
  const docs=selectedSEIDocs(),project=data.projetos.find(p=>p.id===$f('ficha-project')?.value);
  if(!project){
-  place.replaceChildren();
-  stat.textContent=docs.length+' BM(s) na biblioteca. Selecione um empreendimento.';
-  if(inline)inline.textContent='Selecione empreendimento para conferir BMs.';
+  place.replaceChildren();seiCandidateSelected.clear();seiSelectionProject='';
+  stat.textContent=docs.length+' BM(s) disponíveis na biblioteca. Selecione um empreendimento.';
+  if(inline)inline.textContent='Selecione o empreendimento para conferir os BMs.';
+  if($f('ficha-sei-selection-count'))$f('ficha-sei-selection-count').textContent='0 selecionados';
   return;
  }
- const id=project.id,available=docs.filter(d=>{
-  const assigned=associatedProjects(d);return !assigned.length||assigned.includes(id);
- }).sort((a,b)=>{
-  const rank=d=>belongsTo(d,id)?2:workCandidateForProject(d,project)?1:0;
-  return rank(b)-rank(a)||String(a.name).localeCompare(String(b.name),'pt-BR',{numeric:true});
- });
- const query=normal($f('ficha-sei-search')?.value||'');
- const visible=query?available.filter(d=>normal([d.name,d.ref,d.bmNumber,d.bmPeriod,d.workName].join(' ')).includes(query)):available;
- const linked=available.filter(d=>belongsTo(d,id));
+ const id=project.id,all=candidateDocuments(),visible=visibleCandidateDocuments();
+ const selectedSet=selectedForProject(id),valid=new Set(all.map(d=>d.id));
+ for(const old of [...selectedSet])if(!valid.has(old))selectedSet.delete(old);
+ const linked=all.filter(d=>belongsTo(d,id));
  const staged=bmRows.filter(x=>x.project===id&&x.status!=='ignorado'&&seiActive(x));
  const pending=staged.filter(x=>x.status==='pendente').length,confirmed=staged.filter(x=>x.status==='confirmado').length;
- stat.textContent=linked.length+' BM(s) vinculados à PUC; '+(available.length-linked.length)+
-   ' sem vínculo, disponíveis para avaliação. '+pending+' pendente(s), '+confirmed+' conferido(s).';
- if(inline)inline.textContent=staged.length+' BM(s) encontrados para esta obra · '+confirmed+
- ' conferido(s) · '+pending+' aguardando conferência. '+(available.length-linked.length)+
- ' BM(s) sem vínculo: só incorporar após confirmar o objeto.';
+ const unlinked=all.length-linked.length;
+ stat.textContent=linked.length+' vinculado(s) · '+unlinked+' sem vínculo · '+
+   pending+' pendente(s) · '+confirmed+' conferido(s).';
+ if(inline)inline.textContent=staged.length+' BM(s) associados à obra: '+confirmed+' conferidos, '+pending+
+   ' aguardando conferência. '+unlinked+' sem vínculo podem ser avaliados e associados manualmente.';
+ const short=(value,n=135)=>{const text=String(value||'').replace(/\s+/g,' ').trim();return text.length>n?text.slice(0,n-1)+'…':text};
  place.innerHTML=visible.map(d=>{
-  const previously=bmRows.some(x=>x.sourceDocId===d.id&&x.project===id);
-  const assigned=belongsTo(d,id),indicated=!assigned&&workCandidateForProject(d,project);
-  return '<label class="ficha-sei-biblioteca-item"><input type="checkbox" data-sei-doc="'+ef(d.id)+'" '+
-   (previously?'disabled':assigned?'checked':'')+
-   '/><span><strong>'+ef(d.name)+'</strong><small>BM '+ef(d.bmNumber||'nº pendente')+
-   ' · '+ef(d.bmPeriod||'competência não identificada')+' · '+ef(d.workName||'Objeto não identificado')+
-   '</small><small>'+(previously?'Incorporado à ficha, confira os valores':assigned?'Vinculado à PUC, ainda não homologado':
-   indicated?'Similaridade sugerida — selecione apenas após conferir o objeto':'Sem vínculo; seleção manual exige conferência')+
-   '</small></span></label>';
- }).join('')||'<p class="muted">Nenhum BM corresponde ao filtro. Confira número, arquivo e vínculo em Documentos → SEI.</p>';
- const button=$f('ficha-open-review');
- if(button)button.textContent='Conferir BMs ('+pending+' pendentes)';
+  const previous=bmRows.find(x=>x.sourceDocId===d.id&&x.project===id);
+  const assigned=belongsTo(d,id),suggested=!assigned&&workCandidateForProject(d,project);
+  const statusLabel=previous?'Incorporado à ficha':assigned?'Vinculado à PUC':suggested?'Vínculo sugerido':'Sem vínculo';
+  const tag=previous?'in-ficha':assigned?'linked':suggested?'suggested':'unlinked';
+  const details=[d.bmNumber?'BM '+d.bmNumber:'BM sem nº',d.bmPeriod||'Competência não identificada'].join(' · ');
+  const disabled=!!previous;
+  return '<label class="ficha-sei-biblioteca-item '+tag+'">'+
+   '<input type="checkbox" data-sei-doc="'+ef(d.id)+'" '+(disabled?'disabled':selectedSet.has(d.id)?'checked':'')+'>'+
+   '<span class="ficha-sei-biblioteca-content">'+
+   '<strong title="'+ef(d.name)+'">'+ef(d.name)+'</strong>'+
+   '<span class="ficha-sei-biblioteca-meta">'+
+    '<span>'+ef(details)+'</span><span class="ficha-sei-status-tag">'+ef(statusLabel)+'</span></span>'+
+   '<small title="'+ef(d.workName||'')+'">Objeto: '+ef(short(d.workName||'não identificado no PDF'))+'</small>'+
+   (d.ref?'<small>Referência: '+ef(short(d.ref,85))+'</small>':'')+
+   '</span></label>';
+ }).join('')||'<p class="ficha-sei-no-results">Nenhum BM corresponde à pesquisa. Ajuste o filtro ou verifique a biblioteca Documentos → SEI.</p>';
+ const n=[...selectedSet].filter(x=>valid.has(x)&&!bmRows.some(r=>r.sourceDocId===x&&r.project===id)).length;
+ if($f('ficha-sei-selection-count'))$f('ficha-sei-selection-count').textContent=n+' BM(s) marcados para incorporar';
+ if($f('ficha-open-review'))$f('ficha-open-review').textContent='Conferir BMs ('+pending+' pendentes)';
 }
 function loadSelectedSEIBMs(){
  const project=data.projetos.find(p=>p.id===$f('ficha-project')?.value),stat=$f('ficha-sei-biblioteca-status');
  if(!project){stat.textContent='Selecione primeiro o empreendimento.';return}
- const chosen=[...($f('ficha-sei-biblioteca-list')?.querySelectorAll('input[data-sei-doc]:checked:not(:disabled)')||[])].map(x=>x.dataset.seiDoc);
+ const chosen=[...selectedForProject(project.id)].filter(id=>!bmRows.some(x=>x.project===project.id&&x.sourceDocId===id));
  if(!chosen.length){stat.textContent='Marque os documentos que deseja incorporar. Nenhum BM alterado.';return}
  const docs=selectedSEIDocs().filter(d=>chosen.includes(d.id));
  if(docs.some(d=>associatedProjects(d).length&&!belongsTo(d,project.id))){
@@ -215,6 +247,7 @@ function loadSelectedSEIBMs(){
  if(unlinked.length&&!window.confirm('Confirma, após conferir o objeto, contrato e processo, que estes '+unlinked.length+
    ' BM(s) sem PUC indicada pertencem a '+project.id+'? Isto NÃO confere seus valores.'))return;
  const result=stageBMs(docs,project.id,true);
+ for(const d of docs)seiCandidateSelected.delete(d.id);
  renderRows();drawSheet();refreshSelectedSEIBMs();
  if($f('ficha-bms-conferencia'))$f('ficha-bms-conferencia').open=true;
  stat.textContent=result.added+' BM(s) adicionados como candidatos pendentes. Confira data, contrato e físico acumulado na tabela; nenhum dado foi homologado.';
@@ -477,6 +510,22 @@ function init(){
  $f('ficha-planned-model').onclick=()=>model('MODELO_CURVA_S_PREVISTA.csv',['investimento','contrato','competencia','fisico_previsto_acumulado_pct','referencia']);
  $f('ficha-sei-refresh').onclick=refreshSelectedSEIBMs;
  $f('ficha-sei-search').oninput=refreshSelectedSEIBMs;
+ $f('ficha-sei-scope').onchange=refreshSelectedSEIBMs;
+ $f('ficha-sei-biblioteca-list').addEventListener('change',e=>{
+  const input=e.target.closest('input[data-sei-doc]');
+  if(!input||input.disabled)return;
+  const set=selectedForProject($f('ficha-project').value);
+  if(input.checked)set.add(input.dataset.seiDoc);else set.delete(input.dataset.seiDoc);
+  refreshSelectedSEIBMs();
+ });
+ $f('ficha-sei-select-visible').onclick=()=>{
+  const set=selectedForProject($f('ficha-project').value);
+  for(const d of visibleCandidateDocuments()){
+   if(!bmRows.some(x=>x.project===$f('ficha-project').value&&x.sourceDocId===d.id))set.add(d.id);
+  }
+  refreshSelectedSEIBMs();
+ };
+ $f('ficha-sei-clear-selection').onclick=()=>{selectedForProject($f('ficha-project').value).clear();refreshSelectedSEIBMs()};
  $f('ficha-sei-load').onclick=loadSelectedSEIBMs;
  document.addEventListener('puc-documents-updated',()=>{stageLinkedBMs();refreshSelectedSEIBMs();renderRows();drawSheet()});
  document.addEventListener('puc-sei-selection-updated',()=>{stageLinkedBMs();refreshSelectedSEIBMs();renderRows();drawSheet()});
