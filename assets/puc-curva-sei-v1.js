@@ -172,9 +172,15 @@ async function extract(doc){
  try{
   for(let p=1;p<=pages;p++){
    const items=(await (await pdf.getPage(p)).getTextContent()).items;
-   const widePage=widePageCandidates(items,p);
-   if(widePage.length)wide.push(...widePage);
-   else records.push(...parsePage(items,p));
+   const widePage=widePageCandidates(items,p),fixed=parsePage(items,p);
+   const paired=widePage.some(v=>v.group==='COLUNA 2');
+   const knownFixed=fixed.filter(v=>Number.isFinite(v.percentualPrevistoAcumulado)||
+     Number.isFinite(v.percentualRealizadoAcumulado)).length>=2;
+   // Preserva PDFs do leiaute tradicional e evita usar seus deslocamentos
+   // absolutos em tabelas largas de duas colunas por BM.
+   if(knownFixed&&!paired)records.push(...fixed);
+   else if(widePage.length)wide.push(...widePage);
+   else records.push(...fixed);
    if(p===1||p===pages)meta.push(rowsFromItems(items).slice(0,36).map(r=>r.text).join('\n'));
   }
  }finally{try{await pdf.destroy()}catch(e){}}
