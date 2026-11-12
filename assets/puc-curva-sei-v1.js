@@ -8,7 +8,16 @@ const money=x=>x===null||!Number.isFinite(x)?'—':x.toLocaleString('pt-BR',{sty
 const excluded=()=>{try{return new Set(JSON.parse(localStorage.getItem('BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1')||'[]'))}catch(e){return new Set()}};
 const currentProject=()=>byId('ficha-project')?.value||'';
 const currentContract=()=>byId('ficha-contract')?.value?.trim()||'';
-const selected=()=>{const id=currentProject();if(!id)return [];return (window.PUCDocLibrary?.list?.()||[]).filter(d=>d.origin==='SEI'&&/^(BM IDENTIFICADO|BM PROVÁVEL)/.test(d.bmStatus||'')&&!excluded().has(d.id)&&/\.pdf$/i.test(d.name)&&(d.project===id||(Array.isArray(d.projects)&&d.projects.includes(id))))};
+const selected=()=>{
+ const id=currentProject();if(!id)return [];
+ const staged=window.PUCFichasBM?.getState?.().bmRows||[];
+ const mapped=new Set(staged.filter(r=>r.project===id&&r.sourceDocId&&r.status!=='ignorado').map(r=>r.sourceDocId));
+ return (window.PUCDocLibrary?.list?.()||[]).filter(d=>
+   d.origin==='SEI'&&/^(BM IDENTIFICADO|BM PROVÁVEL)/.test(d.bmStatus||'')&&
+   !excluded().has(d.id)&&/\.pdf$/i.test(d.name)&&
+   (d.project===id||(Array.isArray(d.projects)&&d.projects.includes(id))||mapped.has(d.id))
+ );
+};
 function rowsFromItems(items){
  const rows=[];
  for(const item of items||[]){
@@ -200,8 +209,11 @@ function availableDocuments(){
  if(!contract)return docs;
  return docs.filter(d=>{
   const m=metadata(d.text||'');
-  if(m.contract)return m.contract.toUpperCase().includes(contract.toUpperCase());
-  return (d.name||'').toUpperCase().includes(contract.toUpperCase().replaceAll('/','_'));
+  if(m.contract)return m.contract.toUpperCase().trim()===contract.toUpperCase().trim();
+  const fromReview=(window.PUCFichasBM?.getState?.().bmRows||[])
+    .some(x=>x.project===currentProject()&&x.sourceDocId===d.id&&x.status!=='ignorado'&&
+      x.contract.toUpperCase().trim()===contract.toUpperCase().trim());
+  return fromReview||(d.name||'').toUpperCase().includes(contract.toUpperCase().replaceAll('/','_'));
  });
 }
 function syncDocuments(){
@@ -224,9 +236,14 @@ function showLegacy(note){
  activeReport=null;
  if(currentProject())window.PUCFichasBM?.drawSheet?.();
  const state=window.PUCFichasBM?.getState?.(),project=currentProject(),contract=currentContract();
- const confirmed=(state?.bmRows||[]).filter(x=>x.project===project&&x.status==='confirmado'&&x.physical!=null&&Number.isFinite(Number(x.physical))&&(!contract||x.contract===contract));
+ const related=(state?.bmRows||[]).filter(x=>x.project===project&&x.status!=='ignorado'&&(!contract||x.contract===contract));
+ const confirmed=related.filter(x=>x.status==='confirmado'&&x.physical!=null&&Number.isFinite(Number(x.physical)));
+ const pending=related.filter(x=>x.status==='pendente');
  const status=byId('puc-curva-document-status');
- if(status)status.textContent=note+(confirmed.length?' · '+confirmed.length+' BM(s) físicos conferidos disponíveis na ficha abaixo.':' · Sem pontos físicos conferidos, não será criada curva estimada.');
+ if(status)status.textContent=note+
+   (confirmed.length?' · '+confirmed.length+' BM(s) conferidos para o gráfico físico.':'')+
+   (pending.length?' · '+pending.length+' BM(s) a conferir: utilize o botão Conferir BMs acima.':'')+
+   (!confirmed.length&&!pending.length?' · Nenhum BM associado com pontos utilizáveis. Confira o vínculo em Documentos → SEI.':'');
 }
 async function render(){
  const box=byId('puc-curva-documental');if(!box)return;
@@ -260,6 +277,7 @@ function setup(){
  function schedule(){clearTimeout(delay);delay=setTimeout(()=>{cache.clear();render()},180)}
  document.addEventListener('puc-documents-updated',schedule);
  document.addEventListener('puc-sei-selection-updated',schedule);
+ document.addEventListener('puc-ficha-bms-atualizados',schedule);
  document.addEventListener('click',event=>{
    if(!event.target.closest?.('#ficha-print-btn')||!activeReport||!byId('puc-curva-documental')?.querySelector('.puc-curva-report'))return;
    event.preventDefault();event.stopImmediatePropagation();event.stopPropagation();
