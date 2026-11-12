@@ -8,19 +8,32 @@ const stored=[];let selected=null;
 function projectIds(doc){return [...new Set([...(Array.isArray(doc.projects)?doc.projects:[]),doc.project].filter(Boolean))]}
 function chosenProjects(){const choices=E('puc-lib-multi-choices');if(choices)return [...choices.querySelectorAll('input[type="checkbox"]:checked')].map(x=>x.value);const one=E('puc-lib-project')?.value;return one?[one]:[]}
 function pucCaption(doc){return projectIds(doc).join(', ')||'Sem PUC vinculada'}
-let lastIngestReport={count:0,errors:[]};
+let lastIngestReport={count:0,ignored:0,errors:[]};
 async function digest(blob){const raw=await blob.arrayBuffer();const h=await crypto.subtle.digest('SHA-256',raw);return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('')}
 const engine=()=>window.PUCDocEngine;
 function bmNumber(x){return engine()?.bmNumber(x.name,x.text)||''}
 function bmCompetence(x){return engine()?.bmPeriod(x.name,x.text)||''}
 function classification(x){return engine()?.bmClass(x.name,x.text)||'SEM INDICAÇÃO DE BM'}
-function updateEntry(x){if(x.origin==='SEI')x.ref=String(x.ref||'').replace(/\s*\|\s*\d+\s+documento\(s\)\s+selecionado\(s\)/gi,'').trim();x.text=String(x.text||'');x.workName=engine()?.bmWorkName?.(x.text)||x.workName||'';x.candidates=engine()?.indicators(x.text)||[];
+function updateEntry(x){
+ if(x.origin==='SEI')x.ref=String(x.ref||'').replace(/\s*\|\s*\d+\s+documento\(s\)\s+selecionado\(s\)/gi,'').trim();
+ x.text=String(x.text||'');
+ const gate=x.origin==='SEI'?engine()?.seiBMDecision?.(x.name,x.text,x.quality):null;
+ if(gate&&!gate.eligible){
+  x.bmStatus=gate.status;x.bm=null;x.bmManual=false;
+  x.category='Fora da análise SEI';x.candidates=[];x.workName='';x.seiScope='IGNORADO';x.seiSkipReason=gate.reason;
+  return x;
+ }
+ x.seiScope=x.origin==='SEI'?'BM_LEGIVEL':'';x.seiSkipReason='';
+ x.workName=engine()?.bmWorkName?.(x.text)||x.workName||'';
+ x.candidates=engine()?.indicators(x.text)||[];
  x.bmStatus=x.bmManual?'BM IDENTIFICADO (MANUAL)':classification(x);
  if(x.bmManual||x.bmStatus==='BM IDENTIFICADO'||x.bmStatus==='BM PROVÁVEL'){
-  x.category='BM / medição';x.bm={number:bmNumber(x),period:bmCompetence(x),candidates:x.candidates,status:'PENDENTE DE CONFERÊNCIA'}
- }else{x.category=x.bmStatus==='BM MENCIONADO'?'Documento com referência a BM':(category(x.name)==='BM / medição'?'Documento':category(x.name));x.bm=null}
- return x
+  x.category='BM / medição';x.bm={number:bmNumber(x),period:bmCompetence(x),candidates:x.candidates,status:'PENDENTE DE CONFERÊNCIA'};
+ }else{x.category=x.bmStatus==='BM MENCIONADO'?'Documento com referência a BM':
+  (category(x.name)==='BM / medição'?'Documento':category(x.name));x.bm=null}
+ return x;
 }
+
 function openDB(){return new Promise((resolve,reject)=>{let r=indexedDB.open('BI_PUC_DOCUMENTOS_LOCAL',2);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains('files'))r.result.createObjectStore('files',{keyPath:'id'})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 function transact(mode,fn){return new Promise((resolve,reject)=>{let tx=db.transaction('files',mode),store=tx.objectStore('files'),result;let request;try{request=fn(store)}catch(e){tx.abort();reject(e);return}request.onsuccess=()=>{result=request.result};request.onerror=()=>reject(request.error);tx.oncomplete=()=>resolve(result);tx.onerror=()=>reject(tx.error||request.error);tx.onabort=()=>reject(tx.error||Error('Transação documental cancelada'))})}
 async function reload(){stored.splice(0);stored.push(...(await transact('readonly',s=>s.getAll())).sort((a,b)=>b.time-a.time).map(updateEntry));paint()}
@@ -50,7 +63,11 @@ async function extract(f){return engine().unpack(f)}
 async function fileText(item){return engine().read(item)}
 async function reanalyse(onlySEIBMs=false){
  let changed=0,problems=[];const button=E(onlySEIBMs?'puc-bm-reanalyse':'puc-reanalyse');if(button)button.disabled=true;
- const queue=onlySEIBMs?stored.filter(d=>{if(d.origin!=='SEI'||!isBM(d))return false;try{return !new Set(JSON.parse(localStorage.getItem('BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1')||'[]')).has(d.id)}catch(e){return true}}):[...stored];
+ const queue=(onlySEIBMs?stored.filter(d=>d.origin==='SEI'&&isBM(d)):
+ stored.filter(d=>d.origin!=='SEI'||engine()?.seiBMFileAllowed?.(d.name))).filter(d=>{
+ if(d.origin!=='SEI')return true;
+ try{return !new Set(JSON.parse(localStorage.getItem('BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1')||'[]')).has(d.id)}catch(e){return true}
+});
  try{for(const d of queue){if(!d.blob)continue;
   try{const result=await fileText({name:d.name,blob:d.blob});d.text=result.text;d.quality=result.quality;updateEntry(d);await transact('readwrite',s=>s.put(d));changed++;
    if(changed%5===0)status('Reanalisando documentos: '+changed+'/'+queue.length);
@@ -60,13 +77,14 @@ async function reanalyse(onlySEIBMs=false){
 }
 async function ingest(files,origin,project,ref,selectedZipEntries=null){
  const requested=[...new Set((Array.isArray(project)?project:[project]).filter(Boolean))];
- let count=0,linked=0;let errors=[];
+ let count=0,linked=0,ignored=0;let errors=[];
  for(const file of files){
   try{
    if(file.size>90*1024*1024)throw Error('arquivo acima de 90 MB');
    const inner=await extract(file);
    for(const item of inner){
     if(origin==='SEI'&&/\.zip$/i.test(file.name)&&selectedZipEntries&&!selectedZipEntries.has(file.name+'\u0001'+item.container+'\u0001'+item.name))continue;
+    if(origin==='SEI'&&!engine()?.seiBMFileAllowed?.(item.name)){ignored++;continue}
     const hash=await digest(item.blob);
     const previous=stored.find(x=>x.hash===hash&&x.origin===origin&&x.ref===ref);
     if(previous){
@@ -78,13 +96,15 @@ async function ingest(files,origin,project,ref,selectedZipEntries=null){
      continue;
     }
     const parsed=await fileText(item);
+    if(origin==='SEI'&&!engine()?.seiBMDecision?.(item.name,parsed.text,parsed.quality)?.eligible){ignored++;continue}
     const entry=updateEntry({id:crypto.randomUUID(),hash,name:item.name,container:item.container,blob:item.blob,origin,project:requested[0]||'',projects:requested,ref,time:Date.now(),category:category(item.name),text:parsed.text,quality:parsed.quality});
     await transact('readwrite',st=>st.put(entry));stored.push(entry);count++;
    }
   }catch(e){errors.push(file.name+': '+e.message)}
  }
- lastIngestReport={count,linked,errors};await reload();
- status(count+' documento(s) novo(s) e '+linked+' vinculo(s) ampliado(s). '+(requested.length?requested.join(', '):'Sem PUC vinculada')+'. '+(errors.length?'Observacoes: '+errors.slice(0,8).join('; '):'Sem duplicar arquivos.'));
+ lastIngestReport={count,linked,ignored,errors};await reload();
+ status(count+' BM(s) novo(s), '+linked+' vínculo(s) ampliado(s) e '+ignored+' arquivo(s) ignorado(s) por não serem BM legível. '+
+  (requested.length?requested.join(', '):'Sem PUC vinculada')+'. '+(errors.length?'Pendências: '+errors.slice(0,6).join('; '):'Nenhum arquivo fora do escopo foi analisado.'));
  return count;
 }
 async function deleteBatch(mode){
@@ -110,7 +130,10 @@ async function deleteBatch(mode){
 }
 function bmRows(){const el=E('puc-bm-list');if(!el)return;const arr=stored.filter(isBM);el.innerHTML=arr.length?arr.map(x=>'<tr><td>'+escape(displaySEIReference(x.ref))+'</td><td>'+escape(pucCaption(x))+'</td><td>'+escape(x.bm?.number||'Nº não identificado')+'</td><td>'+escape(x.bm?.period||'Competência não identificada')+'</td><td>'+escape(x.name)+'</td><td>'+escape(String(x.candidates.length))+' candidato(s), não conferido(s)</td><td><button type="button" class="btn secondary" data-bm-open="'+escape(x.id)+'">Conferir</button></td></tr>').join(''):'<tr><td colspan="7">Nenhum BM identificado. Confirme se o ZIP foi importado na Biblioteca e use Reanalisar anexos; PDFs digitalizados ou XLS antigos podem precisar de tratamento externo.</td></tr>';el.querySelectorAll('[data-bm-open]').forEach(b=>b.onclick=()=>{view(b.dataset.bmOpen);E('puc-library-detail')?.scrollIntoView({behavior:'smooth'})})}
 
-function isBM(x){return !!x.bmManual||x.bmStatus==='BM IDENTIFICADO'||x.bmStatus==='BM PROVÁVEL'||classification(x)==='BM IDENTIFICADO'||classification(x)==='BM PROVÁVEL'}
+function isBM(x){
+ if(x?.origin==='SEI')return x.seiScope!=='IGNORADO'&&!!engine()?.seiBMDecision?.(x.name,x.text,x.quality)?.eligible;
+ return !!x.bmManual||x.bmStatus==='BM IDENTIFICADO'||x.bmStatus==='BM PROVÁVEL'||classification(x)==='BM IDENTIFICADO'||classification(x)==='BM PROVÁVEL'
+}
 function displaySEIReference(raw){
  const ref=String(raw||'').replace(/\s*\|\s*\d+\s+documento\(s\)\s+selecionado\(s\)/gi,'').trim();
  return ref||'Processo SEI não informado';
