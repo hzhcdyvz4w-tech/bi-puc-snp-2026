@@ -7,15 +7,24 @@ const pct=x=>x===null||!Number.isFinite(x)?'—':x.toLocaleString('pt-BR',{minim
 const money=x=>x===null||!Number.isFinite(x)?'—':x.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const excluded=()=>{try{return new Set(JSON.parse(localStorage.getItem('BI_PUC_SEI_COMPARACAO_EXCLUIDOS_V1')||'[]'))}catch(e){return new Set()}};
 const currentProject=()=>byId('ficha-project')?.value||'';
+const currentProjects=()=>{
+ const ids=window.PUCFichasBM?.selectedProjectIds?.()||[currentProject()];
+ return [...new Set(ids.filter(Boolean))];
+};
 const currentContract=()=>byId('ficha-contract')?.value?.trim()||'';
+const associatedIds=doc=>[...new Set([doc.project,...(Array.isArray(doc.projects)?doc.projects:[])].filter(Boolean))];
+function belongsToProject(doc,id){
+ const ids=associatedIds(doc);
+ if(ids.includes(id))return true;
+ const rows=window.PUCFichasBM?.getState?.()?.bmRows||[];
+ return rows.some(r=>r.project===id&&r.sourceDocId===doc.id&&r.status!=='ignorado');
+}
 const selected=()=>{
- const id=currentProject();if(!id)return [];
- const staged=window.PUCFichasBM?.getState?.().bmRows||[];
- const mapped=new Set(staged.filter(r=>r.project===id&&r.sourceDocId&&r.status!=='ignorado').map(r=>r.sourceDocId));
- return (window.PUCDocLibrary?.list?.()||[]).filter(d=>
-   d.origin==='SEI'&&/^(BM IDENTIFICADO|BM PROVÁVEL)/.test(d.bmStatus||'')&&
-   !excluded().has(d.id)&&/\.pdf$/i.test(d.name)&&
-   (d.project===id||(Array.isArray(d.projects)&&d.projects.includes(id))||mapped.has(d.id))
+ const ids=currentProjects();if(!ids.length)return [];
+ return (window.PUCDocLibrary?.list?.()||[]).filter(doc=>
+  doc.origin==='SEI'&&/^(BM IDENTIFICADO|BM PROVÁVEL)/.test(doc.bmStatus||'')&&
+  !excluded().has(doc.id)&&/\.pdf$/i.test(doc.name)&&
+  ids.some(id=>belongsToProject(doc,id))
  );
 };
 function rowsFromItems(items){
@@ -225,8 +234,8 @@ function bmIndex(v){
  const raw=String(v??'').trim(),m=raw.match(/^(?:BM\s*)?0*(\d{1,3})$/i);
  return m?Number(m[1]):null;
 }
-function singleBmPoint(doc){
- const row=reviewedRow(doc);
+function singleBmPoint(doc,projectId=currentProject()){
+ const row=reviewedRow(doc,projectId);
  const parsed=window.PUCFichasBM?.parseBmText?.(doc.text||'',doc.name)||{};
  const guess=doc.name.match(/(?:^|[^\w])BM[\s_.-]*(?:N[º°. ]*)?0*(\d{1,3})(?!\d)/i)?.[1];
  const number=bmIndex(row?.number)??bmIndex(doc.bmNumber)??bmIndex(parsed.bm_number)??bmIndex(guess);
@@ -278,9 +287,9 @@ function uniteHistory(parts){
   gaps.push('Entre BM '+points[n-1].number+' e BM '+points[n].number+' há medições sem ponto identificado.');
  return {points:usable,warnings:[...new Set([...alerts,...gaps])],allPoints:points,conflicts};
 }
-async function consolidate(docs,progress=()=>{},stillCurrent=()=>true){
+async function consolidate(docs,progress=()=>{},stillCurrent=()=>true,projectId=currentProject()){
  if(!docs.length)throw Error('Nenhum BM vinculado ao empreendimento e ao contrato selecionados.');
- const codes=docs.map(d=>({doc:d,...docContract(d)}));
+ const codes=docs.map(d=>({doc:d,...docContract(d,projectId)}));
  const conflicts=codes.filter(x=>x.conflict);
  const identifiable=[...new Set(codes.filter(x=>!x.conflict).map(x=>x.contract).filter(Boolean))];
  if(!currentContract()&&identifiable.length>1)throw Error('Há BMs com contratos distintos ('+identifiable.join(', ')+'). Selecione um contrato antes de consolidar.');
@@ -297,11 +306,11 @@ async function consolidate(docs,progress=()=>{},stillCurrent=()=>true){
  let totalPages=0,usedHistorical=0;
  for(let i=0;i<input.length;i++){
   if(!stillCurrent())return null;
-  const d=input[i].doc,review=reviewedRow(d),evidence={name:d.name,reference:d.ref||'',bm:review?.number||d.bmNumber||'',
+  const d=input[i].doc,review=reviewedRow(d,projectId),evidence={name:d.name,reference:d.ref||'',bm:review?.number||d.bmNumber||'',
    contract:input[i].contract||'Não identificado — conferir',status:review?.status==='confirmado'?'Conferido':'Pendente',
    historic:'Não identificado',physical:'Ausente'};
   sources.push(evidence);
-  const single=singleBmPoint(d);
+  const single=singleBmPoint(d,projectId);
   if(single){parts.push(single);evidence.physical=pct(single.percentualRealizadoAcumulado);}
   progress(i,input.length,'Examinando BM '+(i+1)+' de '+input.length+' · '+d.name);
   if(/\.pdf$/i.test(d.name)){
@@ -449,10 +458,10 @@ function sourceAudit(result){
   '</tr></thead><tbody>'+rows+'</tbody></table></div></section>';
 }
 
-function layout(result){
+function layout(result,projectId=currentProject()){
  const {points,meta,doc,warnings}=result;
  let projects=[];try{projects=JSON.parse(byId('embedded-data')?.textContent||'{}').projetos||[]}catch(e){}
- const project=projects.find(p=>p.id===currentProject());
+ const project=projects.find(p=>p.id===projectId);
  const actual=[...points].reverse().find(p=>Number.isFinite(p.percentualRealizadoAcumulado));
  const planned=[...points].reverse().find(p=>Number.isFinite(p.percentualPrevistoAcumulado));
  const comparable=actual&&planned&&actual.number===planned.number;
@@ -468,7 +477,7 @@ function layout(result){
  box('Contratada',esc(meta.contractor||'Não identificada'))+
  box('Ordem de serviço',esc(meta.serviceOrder||'Não identificada'))+
  box('BM de referência',result.scanned?'Consolidado de '+result.scanned+' arquivo(s)':esc(meta.bm||doc.bmNumber||'Não identificado'))+
- box('PUC / UF',esc((currentProject()||'—')+' / '+(project?.uf||'—')))+
+ box('PUC / UF',esc((projectId||'—')+' / '+(project?.uf||'—')))+
  '<div class="puc-curva-obj"><small>Objeto contratual</small><strong>'+esc(meta.object||doc.workName||project?.empreendimento||'Não identificado')+'</strong></div></div>'+
  '<div class="puc-curva-kpis">'+
  box('Pontos consolidados',String(points.length))+
@@ -492,14 +501,14 @@ const contractCode=s=>{
  const found=input.match(/\b\d{1,6}\s*[\/.\-]\s*(?:20)?\d{2,4}\b/);
  return found?found[0].replace(/\s/g,'').replace(/[.\-]/g,'/'):input.trim().replace(/\s+/g,' ');
 };
-function reviewedRow(doc){
- const id=currentProject();
+function reviewedRow(doc,projectId=currentProject()){
+ const id=projectId;
  return (window.PUCFichasBM?.getState?.()?.bmRows||[]).find(
   r=>r.project===id&&r.sourceDocId===doc.id&&r.status!=='ignorado'
  )||null;
 }
-function docContract(doc){
- const reviewed=reviewedRow(doc);
+function docContract(doc,projectId=currentProject()){
+ const reviewed=reviewedRow(doc,projectId);
  const meta=metadata(doc.text||'');
  const fromText=meta.contract||((doc.text||'').match(/(?:CONTRATO(?:\s+N[°ºO.]*)?\s*[:\s-]+)(\d{1,6}\s*[\/.\-]\s*(?:20)?\d{2,4})/i)?.[1]||'');
  // A reviewed contract has priority; it must be consistent with the PDF when available.
@@ -520,7 +529,7 @@ function syncDocuments(){
   const n=d=>Number(reviewedRow(d)?.number||d.bmNumber||9999);
   return n(a)-n(b)||a.name.localeCompare(b.name,'pt-BR',{numeric:true});
  });
- const scope=currentProject()+'|'+contractCode(currentContract());
+ const scope=currentProjects().join('|')+'|'+contractCode(currentContract());
  if(scope!==selectionScope){selectedBmIds=new Set(docs.map(d=>d.id));selectionScope=scope;selectionEdited=false}
  const valid=new Set(docs.map(d=>d.id));
  selectedBmIds=new Set([...selectedBmIds].filter(id=>valid.has(id)));
@@ -532,11 +541,12 @@ function syncDocuments(){
     .some(x=>String(x||'').toLocaleLowerCase('pt-BR').includes(query));
  }):docs;
  list.innerHTML=visible.map(d=>{
-  const r=reviewedRow(d),bm=r?.number||d.bmNumber||'?';
+  const matched=currentProjects().filter(id=>belongsToProject(d,id));
+  const r=reviewedRow(d,matched[0]||currentProject()),bm=r?.number||d.bmNumber||'?';
   const situation=r?.status==='confirmado'?'Conferido':r?.status==='pendente'?'Pendente':'Não incorporado';
   return '<label class="puc-curva-bm-option"><input type="checkbox" data-curva-id="'+esc(d.id)+'" '+
    (selectedBmIds.has(d.id)?'checked':'')+'><span class="puc-curva-bm-detail"><strong>BM '+esc(bm)+' · '+esc(d.name)+'</strong>'+
-   '<small>'+esc((r?.contract||docContract(d).contract||'Contrato não identificado')+' · '+situation)+
+   '<small>'+esc(matched.join(' + ')+' · '+(r?.contract||docContract(d,matched[0]).contract||'Contrato não identificado')+' · '+situation)+
    '</small></span></label>';
  }).join('')||'<p class="puc-curva-note">Nenhum BM corresponde à pesquisa.</p>';
  const active=docs.filter(d=>selectedBmIds.has(d.id));
@@ -591,7 +601,7 @@ async function render(){
  const panel=byId('puc-curva-documental');
  if(!panel)return;
  const id=++generation,selection=syncDocuments();
- const mappingScope=currentProject()+'|'+contractCode(currentContract());
+ const mappingScope=currentProjects().join('|')+'|'+contractCode(currentContract());
  if(candidateScope!==mappingScope){candidateScope=mappingScope;candidateMap={percentualPrevistoAcumulado:'',percentualRealizadoAcumulado:''};updateMappingOptions([])}
 
  if(!currentProject())return showLegacy('Escolha o empreendimento antes de gerar o histórico dos BMs.');
@@ -724,6 +734,7 @@ function setup(){
  document.addEventListener('puc-documents-updated',()=>schedule(true));
  document.addEventListener('puc-sei-selection-updated',()=>schedule(false));
  document.addEventListener('puc-ficha-bms-atualizados',()=>schedule(false));
+ document.addEventListener('puc-projetos-agrupados-atualizados',()=>{selectionScope='';selectedBmIds.clear();schedule(false)});
  document.addEventListener('click',event=>{
    if(!event.target.closest?.('#ficha-print-btn')||!activeReport||!byId('puc-curva-documental')?.querySelector('.puc-curva-report'))return;
    event.preventDefault();event.stopImmediatePropagation();event.stopPropagation();
