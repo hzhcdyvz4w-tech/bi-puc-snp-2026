@@ -34,6 +34,12 @@ function seiBMFileAllowed(name){
 function seiBMDecision(name,text,quality){
  if(!seiBMFileAllowed(name))return {eligible:false,status:'FORA DO ESCOPO SEI',reason:'Somente o BM principal e a planilha principal de medição em PDF/XLSX são analisados; anexos, imagens e documentos processuais são excluídos.'};
  const clean=String(text||'').replace(/PÁGINA\s+\d+/gi,'').trim();
+ // Identifica anexos textualmente, inclusive quando o arquivo SEI recebeu nome genérico.
+ const opening=normal(clean.slice(0,650)).replace(/^\s*pagina\s*\d+\s*/, '').trim();
+ if(/^(?:anexos?|apendice)\s*(?:(?:n[ºo.]?\s*)?(?:\d+|[ivx]+))?\s*(?:[:.\-–]|\s|$)/.test(opening)){
+  return {eligible:false,status:'ANEXO DO BM — NÃO ANALISAR',
+   reason:'O documento é identificado no cabeçalho como anexo, não como boletim principal.'};
+ }
  if(clean.length<18||/NÃO EXTRAÍDO|SEM TEXTO|OCR NECESSÁRIO|NÃO LEGÍVEL|NÃO EXTRAÍDA/.test(String(quality||'').toUpperCase())){
   return {eligible:false,status:'SEM TEXTO DE BM',reason:'Documento sem texto legível de medição; imagens e PDFs digitalizados não são analisados.'};
  }
