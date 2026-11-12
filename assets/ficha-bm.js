@@ -76,7 +76,7 @@ function ui(){
   <p class="ficha-status" id="ficha-top-status"></p>
   <div class="ficha-actions"><button class="btn secondary" id="ficha-open-critico">Abrir Relatório Crítico</button><button class="btn secondary" id="ficha-sync-confront">Enviar BMs e Balanço conferidos ao Confronto</button><button class="btn secondary" id="ficha-export-session">Salvar sessão da ficha (JSON)</button><label style="font-size:12px">Restaurar sessão <input id="ficha-restore-session" type="file" accept=".json,application/json" style="max-width:210px"/></label></div></div>
   <div class="panel" id="ficha-review-bms"><div class="section-header"><h3>1. BMs localizados nos processos SEI</h3><button class="btn secondary" type="button" data-open-ficha-sources="sei">Inserir mais arquivos SEI/BMs</button></div><p class="muted">A varredura é iniciada pelo botão <b>Inserir fontes</b>, junto dos filtros acima. Aqui ficam os boletins encontrados e o histórico para revisão dos dados físicos e financeiros. Nenhum candidato entra na curva S antes de ser conferido.</p>
-  <div class="ficha-sei-biblioteca" id="ficha-biblioteca-sei"><h4>Boletins selecionados em Documentos → SEI</h4><p class="muted">A lista acompanha a seleção da biblioteca local. Escolha os BMs desta obra e incorpore os candidatos à ficha; todos exigem conferência. Percentuais financeiros não são utilizados como avanço físico.</p><div class="ficha-sei-biblioteca-actions"><button type="button" class="btn secondary" id="ficha-sei-refresh">Atualizar BMs selecionados</button><button type="button" class="btn" id="ficha-sei-load">Carregar candidatos à ficha</button></div><p class="ficha-status" id="ficha-sei-biblioteca-status"></p><div class="ficha-sei-biblioteca-list" id="ficha-sei-biblioteca-list"></div></div>
+  <div class="ficha-sei-biblioteca" id="ficha-biblioteca-sei"><h4>Boletins selecionados em Documentos → SEI</h4><p class="muted">A lista acompanha a seleção da biblioteca local. Escolha os BMs desta obra e incorpore os candidatos à ficha; todos exigem conferência. Percentuais financeiros não são utilizados como avanço físico.</p><div class="ficha-sei-biblioteca-actions"><button type="button" class="btn secondary" id="ficha-sei-refresh">Atualizar BMs selecionados</button><button type="button" class="btn" id="ficha-sei-load">Carregar candidatos à ficha</button></div><p class="ficha-status" id="ficha-sei-biblioteca-status"></p><label class="ficha-sei-search">Filtrar BMs anexados <input type="search" id="ficha-sei-search" placeholder="Número do BM, arquivo, processo ou obra" autocomplete="off"></label><div class="ficha-sei-biblioteca-list" id="ficha-sei-biblioteca-list"></div></div>
   <div class="scroll"><table class="bm-table"><thead><tr><th>BM / origem</th><th>Data de medição</th><th>Contrato</th><th>Físico acum. (%)</th><th>Medido no BM (R$)</th><th>Medido acum. (R$)</th><th>Conferência</th><th>Ação</th></tr></thead><tbody id="ficha-bms-rows"><tr><td colspan="8" class="empty">Ainda não há BMs identificados. Selecione um projeto e importe o processo SEI.</td></tr></tbody></table></div>
   <details style="margin-top:14px"><summary><b>Adicionar BM manualmente (PDF digitalizado ou não reconhecido)</b></summary><form id="ficha-manual-bm" class="ficha-form" style="margin-top:13px"><label>Nº do BM<input name="bm" placeholder="Ex.: 05" required/></label><label>Data da medição<input name="date" type="date" required/></label><label>Contrato<input name="contract" placeholder="Ex.: 01/2025"/></label><label>Físico acumulado (%)<input name="physical" type="number" step="any" min="0" max="100"/></label><label>Valor medido no BM (R$)<input name="med" inputmode="decimal" placeholder="Ex.: 12500,40"/></label><label>Valor medido acumulado (R$)<input name="acc" inputmode="decimal" placeholder="Ex.: 345000,40"/></label><label class="span2">Referência do documento SEI<input name="evidence" placeholder="Documento SEI nº..., fls. ..." required/></label><div style="display:flex;align-items:end"><button class="btn" type="submit">Incluir BM para conferência</button></div></form></details>
   <div class="ficha-actions"><button class="btn secondary" id="ficha-export-bms">Exportar BMs conferidos e pendentes (CSV)</button><span class="muted" id="ficha-bm-count"></span></div></div>
@@ -174,7 +174,12 @@ function refreshSelectedSEIBMs(){
  }
  const id=project.id,available=docs.filter(d=>{
   const assigned=associatedProjects(d);return !assigned.length||assigned.includes(id);
+ }).sort((a,b)=>{
+  const rank=d=>belongsTo(d,id)?2:workCandidateForProject(d,project)?1:0;
+  return rank(b)-rank(a)||String(a.name).localeCompare(String(b.name),'pt-BR',{numeric:true});
  });
+ const query=normal($f('ficha-sei-search')?.value||'');
+ const visible=query?available.filter(d=>normal([d.name,d.ref,d.bmNumber,d.bmPeriod,d.workName].join(' ')).includes(query)):available;
  const linked=available.filter(d=>belongsTo(d,id));
  const staged=bmRows.filter(x=>x.project===id&&x.status!=='ignorado'&&seiActive(x));
  const pending=staged.filter(x=>x.status==='pendente').length,confirmed=staged.filter(x=>x.status==='confirmado').length;
@@ -183,7 +188,7 @@ function refreshSelectedSEIBMs(){
  if(inline)inline.textContent=staged.length+' BM(s) encontrados para esta obra · '+confirmed+
  ' conferido(s) · '+pending+' aguardando conferência. '+(available.length-linked.length)+
  ' BM(s) sem vínculo: só incorporar após confirmar o objeto.';
- place.innerHTML=available.map(d=>{
+ place.innerHTML=visible.map(d=>{
   const previously=bmRows.some(x=>x.sourceDocId===d.id&&x.project===id);
   const assigned=belongsTo(d,id),indicated=!assigned&&workCandidateForProject(d,project);
   return '<label class="ficha-sei-biblioteca-item"><input type="checkbox" data-sei-doc="'+ef(d.id)+'" '+
@@ -193,7 +198,7 @@ function refreshSelectedSEIBMs(){
    '</small><small>'+(previously?'Incorporado à ficha, confira os valores':assigned?'Vinculado à PUC, ainda não homologado':
    indicated?'Similaridade sugerida — selecione apenas após conferir o objeto':'Sem vínculo; seleção manual exige conferência')+
    '</small></span></label>';
- }).join('')||'<p class="muted">Nenhum BM disponível para este empreendimento. Vá a Documentos → SEI e confira a vinculação.</p>';
+ }).join('')||'<p class="muted">Nenhum BM corresponde ao filtro. Confira número, arquivo e vínculo em Documentos → SEI.</p>';
  const button=$f('ficha-open-review');
  if(button)button.textContent='Conferir BMs ('+pending+' pendentes)';
 }
@@ -449,7 +454,7 @@ function simplifyFichasUI(){
  };
  $f('ficha-open-documents').onclick=()=>document.querySelector('#nav [data-page="documentos"]')?.click();
  const style=document.createElement('style');style.id='ficha-grafico-enxuto-css';
- style.textContent="\n #fichas.ficha-grafico-enxuto > .panel[hidden],#fichas.ficha-grafico-enxuto > .ficha-source-panel[hidden]{display:none!important}\n #fichas .ficha-curve-controls{padding:20px 24px!important;margin-bottom:15px}\n #fichas .ficha-curve-controls h2{margin:0 0 7px;font-size:23px}\n #fichas .ficha-curve-pickers{display:grid;grid-template-columns:minmax(140px,1fr) minmax(0,2fr) minmax(140px,1fr);gap:12px;margin-top:15px}\n #fichas .ficha-curve-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:12px 0}\n #fichas .ficha-curve-actions .ficha-status{flex-basis:100%;margin:0}\n #fichas .ficha-curve-pickers label{display:flex;flex-direction:column;min-width:0;gap:7px;font-size:13px;font-weight:650}\n #fichas .ficha-curve-pickers select{width:100%;min-width:0;padding:11px;font-size:14px}\n #fichas #ficha-result-panel{margin-top:12px}\n #fichas #ficha-review-bms{margin-top:15px}\n #fichas .ficha-bms-conferencia>summary{font-size:15px;font-weight:700;cursor:pointer;padding:8px 0;color:#184868}\n #fichas .ficha-bms-conferencia[open]>summary{margin-bottom:15px}\n #fichas #ficha-review-bms [hidden]{display:none!important}\n #fichas .ficha-chart{min-height:260px}\n @media(max-width:720px){#fichas .ficha-curve-pickers{grid-template-columns:minmax(0,1fr)}#fichas .ficha-curve-controls{padding:16px!important}}\n @media print{#fichas .ficha-curve-controls,#fichas #ficha-review-bms{display:none!important}}\n";
+ style.textContent="\n #fichas.ficha-grafico-enxuto > .panel[hidden],#fichas.ficha-grafico-enxuto > .ficha-source-panel[hidden]{display:none!important}\n #fichas .ficha-curve-controls{padding:20px 24px!important;margin-bottom:15px}\n #fichas .ficha-curve-controls h2{margin:0 0 7px;font-size:23px}\n #fichas .ficha-curve-pickers{display:grid;grid-template-columns:minmax(140px,1fr) minmax(0,2fr) minmax(140px,1fr);gap:12px;margin-top:15px}\n #fichas .ficha-curve-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:12px 0}\n #fichas .ficha-sei-search{display:flex;gap:9px;align-items:center;flex-wrap:wrap;font-weight:650;font-size:13px;margin:12px 0}\n #fichas .ficha-sei-search input{flex:1;min-width:210px;max-width:100%;padding:9px}\n #fichas .ficha-curve-actions .ficha-status{flex-basis:100%;margin:0}\n #fichas .ficha-curve-pickers label{display:flex;flex-direction:column;min-width:0;gap:7px;font-size:13px;font-weight:650}\n #fichas .ficha-curve-pickers select{width:100%;min-width:0;padding:11px;font-size:14px}\n #fichas #ficha-result-panel{margin-top:12px}\n #fichas #ficha-review-bms{margin-top:15px}\n #fichas .ficha-bms-conferencia>summary{font-size:15px;font-weight:700;cursor:pointer;padding:8px 0;color:#184868}\n #fichas .ficha-bms-conferencia[open]>summary{margin-bottom:15px}\n #fichas #ficha-review-bms [hidden]{display:none!important}\n #fichas .ficha-chart{min-height:260px}\n @media(max-width:720px){#fichas .ficha-curve-pickers{grid-template-columns:minmax(0,1fr)}#fichas .ficha-curve-controls{padding:16px!important}}\n @media print{#fichas .ficha-curve-controls,#fichas #ficha-review-bms{display:none!important}}\n";
  document.head.appendChild(style);
 }
 
@@ -471,6 +476,7 @@ function init(){
  $f('ficha-balanco-model').onclick=()=>model('MODELO_BALANCO_FICHA.csv',['investimento','id_governa','empreendimento','municipio','objeto','valor_global','execucao_fisica_pct','execucao_financeira_pct','inicio','termino_previsto','termino_real','data_corte','referencia']);
  $f('ficha-planned-model').onclick=()=>model('MODELO_CURVA_S_PREVISTA.csv',['investimento','contrato','competencia','fisico_previsto_acumulado_pct','referencia']);
  $f('ficha-sei-refresh').onclick=refreshSelectedSEIBMs;
+ $f('ficha-sei-search').oninput=refreshSelectedSEIBMs;
  $f('ficha-sei-load').onclick=loadSelectedSEIBMs;
  document.addEventListener('puc-documents-updated',()=>{stageLinkedBMs();refreshSelectedSEIBMs();renderRows();drawSheet()});
  document.addEventListener('puc-sei-selection-updated',()=>{stageLinkedBMs();refreshSelectedSEIBMs();renderRows();drawSheet()});
