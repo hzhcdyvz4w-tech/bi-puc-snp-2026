@@ -365,9 +365,15 @@ function svgChart(points){
    points.filter(p=>Number.isFinite(p[key])).map(p=>'<circle cx="'+x(p).toFixed(1)+'" cy="'+y(p[key]).toFixed(1)+'" r="4" fill="'+color+'"><title>BM '+p.number+' · '+pct(p[key])+'</title></circle>').join('');
  };
  const ticks=points.filter((p,i)=>i===0||i===points.length-1||i%Math.max(1,Math.ceil(points.length/12))===0).map(p=>'<text x="'+x(p).toFixed(1)+'" y="'+(height-28)+'" text-anchor="middle" font-size="11" fill="#40536b">'+(useDays?p.day:'BM '+p.number)+'</text>').join('');
+ const labelKey=points.some(p=>Number.isFinite(p.percentualRealizadoAcumulado))?'percentualRealizadoAcumulado':'percentualPrevistoAcumulado';
+ const visible=points.filter(p=>Number.isFinite(p[labelKey]));
+ const jump=Math.max(1,Math.ceil(visible.length/16));
+ const labels=visible.filter((p,i)=>i===0||i===visible.length-1||i%jump===0)
+  .map(p=>'<text x="'+x(p).toFixed(1)+'" y="'+Math.max(12,y(p[labelKey])-10).toFixed(1)+'" text-anchor="middle" font-size="10" font-weight="600" fill="#28546c">'+
+   p[labelKey].toLocaleString('pt-BR',{maximumFractionDigits:1})+'%</text>').join('');
  return '<svg class="puc-curva-svg" viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Curva S dos percentuais documentados: previsto azul, realizado verde" xmlns="http://www.w3.org/2000/svg">'+axes+
  series('percentualPrevistoAcumulado','#3977c5')+series('percentualRealizadoAcumulado','#5cbb83')+
- ticks+'<text x="'+(width/2)+'" y="'+(height-8)+'" text-anchor="middle" font-size="12">'+(useDays?'Dias transcorridos conforme o BM':'Sequência dos boletins (BM)')+'</text></svg>';
+ labels+ticks+'<text x="'+(width/2)+'" y="'+(height-8)+'" text-anchor="middle" font-size="12">'+(useDays?'Dias transcorridos conforme o BM':'Sequência dos boletins (BM)')+'</text></svg>';
 }
 function horizontalTable(points){
  const chunks=[];for(let i=0;i<points.length;i+=14)chunks.push(points.slice(i,i+14));
