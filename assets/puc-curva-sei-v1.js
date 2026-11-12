@@ -607,6 +607,63 @@ async function render(){
  if(!currentProject())return showLegacy('Escolha o empreendimento antes de gerar o histórico dos BMs.');
  if(!selection)return showLegacy('Nenhum BM elegível identificado no projeto e contrato selecionados.');
  const docs=selection.docs;
+ const projects=currentProjects();
+ if(projects.length>1){
+  const status=byId('puc-curva-document-status'),legacy=byId('ficha-print-area');
+  activeReport=null;panel.replaceChildren();if(legacy)legacy.hidden=true;
+  if(!docs.length){
+   status.textContent='Nenhum BM marcado para as PUCs selecionadas. Marque BMs dos empreendimentos desejados.';
+   return;
+  }
+  const cards=[],candidateRows=[],completed=[],problems=[];
+  for(const puc of projects){
+   if(id!==generation)return;
+   const groupDocs=docs.filter(doc=>belongsToProject(doc,puc));
+   if(!groupDocs.length){
+    cards.push('<section class="puc-curva-group"><h3>'+esc(puc)+'</h3><p>Sem Boletins de Medição vinculados a esta PUC. Confira Documentos → SEI.</p></section>');
+    continue;
+   }
+   // Quando há contratos distintos dentro da mesma PUC, também são separados.
+   const buckets=new Map();
+   for(const doc of groupDocs){
+    const key=docContract(doc,puc).contract||'SEM CONTRATO IDENTIFICADO';
+    if(!buckets.has(key))buckets.set(key,[]);
+    buckets.get(key).push(doc);
+   }
+   for(const [contract,group] of buckets){
+    if(id!==generation)return;
+    status.textContent='Lendo '+group.length+' BM(s) da '+puc+' · '+contract+'...';
+    try{
+     const result=await consolidate(group,(i,n,txt)=>{
+      if(id===generation)status.textContent=puc+' · '+contract+': '+txt+' ('+(i+1)+'/'+n+')';
+     },()=>id===generation,puc);
+     if(id!==generation||!result)return;
+     candidateRows.push(...(result.candidateRows||[]));
+     if(result.points.length){
+      cards.push('<section class="puc-curva-group"><h3>'+esc(puc)+' · '+esc(contract)+'</h3>'+
+       layout(result,puc)+'</section>');
+      completed.push({puc,contract,points:result.points.length,documents:result.scanned});
+     }else{
+      cards.push('<section class="puc-curva-group"><h3>'+esc(puc)+' · '+esc(contract)+'</h3>'+
+       '<p class="puc-curva-note">BMs examinados, mas sem histórico físico acumulado identificável. Não foi calculada curva estimada.</p>'+
+       sourceAudit(result)+'</section>');
+     }
+    }catch(e){
+     problems.push(puc+' / '+contract+': '+String(e.message||e));
+     cards.push('<section class="puc-curva-group"><h3>'+esc(puc)+' · '+esc(contract)+'</h3>'+
+      '<p class="puc-curva-alert">'+esc(String(e.message||e))+'</p></section>');
+    }
+   }
+  }
+  if(id!==generation)return;
+  updateMappingOptions([...new Map(candidateRows.map(c=>[c.key,c])).values()]);
+  panel.innerHTML='<p class="puc-curva-group-summary"><b>Seleção conjunta: '+esc(projects.join(' + '))+
+   '.</b> Relatórios físicos separados por PUC e contrato. Percentuais e saldos não são somados.</p>'+cards.join('');
+  if(completed.length)activeReport={group:true,reports:completed};
+  status.textContent=completed.length+' curva(s) documentais emitidas em '+projects.length+
+   ' PUC(s). '+problems.length+' pendência(s). Os demais BMs exigem revisão; nenhuma curva foi estimada.';
+  return;
+ }
  if(!docs.length){
   if(selection.available===0)return showLegacy('Nenhum documento BM vinculado ao filtro. Verifique Documentos → SEI.');
   generation++;
@@ -704,6 +761,7 @@ function setup(){
  byId('puc-curva-manual-generate').onclick=()=>{
   const status=byId('puc-curva-manual-status');
   if(!currentProject()){status.textContent='Selecione primeiro o empreendimento.';return}
+  if(currentProjects().length>1){status.textContent='Para transcrever uma tabela, selecione uma PUC de cada vez e indique a fonte do contrato. Nenhum dado conjunto foi gerado.';return}
   try{
    const input=parseTranscribedHistory(byId('puc-curva-manual-data')?.value||'',
        byId('puc-curva-manual-ref')?.value||'');
@@ -751,6 +809,7 @@ function setup(){
  style.textContent += '.puc-curva-manual{padding:13px;background:#fff;border:1px solid #d1dfea;border-radius:9px}.puc-curva-manual summary{cursor:pointer;font-weight:700;font-size:13px}.puc-curva-manual label{display:flex;flex-direction:column;gap:6px;margin:10px 0;font-size:12px;font-weight:650}.puc-curva-manual input,.puc-curva-manual textarea{width:100%;box-sizing:border-box;border:1px solid #b9d0e1;border-radius:7px;padding:10px;font-family:inherit}.puc-curva-manual textarea{font-family:ui-monospace,monospace}';
  style.textContent += '.puc-curva-line-mapping{background:#fff;border:1px solid #9fc1d6;padding:13px;border-radius:9px}.puc-curva-line-mapping strong{font-size:14px}.puc-curva-mapping-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0}.puc-curva-mapping-fields label{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700}.puc-curva-mapping-fields select{width:100%;min-width:0;padding:9px}@media(max-width:700px){.puc-curva-mapping-fields{grid-template-columns:1fr}}';
  style.textContent += '.puc-curva-bm-heading{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}.puc-curva-bm-heading label{font-size:14px;font-weight:700}.puc-curva-bm-toolbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center}.puc-curva-bm-toolbar input{flex:1;min-width:210px;max-width:100%;padding:10px;border:1px solid #cbdce8;border-radius:7px}.puc-curva-bms-list{width:100%;max-height:265px;overflow:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:9px;border:1px solid #ccdae7;border-radius:9px;background:white}.puc-curva-bm-option{display:flex;align-items:flex-start;gap:9px;min-width:0;padding:10px;border:1px solid #dde6ef;border-radius:8px;background:#f8fbfe;cursor:pointer}.puc-curva-bm-option input{margin-top:4px;width:17px;height:17px;flex:none}.puc-curva-bm-detail{min-width:0;overflow-wrap:anywhere}.puc-curva-bm-detail strong{font-size:12px;display:block}.puc-curva-bm-detail small{font-size:11px;color:#506b80;display:block;margin-top:4px}.puc-curva-bm-option:has(input:checked){border-color:#5793ba;background:#eff7fd}@media(max-width:700px){.puc-curva-bms-list{grid-template-columns:1fr}.puc-curva-bm-toolbar button{width:100%}}@media print{.puc-curva-bm-toolbar,.puc-curva-bms-list,.puc-curva-bm-heading{display:none!important}}';
+ style.textContent += '.puc-curva-group{margin:18px 0;padding:14px;border:1px solid #c5d8e7;border-radius:10px;break-inside:avoid-page}.puc-curva-group>h3{font-size:17px;margin:0 0 10px;color:#225577}.puc-curva-group-summary{padding:12px;background:#edf5fc;border-left:3px solid #2a6f98;color:#234c64}.puc-curva-group .puc-curva-report{margin:0;border:0;padding:4px}';
  document.head.appendChild(style);render();
 }
 window.PUCCurvaSEI={parsePage,widePageCandidates,extract,render,selected,setup,consolidate,uniteHistory,singleBmPoint,parseTranscribedHistory,svgChart,
