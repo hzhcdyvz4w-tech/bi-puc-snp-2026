@@ -172,8 +172,9 @@ async function extract(doc){
  try{
   for(let p=1;p<=pages;p++){
    const items=(await (await pdf.getPage(p)).getTextContent()).items;
-   records.push(...parsePage(items,p));
-   wide.push(...widePageCandidates(items,p));
+   const widePage=widePageCandidates(items,p);
+   if(widePage.length)wide.push(...widePage);
+   else records.push(...parsePage(items,p));
    if(p===1||p===pages)meta.push(rowsFromItems(items).slice(0,36).map(r=>r.text).join('\n'));
   }
  }finally{try{await pdf.destroy()}catch(e){}}
@@ -304,10 +305,11 @@ async function consolidate(docs,progress=()=>{},stillCurrent=()=>true){
     for(const point of history.points)parts.push({...point,sourceName:d.name,originDoc:d.id,
       confidence:review?.status==='confirmado'?'Conferido pelo operador':'Extração não conferida'});
     for(const candidate of history.wideCandidates||[]){
-      wideCandidates.push({...candidate,sourceName:d.name,sourceDocId:d.id});
+      const scoped={...candidate,key:d.id+'::'+candidate.key,sourceName:d.name,sourceDocId:d.id};
+      wideCandidates.push(scoped);
       const dest=candidate.semantic&&candidate.group==='TOTAL'?candidate.semantic:
-        (candidateMap.percentualPrevistoAcumulado===candidate.key?'percentualPrevistoAcumulado':
-         candidateMap.percentualRealizadoAcumulado===candidate.key?'percentualRealizadoAcumulado':'');
+        (candidateMap.percentualPrevistoAcumulado===scoped.key?'percentualPrevistoAcumulado':
+         candidateMap.percentualRealizadoAcumulado===scoped.key?'percentualRealizadoAcumulado':'');
       if(dest)for(const val of candidate.values)parts.push({
         number:val.number,[dest]:val.value,sourceName:d.name,originDoc:d.id,page:candidate.page,
         confidence:candidate.semantic?'Rótulo identificado':'Linha selecionada pelo operador'
