@@ -25,7 +25,7 @@ function updateEntry(x){
  }
  x.seiScope=x.origin==='SEI'?'BM_LEGIVEL':'';x.seiSkipReason='';
  x.workName=engine()?.bmWorkName?.(x.text)||x.workName||'';
- x.candidates=engine()?.indicators(x.text)||[];
+ x.candidates=(x.origin==='SEI'?engine()?.seiBMIndicators?.(x.text):engine()?.indicators?.(x.text))||[];
  x.bmStatus=x.bmManual?'BM IDENTIFICADO (MANUAL)':classification(x);
  if(x.bmManual||x.bmStatus==='BM IDENTIFICADO'||x.bmStatus==='BM PROVÁVEL'){
   x.category='BM / medição';x.bm={number:bmNumber(x),period:bmCompetence(x),candidates:x.candidates,status:'PENDENTE DE CONFERÊNCIA'};
