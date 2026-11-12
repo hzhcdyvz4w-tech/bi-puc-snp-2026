@@ -396,6 +396,13 @@ function syncDocuments(){
  else status.textContent=active.length+' BM(s) prontos para consolidar. Somente dados identificados nos documentos serão usados.';
  return {docs:active,available:docs.length};
 }
+function invalidateSelection(){
+ generation++;activeReport=null;
+ byId('puc-curva-documental')?.replaceChildren();
+ const previous=byId('ficha-print-area');if(previous)previous.hidden=true;
+ const status=byId('puc-curva-document-status');
+ if(status)status.textContent='Seleção alterada. Clique em “Gerar Curva S dos BMs selecionados” para atualizar o gráfico.';
+}
 function showLegacy(note){
  const box=byId('puc-curva-documental'),legacy=byId('ficha-print-area');
  if(box)box.replaceChildren();
@@ -479,14 +486,14 @@ function setup(){
   const checkbox=e.target.closest('input[data-curva-id]');if(!checkbox)return;
   if(checkbox.checked)selectedBmIds.add(checkbox.dataset.curvaId);
   else selectedBmIds.delete(checkbox.dataset.curvaId);
-  selectionEdited=true;syncDocuments();
+  selectionEdited=true;syncDocuments();invalidateSelection();
  });
  byId('puc-curva-bms-search').addEventListener('input',syncDocuments);
  byId('puc-curva-select-all').onclick=()=>{
   for(const d of availableDocuments())selectedBmIds.add(d.id);
-  selectionEdited=true;syncDocuments();
+  selectionEdited=true;syncDocuments();invalidateSelection();
  };
- byId('puc-curva-select-none').onclick=()=>{selectedBmIds.clear();selectionEdited=true;syncDocuments()};
+ byId('puc-curva-select-none').onclick=()=>{selectedBmIds.clear();selectionEdited=true;syncDocuments();invalidateSelection()};
  byId('puc-curva-refresh').onclick=render;
  byId('ficha-generate')?.addEventListener('click',render);
  byId('ficha-project')?.addEventListener('change',()=>{selectionScope='';selectedBmIds.clear();render()});
