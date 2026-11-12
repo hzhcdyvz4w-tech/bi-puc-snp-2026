@@ -168,11 +168,12 @@ async function extract(doc){
  if(window.pdfjsLib.GlobalWorkerOptions)window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
  if(blob.size>35*1024*1024)throw Error('PDF acima de 35 MB; confira o arquivo original.');
  const pdf=await window.pdfjsLib.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise;
- const pages=Math.min(pdf.numPages,65),truncated=pdf.numPages>65,records=[],meta=[];
+ const pages=Math.min(pdf.numPages,65),truncated=pdf.numPages>65,records=[],meta=[],wide=[];
  try{
   for(let p=1;p<=pages;p++){
    const items=(await (await pdf.getPage(p)).getTextContent()).items;
    records.push(...parsePage(items,p));
+   wide.push(...widePageCandidates(items,p));
    if(p===1||p===pages)meta.push(rowsFromItems(items).slice(0,36).map(r=>r.text).join('\n'));
   }
  }finally{try{await pdf.destroy()}catch(e){}}
@@ -200,14 +201,14 @@ async function extract(doc){
   byNumber.set(row.number,merged);
  }
  const points=[...byNumber.values()].sort((a,b)=>a.number-b.number);
- if(points.length<2||!points.some(p=>Number.isFinite(p.percentualPrevistoAcumulado)||Number.isFinite(p.percentualRealizadoAcumulado)))
+ if((points.length<2||!points.some(p=>Number.isFinite(p.percentualPrevistoAcumulado)||Number.isFinite(p.percentualRealizadoAcumulado)))&&!wide.length)
   throw Error('Histórico acumulado insuficiente neste PDF; consulte BMs individuais conferidos.');
  for(const key of ['percentualPrevistoAcumulado','percentualRealizadoAcumulado']){
   const series=points.filter(p=>Number.isFinite(p[key]));
   if(series.some((p,i)=>i>0&&p[key]<series[i-1][key]-.01))
    warnings.push('A série '+(key.includes('Previsto')?'prevista':'realizada')+' diminui entre BMs. Verificar retificações.');
  }
- const result={doc,points,pages,meta:metadata(meta.join('\n')+'\n'+String(doc.text||'')),warnings:[...new Set(warnings)]};
+ const result={doc,points,pages,wideCandidates:wide,meta:metadata(meta.join('\n')+'\n'+String(doc.text||'')),warnings:[...new Set(warnings)]};
  cache.set(doc.id,result);
  return result;
 }
@@ -281,7 +282,7 @@ async function consolidate(docs,progress=()=>{},stillCurrent=()=>true){
  const omissions=[...conflicts.map(x=>x.doc.name+': '+x.conflict),
    ...codes.filter(x=>!x.conflict&&(!input.some(d=>d.doc.id===x.doc.id)))
       .map(x=>x.doc.name+': contrato não identificado ou diferente; não consolidado.')];
- const parts=[],sources=[],warningDetails=[...omissions];
+ const parts=[],sources=[],wideCandidates=[],warningDetails=[...omissions];
  let totalPages=0,usedHistorical=0;
  for(let i=0;i<input.length;i++){
   if(!stillCurrent())return null;
@@ -298,7 +299,18 @@ async function consolidate(docs,progress=()=>{},stillCurrent=()=>true){
     if(!stillCurrent())return null;
     for(const point of history.points)parts.push({...point,sourceName:d.name,originDoc:d.id,
       confidence:review?.status==='confirmado'?'Conferido pelo operador':'Extração não conferida'});
-    evidence.historic=history.points.length+' ponto(s) históricos';
+    for(const candidate of history.wideCandidates||[]){
+      wideCandidates.push({...candidate,sourceName:d.name,sourceDocId:d.id});
+      const dest=candidate.semantic&&candidate.group==='TOTAL'?candidate.semantic:
+        (candidateMap.percentualPrevistoAcumulado===candidate.key?'percentualPrevistoAcumulado':
+         candidateMap.percentualRealizadoAcumulado===candidate.key?'percentualRealizadoAcumulado':'');
+      if(dest)for(const val of candidate.values)parts.push({
+        number:val.number,[dest]:val.value,sourceName:d.name,originDoc:d.id,page:candidate.page,
+        confidence:candidate.semantic?'Rótulo identificado':'Linha selecionada pelo operador'
+      });
+    }
+    evidence.historic=history.points.length+' ponto(s) históricos'+(history.wideCandidates?.length?
+      ' · '+history.wideCandidates.length+' linha(s) percentuais identificadas':'');
     const latest=[...history.points].reverse().find(p=>Number.isFinite(p.percentualRealizadoAcumulado));
     if(latest&&!single)evidence.physical=pct(latest.percentualRealizadoAcumulado)+' (tabela histórica)';
     totalPages+=history.pages;
@@ -312,16 +324,17 @@ async function consolidate(docs,progress=()=>{},stillCurrent=()=>true){
   }
  }
  const merged=uniteHistory(parts);
+ const candidateRows=[...new Map(wideCandidates.map(x=>[x.key,x])).values()].sort((a,b)=>a.rank-b.rank||a.group.localeCompare(b.group));
  const usable=merged.points;
  if(!usable.length){
   return {points:[],meta:{contract:target},doc:{id:'todos',name:'Todos os BMs vinculados',ref:'Documentos → SEI'},
    warnings:[...new Set([...warningDetails,...merged.warnings])],sources,pages:totalPages,
-   usedHistorical,scanned:input.length,excluded:omissions.length};
+   usedHistorical,scanned:input.length,excluded:omissions.length,candidateRows};
  }
  const recent=docs.find(d=>/CURVA[\s_.-]*S/i.test(d.name))||docs[0];
  return {points:usable,meta:{...metadata(recent?.text||''),contract:target},doc:{id:'todos',name:input.length+' boletim(ns) do contrato',ref:'Documentos → SEI'},
   warnings:[...new Set([...warningDetails,...merged.warnings])],sources,pages:totalPages,
-  usedHistorical,scanned:input.length,excluded:omissions.length};
+  usedHistorical,scanned:input.length,excluded:omissions.length,candidateRows};
 }
 
 function svgChart(points){
@@ -414,7 +427,8 @@ function layout(result){
  '<p class="puc-curva-note">Histórico consolidado dos BMs vinculados ao empreendimento/contrato. Percentuais históricos são extraídos das tabelas nos PDFs; percentuais físicos individuais podem aparecer como prévia documental não conferida. Sem estimativas, somatório de percentuais de BMs ou interpolação de períodos ausentes. O gráfico não constitui execução física homologada, pagamento ou lançamento no SIOP.</p>'+
  '<p class="puc-curva-note">Fonte: '+esc(source)+' · '+result.pages+' página(s) examinada(s) · Emitido em '+new Date().toLocaleString('pt-BR')+'. Conferir contrato, objeto, sequência e valores com o documento original antes de usar na decisão.</p></div>';
 }
-let generation=0,activeReport=null,selectedBmIds=new Set(),selectionScope='',selectionEdited=false;
+let generation=0,activeReport=null,selectedBmIds=new Set(),selectionScope='',selectionEdited=false,
+    candidateMap={percentualPrevistoAcumulado:'',percentualRealizadoAcumulado:''},candidateScope='',availableCandidateRows=[];
 
 const ALL='__todos_bms__';
 const contractCode=s=>{
