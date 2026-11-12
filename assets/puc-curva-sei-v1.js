@@ -140,9 +140,11 @@ function singleBmPoint(doc){
  const row=reviewedRow(doc);
  const parsed=window.PUCFichasBM?.parseBmText?.(doc.text||'',doc.name)||{};
  const guess=doc.name.match(/(?:^|[^\w])BM[\s_.-]*(?:N[º°. ]*)?0*(\d{1,3})(?!\d)/i)?.[1];
- const number=bmIndex(row?.number)||bmIndex(doc.bmNumber)||bmIndex(parsed.bm_number)||bmIndex(guess);
+ const number=bmIndex(row?.number)??bmIndex(doc.bmNumber)??bmIndex(parsed.bm_number)??bmIndex(guess);
  if(number===null)return null;
- const value=row?.physical!=null?Number(row.physical):Number(parsed.physical_cumulative);
+ const raw=row?.physical!=null?row.physical:parsed.physical_cumulative;
+ if(raw===null||raw===undefined||raw==='')return null;
+ const value=Number(raw);
  if(!Number.isFinite(value)||value<0||value>100)return null;
  return {number,percentualRealizadoAcumulado:value,date:row?.date||parsed.measurement_date||'',
   sourceName:doc.name,page:null,confidence:row?.status==='confirmado'?'Conferido pelo operador':'Candidato não conferido',
