@@ -23,12 +23,16 @@ function seiBMFileAllowed(name){
  const n=normal(String(name||'').split('/').pop());
  const type=extension(n);
  if(!['pdf','xlsx'].includes(type))return false;
+ // Anexos de BMs ficam fora, mesmo se contiverem número, percentual ou o texto do boletim.
+ // Abrange exportações SEI como [113]-11498568_Anexo.pdf, Anexo_BM_01,
+ // BM_01_Anexo2 e Anexos_de_Medicao.xlsx.
+ if(/(?:^|[^a-z0-9])anexos?(?=$|[^a-z0-9]|\d)/.test(n))return false;
  // Tipo processual não é BM, mesmo que mencione medições.
  if(/(?:^|[_\s.-])(?:oficio|despacho|parecer|memorando|nota[_\s.-]?tecnica|processo|protocolo|email|e-mail|carta|decreto|portaria|contrato|aditivo|apostilamento|edital|termo[_\s.-]?(?:de[_\s.-]?)?referencia)(?:[_\s.-]|$)/.test(n))return false;
  return true;
 }
 function seiBMDecision(name,text,quality){
- if(!seiBMFileAllowed(name))return {eligible:false,status:'FORA DO ESCOPO SEI',reason:'Formato ou espécie documental excluída. Apenas PDF e XLSX de BM/medição.'};
+ if(!seiBMFileAllowed(name))return {eligible:false,status:'FORA DO ESCOPO SEI',reason:'Somente o BM principal e a planilha principal de medição em PDF/XLSX são analisados; anexos, imagens e documentos processuais são excluídos.'};
  const clean=String(text||'').replace(/PÁGINA\s+\d+/gi,'').trim();
  if(clean.length<18||/NÃO EXTRAÍDO|SEM TEXTO|OCR NECESSÁRIO|NÃO LEGÍVEL|NÃO EXTRAÍDA/.test(String(quality||'').toUpperCase())){
   return {eligible:false,status:'SEM TEXTO DE BM',reason:'Documento sem texto legível de medição; imagens e PDFs digitalizados não são analisados.'};
