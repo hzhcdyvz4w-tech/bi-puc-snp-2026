@@ -109,3 +109,49 @@ test('documento de outro empreendimento não é incluído no consolidado',()=>{
  const {api}=completeFixture([{n:1,value:20,project:'P1'},{n:2,value:60,project:'P2'}]);
  assert.deepEqual(api.selected().map(x=>x.id),['fixture-0']);
 });
+
+
+function wideTableItems(){
+ const result=[];
+ for(let i=0;i<9;i++){
+  const x=160+i*110;
+  result.push(item('BM '+(25+i),x,780));
+  result.push(item('SUAPE',x-20,765),item('MPOR',x+24,765));
+  result.push(item((35+i*5)+',00%',x-20,650),item('0,00%',x+24,650));
+  result.push(item((30+i*5)+',00%',x-20,610),item((4+i)+',00%',x+24,610));
+ }
+ return result;
+}
+test('tabela horizontal reconhece múltiplos BMs e duas colunas sem confundir os percentuais',async()=>{
+ const {api,docs}=mock(wideTableItems());
+ const baseline=await api.consolidate([docs[0]]);
+ assert.equal(baseline.points.length,0,'Sem rótulo físico, não presumir a linha correta');
+ assert.equal(baseline.candidateRows.length,4);
+ const planned=baseline.candidateRows.find(x=>x.key.endsWith('linha-01-COLUNA1'));
+ const actual=baseline.candidateRows.find(x=>x.key.endsWith('linha-02-COLUNA1'));
+ assert.ok(planned&&actual);
+ api.selectDocumentRow('percentualPrevistoAcumulado',planned.key);
+ api.selectDocumentRow('percentualRealizadoAcumulado',actual.key);
+ const result=await api.consolidate([docs[0]]);
+ assert.equal(result.points.length,9);
+ assert.equal(result.points[0].number,25);
+ assert.equal(result.points[8].number,33);
+ assert.equal(result.points[0].percentualPrevistoAcumulado,35);
+ assert.equal(result.points[8].percentualPrevistoAcumulado,75);
+ assert.equal(result.points[8].percentualRealizadoAcumulado,70);
+ const svg=api.svgChart(result.points);
+ assert.equal((svg.match(/<polyline/g)||[]).length,2);
+ assert.ok(!svg.includes('NaN'));
+});
+test('transcrição de tabela digitalizada aceita percentuais brasileiros e exige fonte',()=>{
+ const {api}=mock([]);
+ const result=api.parseTranscribedHistory(
+  'BM;Previsto;Realizado\n25;35,00%;30,00%\n26;40,00%;35,00%\n27;45,00%;40,00%',
+  'SEI 123 — tabela do BM 33'
+ );
+ assert.equal(result.points.length,3);
+ assert.equal(result.points[1].percentualRealizadoAcumulado,35);
+ assert.throws(()=>api.parseTranscribedHistory('25;10%;5%\n26;12%;8%',''),/referência/i);
+ assert.throws(()=>api.parseTranscribedHistory('25;10%;5%\n25;12%;8%','SEI 123'),/repetido/i);
+ assert.throws(()=>api.parseTranscribedHistory('25;140%;5%\n26;12%;8%','SEI 123'),/acima de 100%/i);
+});
