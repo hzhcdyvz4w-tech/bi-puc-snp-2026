@@ -54,3 +54,10 @@ test('arquivos de anexos dos BMs não entram, mesmo quando contêm quadro de med
  }
  assert.equal(eng.seiBMDecision('BM_01.pdf',bmText,'TEXTO EXTRAÍDO (PDF)').eligible,true);
 });
+
+test('anexo identificado pelo próprio cabeçalho é excluído mesmo com nome neutro',()=>{
+ const engine=load();
+ const text='PÁGINA 1\nANEXO 1 AO BOLETIM DE MEDIÇÃO 12\nCONTRATO 26/2025\nVALOR DA MEDIÇÃO R$ 3.000,00';
+ assert.equal(engine.seiBMDecision('Documento_SEI_300.pdf',text,'TEXTO EXTRAÍDO (PDF)').eligible,false);
+ assert.equal(engine.seiBMDecision('BM_12_principal.pdf',bmText,'TEXTO EXTRAÍDO (PDF)').eligible,true);
+});
