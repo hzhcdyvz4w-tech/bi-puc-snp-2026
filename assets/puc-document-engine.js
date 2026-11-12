@@ -221,15 +221,15 @@ function indicators(text){
 }
 async function unpack(file,allowedName=null){
  if(typeof w.JSZip==='undefined')throw Error('Leitor ZIP indisponível');
- const results=[],limits={entries:0,bytes:0,maxEntries:550,maxBytes:120*1024*1024};
+ const results=[],limits={entries:0,bytes:0,maxEntries:550,maxBytes:120*1024*1024},skipped={count:0};
  async function walk(item,container,depth){
   if(limits.entries>=limits.maxEntries)throw Error('ZIP com mais de 550 documentos');
   const name=item.name||'anexo';
-  if(extension(name)!=='zip'&&allowedName&&!allowedName(name))return;
+  if(extension(name)!=='zip'&&allowedName&&!allowedName(name)){skipped.count++;return}
   if(extension(name)==='zip'&&depth<2){
    const archive=await w.JSZip.loadAsync(await item.arrayBuffer());
    for(const entry of Object.values(archive.files)){if(entry.dir||/(^|\/)(?:__MACOSX|\.)/.test(entry.name)||entry.name.includes('..')||entry.name.startsWith('/'))continue;
-    if(allowedName&&extension(entry.name)!=='zip'&&!allowedName(entry.name))continue;
+    if(allowedName&&extension(entry.name)!=='zip'&&!allowedName(entry.name)){skipped.count++;continue}
     const expected=Number(entry._data?.uncompressedSize||0),compressed=Number(entry._data?.compressedSize||0);
     if(expected>limits.maxBytes-limits.bytes)throw Error('ZIP excede limite de 120 MB descompactados (pré-verificação)');
     if(expected>15*1024*1024&&compressed>0&&expected/compressed>500)throw Error('Entrada ZIP com taxa de expansão anormal');
@@ -239,7 +239,7 @@ async function unpack(file,allowedName=null){
   }
   results.push({name,blob:item.blob||item,container});
  }
- await walk(file,'',0);return results;
+ await walk(file,'',0);results.ignoredCount=skipped.count;return results;
 }
 function basicPDF(bytes){
  // Fallback da versao anterior: textos PDF nao comprimidos; nao equivale a leitor PDF completo.
