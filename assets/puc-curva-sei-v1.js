@@ -130,6 +130,115 @@ async function extract(doc){
  cache.set(doc.id,result);
  return result;
 }
+/* Histórico completo: leitura de cada BM vinculado, sem inferência de dados ausentes.
+   Uma divergência de percentuais para o mesmo BM é marcada e retirada do gráfico. */
+function bmIndex(v){
+ const raw=String(v??'').trim(),m=raw.match(/^(?:BM\s*)?0*(\d{1,3})$/i);
+ return m?Number(m[1]):null;
+}
+function singleBmPoint(doc){
+ const row=reviewedRow(doc);
+ const parsed=window.PUCFichasBM?.parseBmText?.(doc.text||'',doc.name)||{};
+ const guess=doc.name.match(/(?:^|[^\w])BM[\s_.-]*(?:N[º°. ]*)?0*(\d{1,3})(?!\d)/i)?.[1];
+ const number=bmIndex(row?.number)||bmIndex(doc.bmNumber)||bmIndex(parsed.bm_number)||bmIndex(guess);
+ if(number===null)return null;
+ const value=row?.physical!=null?Number(row.physical):Number(parsed.physical_cumulative);
+ if(!Number.isFinite(value)||value<0||value>100)return null;
+ return {number,percentualRealizadoAcumulado:value,date:row?.date||parsed.measurement_date||'',
+  sourceName:doc.name,page:null,confidence:row?.status==='confirmado'?'Conferido pelo operador':'Candidato não conferido',
+  originDoc:doc.id};
+}
+function uniteHistory(parts){
+ const data=new Map(),conflicts=new Set(),alerts=[];
+ const numberFields=['percentualRealizadoAcumulado','percentualPrevistoAcumulado','percentualPrevistoParcial',
+   'percentualRealizadoParcial','financeiroPrevistoParcial','financeiroRealizadoParcial',
+   'financeiroPrevistoAcumulado','financeiroRealizadoAcumulado','day'];
+ for(const item of parts){
+  const number=bmIndex(item.number);if(number===null)continue;
+  if(!data.has(number))data.set(number,{number,day:null,page:null,sourceName:'',sources:[],confidence:'Candidato não conferido'});
+  const dst=data.get(number);
+  const source=String(item.sourceName||'Documento não especificado');
+  if(!dst.sources.includes(source))dst.sources.push(source);
+  if(!dst.sourceName)dst.sourceName=source;
+  if(item.confidence==='Conferido pelo operador')dst.confidence='Conferido pelo operador';
+  if(item.page!=null&&dst.page==null)dst.page=item.page;
+  if(item.date&&!dst.date)dst.date=item.date;
+  for(const key of numberFields){
+   const value=item[key];
+   if(!Number.isFinite(value))continue;
+   const conflictKey=number+':'+key;
+   if(conflicts.has(conflictKey))continue;
+   if(Number.isFinite(dst[key])&&Math.abs(dst[key]-value)>0.02){
+    delete dst[key];
+    conflicts.add(conflictKey);
+    alerts.push('BM '+number+': divergência em '+key+' entre documentos. Ponto omitido até conferência.');
+   }else dst[key]=value;
+  }
+ }
+ const points=[...data.values()].sort((a,b)=>a.number-b.number);
+ for(const key of ['percentualPrevistoAcumulado','percentualRealizadoAcumulado']){
+  const series=points.filter(p=>Number.isFinite(p[key]));
+  if(series.some((p,i)=>i>0&&p[key]<series[i-1][key]-.01))
+   alerts.push('Percentual '+(key.includes('Previsto')?'previsto':'realizado')+' acumulado diminui entre BMs. Verificar eventuais retificações.');
+ }
+ const usable=points.filter(p=>Number.isFinite(p.percentualPrevistoAcumulado)||Number.isFinite(p.percentualRealizadoAcumulado));
+ const gaps=[];
+ for(let n=1;n<points.length;n++)if(points[n].number-points[n-1].number>1)
+  gaps.push('Entre BM '+points[n-1].number+' e BM '+points[n].number+' há medições sem ponto identificado.');
+ return {points:usable,warnings:[...new Set([...alerts,...gaps])],allPoints:points,conflicts};
+}
+async function consolidate(docs,progress=()=>{},stillCurrent=()=>true){
+ if(!docs.length)throw Error('Nenhum BM vinculado ao empreendimento e ao contrato selecionados.');
+ const codes=docs.map(d=>({doc:d,...docContract(d)}));
+ const conflicts=codes.filter(x=>x.conflict);
+ const identifiable=[...new Set(codes.filter(x=>!x.conflict).map(x=>x.contract).filter(Boolean))];
+ if(!currentContract()&&identifiable.length>1)throw Error('Há BMs com contratos distintos ('+identifiable.join(', ')+'). Selecione um contrato antes de consolidar.');
+ const target=contractCode(currentContract())||identifiable[0]||'';
+ const input=codes.filter(x=>!x.conflict&&((target&&x.contract===target)||(!target&&!x.contract)));
+ const omissions=[...conflicts.map(x=>x.doc.name+': '+x.conflict),
+   ...codes.filter(x=>!x.conflict&&(!input.some(d=>d.doc.id===x.doc.id)))
+      .map(x=>x.doc.name+': contrato não identificado ou diferente; não consolidado.')];
+ const parts=[],sources=[],warningDetails=[...omissions];
+ let totalPages=0,usedHistorical=0;
+ for(let i=0;i<input.length;i++){
+  if(!stillCurrent())return null;
+  const d=input[i].doc,review=reviewedRow(d),evidence={name:d.name,reference:d.ref||'',bm:review?.number||d.bmNumber||'',
+   contract:input[i].contract||'Não identificado',status:review?.status==='confirmado'?'Conferido':'Pendente',
+   historic:'Não identificado',physical:'Ausente'};
+  sources.push(evidence);
+  const single=singleBmPoint(d);
+  if(single){parts.push(single);evidence.physical=pct(single.percentualRealizadoAcumulado);}
+  progress(i,input.length,'Examinando BM '+(i+1)+' de '+input.length+' · '+d.name);
+  if(/\.pdf$/i.test(d.name)){
+   try{
+    const history=await extract(d);
+    if(!stillCurrent())return null;
+    for(const point of history.points)parts.push({...point,sourceName:d.name,originDoc:d.id,
+      confidence:review?.status==='confirmado'?'Conferido pelo operador':'Extração não conferida'});
+    evidence.historic=history.points.length+' ponto(s) históricos';
+    totalPages+=history.pages;
+    usedHistorical++;
+    warningDetails.push(...history.warnings.map(w=>d.name+': '+w));
+   }catch(e){
+    evidence.historic='Sem quadro histórico extraível';
+    // Single-BM results from the stored document remain available even without a full PDF table.
+    if(!single)warningDetails.push(d.name+': '+String(e.message||e).slice(0,180));
+   }
+  }
+ }
+ const merged=uniteHistory(parts);
+ const usable=merged.points;
+ if(!usable.length){
+  return {points:[],meta:{contract:target},doc:{id:'todos',name:'Todos os BMs vinculados',ref:'Documentos → SEI'},
+   warnings:[...new Set([...warningDetails,...merged.warnings])],sources,pages:totalPages,
+   usedHistorical,scanned:input.length,excluded:omissions.length};
+ }
+ const recent=docs.find(d=>/CURVA[\s_.-]*S/i.test(d.name))||docs[0];
+ return {points:usable,meta:{...metadata(recent?.text||''),contract:target},doc:{id:'todos',name:input.length+' boletim(ns) do contrato',ref:'Documentos → SEI'},
+  warnings:[...new Set([...warningDetails,...merged.warnings])],sources,pages:totalPages,
+  usedHistorical,scanned:input.length,excluded:omissions.length};
+}
+
 function svgChart(points){
  const width=1100,height=350,left=68,right=22,top=20,bottom=62;
  const useDays=points.length>1&&points.every(p=>Number.isFinite(p.day))&&points.every((p,i)=>i===0||p.day>points[i-1].day);
