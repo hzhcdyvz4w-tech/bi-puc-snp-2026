@@ -419,7 +419,15 @@ async function render(){
  if(!currentProject())return showLegacy('Escolha o empreendimento antes de gerar o histórico dos BMs.');
  if(!selection)return showLegacy('Nenhum BM elegível identificado no projeto e contrato selecionados.');
  const docs=selection.docs;
- if(!docs.length)return showLegacy('Nenhum documento BM vinculado ao filtro. Verifique Documentos → SEI.');
+ if(!docs.length){
+  if(selection.available===0)return showLegacy('Nenhum documento BM vinculado ao filtro. Verifique Documentos → SEI.');
+  generation++;
+  activeReport=null;panel.replaceChildren();
+  const legacy=byId('ficha-print-area');if(legacy)legacy.hidden=true;
+  const state=byId('puc-curva-document-status');
+  if(state)state.textContent='Nenhum BM marcado. Selecione pelo menos um BM para calcular a Curva S.';
+  return;
+ }
  const status=byId('puc-curva-document-status');
  activeReport=null;
  panel.replaceChildren();
