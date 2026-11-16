@@ -233,9 +233,51 @@
    ]),'Não foram identificadas divergências *verificáveis* nos pares de dados incluídos. Isso não equivale a conformidade integral.')+
    (r.issues.length?'<h4>Limitações e diligências de complementação</h4>'+
     '<ul>'+r.issues.map(x=>'<li><b>'+val(sourceLabels[x.source]||x.source)+':</b> '+val(x.message)+'</li>').join('')+'</ul>':''));
-  const legal=section(++n,'Fundamentação normativa e enquadramento jurídico',
-   '<p><b>Base normativa específica ainda não vinculada ao relatório.</b> As legislações que serão disponibilizadas pelo gestor deverão ser analisadas, com identificação exata da norma, artigo, redação aplicável e correspondência com a evidência do empreendimento.</p>'+
-   '<p>Até essa conferência, o BI não atribui infração, prazo legal, obrigação normativa específica ou conclusão jurídica automática.</p>');
+  // Dispositivos identificados nos documentos fornecidos. Nunca imputar descumprimento automaticamente.
+  // A lei contratual aplicável depende da natureza da entidade, regime e data da contratação.
+  const normRefs={
+   n14133scope:'Lei nº 14.133/2021, art. 1º, § 1º (ressalva das estatais, regidas pela Lei nº 13.303/2016)',
+   n14133exec:'Lei nº 14.133/2021, art. 115 (execução fiel às cláusulas contratuais)',
+   n14133fiscal:'Lei nº 14.133/2021, art. 117 (acompanhamento e fiscalização da execução)',
+   n14133contract:'Lei nº 14.133/2021, art. 92 (cláusulas necessárias do contrato)',
+   n14133accept:'Lei nº 14.133/2021, art. 140 (recebimento do objeto)',
+   tcuRegimes:'TCU, Licitações e Contratos, 5ª edição, item 4.4.1 (regimes de execução e critérios de medição)',
+   tcuProjeto:'TCU, Licitações e Contratos, 5ª edição, itens 4.4.3.3 e 4.4.3.5 (especificações, critérios de medição e programação)',
+   sinapi:'CAIXA, SINAPI — Cálculos e Parâmetros, 8ª edição (2026): referência técnica de custos, quando pertinente',
+   sicro:'DNIT, Manual de Custos de Infraestrutura de Transportes, volume 03, 2ª edição (2025): preços referenciais, quando pertinente'
+  };
+  const entries=[
+   ...audits.map(a=>({
+    tipo:'Constatação técnica a verificar',
+    fato:ctx.sourceLabel(a.source_a)+' × '+ctx.sourceLabel(a.source_b)+' — '+plain(a.reason),
+    evidencia:[a.evidence_a,a.evidence_b].filter(Boolean).join(' / ')||'Referência documental não identificada',
+    pendencia:'Conferir identidade de objeto, contrato, indicador, unidade, competência e data de corte; apurar a causa da divergência.',
+    fundamento:'Potencial referência contratual: '+normRefs.n14133contract+'; '+normRefs.n14133exec+'. Aplicabilidade condicionada ao regime do contrato.',
+    conclusao:'Sem conclusão jurídica automática; exige instrumento contratual, documentação original e exame do regime.'
+   })),
+   ...r.issues.map(i=>({
+    tipo:'Pendência administrativa/documental',
+    fato:(sourceLabels[i.source]||i.source)+' — '+plain(i.message),
+    evidencia:'Fonte indicada no relatório; documento original ou vínculo ainda deve ser confirmado',
+    pendencia:'Solicitar/complementar evidência, identificar responsável e registrar a resposta à diligência.',
+    fundamento:'Referência orientativa, não imputação: '+normRefs.n14133fiscal+'; '+normRefs.tcuProjeto+'. Aplicar apenas se o regime e o escopo forem pertinentes.',
+    conclusao:'Pendência de instrução; ausência de documento na sessão não demonstra descumprimento legal.'
+   }))
+  ];
+  const legalRows=entries.map(e=>[
+   val(e.tipo),val(e.fato),val(e.evidencia),val(e.pendencia),val(e.fundamento),val(e.conclusao)
+  ]);
+  const legal=section(++n,'Fundamentação normativa, evidências e análise jurídica',
+   '<p><b>Verificação do regime jurídico é obrigatória:</b> identificar contratante, natureza da entidade, lei de regência, edital, contrato, data e aditivos. '+
+   esc(normRefs.n14133scope)+'. O BI não aplica automaticamente a Lei nº 14.133/2021 a contratos de estatais nem substitui a Lei nº 13.303/2016 e o regulamento interno pertinente.</p>'+
+   '<h4>Relação das constatações com a documentação e dispositivos a conferir</h4>'+
+   table(['Classificação','Fato/constatação','Evidência técnica','Pendência ou providência administrativa','Referência normativa candidata — verificar incidência','Conclusão jurídica'],legalRows,
+   'Não há constatação individual verificável nesta seleção. Nenhuma irregularidade pode ser presumida da ausência de achados.')+
+   '<h4>Referências conferidas nos materiais disponibilizados</h4>'+
+   '<ul>'+Object.values(normRefs).map(x=>'<li>'+esc(x)+'</li>').join('')+'</ul>'+
+   '<p><b>Limite da análise:</b> os manuais do TCU, SINAPI e SICRO são fontes de orientação técnica/jurisprudencial e referência de custos, conforme o caso; não constituem, por si, dispositivo legal infringido. '+
+   'Decretos sobre transferências, registro de preços e concessões somente serão relacionados quando o objeto e o instrumento demonstrarem sua incidência.</p>'+
+   '<p><b>Conclusão jurídica:</b> pendente de enquadramento individual e validação da área competente. Diferenças de valor, lacunas de documentos e atrasos indicados não são automaticamente irregularidades.</p>');
   const recommendations=[
    ...r.issues.map(x=>'Para '+(sourceLabels[x.source]||x.source)+': '+x.message),
    ...audits.map(x=>'Conferir '+ctx.sourceLabel(x.source_a)+' × '+ctx.sourceLabel(x.source_b)+': '+x.reason),
