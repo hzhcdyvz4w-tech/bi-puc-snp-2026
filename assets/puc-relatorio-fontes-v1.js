@@ -279,7 +279,7 @@
     val(x[0]),val(x[1]),val(x[2]),val(x[3]),val(x[4])
    ]),'Nenhuma fonte com registro comprovadamente vinculado neste recorte.'));
   const investmentIndicators=window.PUCIndicadores?.dashboard?
-    section(++n,'Indicadores — valor investido, valor pago e execução',window.PUCIndicadores.dashboard(id,p)):
+    section(1,'Indicadores de investimento e execução',window.PUCIndicadores.dashboard(id,p)):
     section(++n,'Indicadores — valor investido, valor pago e execução','<p>Indicadores indisponíveis neste carregamento.</p>');
   const physical=section(++n,'Execução física e evolução do empreendimento',
    '<p>Percentuais físicos são extraídos dos BMs conferidos, Balanço registrado ou declaração DOCAS, conforme a origem selecionada. Não são derivados de empenho, pagamento ou dotação.</p>'+
@@ -294,7 +294,7 @@
    '<p><b>Itens inventariados na origem selecionada:</b> '+docFilter.length+
    '. O inventário não certifica o conteúdo integral de PDFs/ZIPs.</p>');
   const audits=filteredAudits.filter(a=>a.status!=='SEM DIVERGÊNCIA NUMÉRICA');
-  const findings=section(++n,'Constatações, divergências e pendências',
+  const findings=section(3,'Constatações e pendências',
    table(['Fonte','Situação','Descrição','Referência'],audits.map(x=>[
     val(ctx.sourceLabel(x.source_a)+' × '+ctx.sourceLabel(x.source_b)),
     val(x.status),val(x.reason),val((x.evidence_a||'')+' / '+(x.evidence_b||''))
@@ -352,7 +352,7 @@
    'Vincular cada documento a PUC, contrato, objeto e data de referência antes de comparar percentuais ou valores.',
    'Submeter o histórico das medições e os resultados do Balanço e DOCAS à validação técnica da SNP.'
   ];
-  const conclusion=section(++n,'Conclusão analítica e sugestões de melhorias',
+  const conclusion=section(5,'Conclusão e providências',
    '<p>'+((filteredRows.length||panels.some(x=>x.count))?
     'Há informações documentais ou estruturadas relacionadas ao empreendimento, identificadas nas seções precedentes. Sua suficiência depende de conferência de vínculos, datas e documentos originais.':
     'Não há evidências suficientes na seleção atual para emitir conclusão sobre execução física ou financeira.')+'</p>'+
@@ -360,9 +360,27 @@
    (audits.length?'Há '+audits.length+' confronto(s) que exigem exame e saneamento; ':'')+
    (r.issues.length?'Há '+r.issues.length+' limitação(ões) de disponibilidade/vinculação documental; ':'')+
    'nenhuma dessas constatações equivale, isoladamente, a irregularidade.</p>'+
-   '<h4>Providências e melhorias sugeridas</h4><ol>'+[...new Set(recommendations)].map(x=>'<li>'+esc(x)+'</li>').join('')+'</ol>'+
+   '<h4>Providências prioritárias</h4><ol>'+[...new Set(recommendations)].slice(0,4).map(x=>'<li>'+esc(x)+'</li>').join('')+'</ol>'+
+   (recommendations.length>4?'<p class="muted">Demais diligências detalhadas estão disponíveis na aba Documentos.</p>':'')+
    '<p><b>Conferência/homologação SNP:</b> PENDENTE. <b>Uso:</b> assessoramento e revisão documental.</p>');
-  holder.innerHTML=heading+metrics+method+provenance+trace+investmentIndicators+physical+financial+schedule+findings+legal+conclusion;
+  // Relatório executivo: cinco blocos. A biblioteca Documentos preserva o exame
+  // pormenorizado dos BMs, valores, cronogramas e confrontos técnicos.
+  const evidence=section(2,'Evidências e fontes documentais',
+   '<p><b>Fontes consideradas:</b> '+esc(sourceTitle)+'. Os quantitativos são indicativos, não comprovam equivalência ou homologação.</p>'+
+   table(['Fonte','Natureza','Itens','Situação'],traceRows.map(x=>[
+    val(x[0]),val(x[1]),val(x[3]),val(x[4])
+   ]),'Não há documentos relacionados nesta seleção.')+
+   '<p class="muted">Para examinar cada BM, documento, medição, cronograma ou vínculo preliminar, consulte a aba Documentos.</p>');
+  const legalBrief=section(4,'Fundamentação normativa',
+   '<p><b>Aplicabilidade a conferir:</b> contrato, entidade contratante, data da contratação, objeto e regime jurídico. '+
+   esc(normRefs.n14133scope)+'.</p>'+
+   '<p>As constatações demandam identificação de dispositivo específico antes de qualquer enquadramento. '+
+   'Manuais técnicos são referências de análise, não demonstração automática de infração.</p>'+
+   (legalRows.length?'<details><summary><b>Exibir referências normativas candidatas ('+legalRows.length+')</b></summary>'+
+     table(['Constatação / pendência','Referência candidata','Situação jurídica'],
+       entries.map(e=>[val(e.fato),val(e.fundamento),val(e.conclusao)]))+'</details>':
+     '<p>Sem constatações individualizadas para enquadramento jurídico.</p>'));
+  holder.innerHTML=heading+investmentIndicators+evidence+findings+legalBrief+conclusion;
   const title=p.empresa+' · '+id+' · '+sourceTitle+' · '+filteredRows.length+' registros estruturados · '+panels.reduce((sum,x)=>sum+x.count,0)+' documentos/declarações vinculados';
   if(summary)summary.textContent=title;
   latest={id,p,mode,r,ctx,renderedAt:new Date().toISOString()};
