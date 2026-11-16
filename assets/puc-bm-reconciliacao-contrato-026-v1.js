@@ -37,9 +37,10 @@
   if(nums.some(x=>x===null)||nums.length<4)return null;
   return {monthly:nums.slice(0,-2),acc:nums.at(-2),balance:nums.at(-1)};
  }
- let cacheKey='',cache=null;
+ let cacheKey='',cache=null,remoteCache=null;
  function compute(){
   const docs=(w.PUCDocLibrary?.list?.()||[]).filter(contractDoc);
+  if(!docs.length&&remoteCache?.ok)return remoteCache;
   const signature=docs.map(d=>String(d.id)+'/'+String(d.hash||'')+'/'+String(d.text||'').length).sort().join('|');
   if(cacheKey===signature)return cache;
   cacheKey=signature;
@@ -126,5 +127,46 @@
    '<p>SEI '+html(d.baseSEI)+' e '+html(d.reajSEI)+
    '; '+html(d.bm03Check)+'. Associação técnica por contrato, rubrica e objeto; comprovação administrativa pendente.</p>'+breakdown(x)+'</div>';
  }
- w.PUCBMReconciliado={compute,resolve,forProject,cell,report};
+ async function loadPrivate(){
+  const cfg=w.PUC_DOCAS_CONFIG||{},url=String(cfg.supabaseUrl||'').replace(/\/$/,'');
+  const api=cfg.publishableKey||'';
+  let token='';
+  try{token=sessionStorage.getItem('puc_docas_token_gestao_v1')||''}catch{}
+  if(!token){try{token=new URLSearchParams(location.hash.slice(1)).get('gestor')||''}catch{}}
+  if(!url||!api||!/^[a-f0-9]{64}$/.test(token))return;
+  try{
+   const res=await fetch(url+'/functions/v1/puc-bm-medicoes-gerenciais',{
+    method:'POST',cache:'no-store',mode:'cors',
+    headers:{'Content-Type':'application/json',apikey:api},
+    body:JSON.stringify({token})
+   });
+   if(!res.ok)throw Error('Sem autorização para consultar os valores gerenciais');
+   const data=await res.json();
+   if(!data.ok||!Array.isArray(data.records)||data.records.length!==42)return;
+   const byCode={};
+   for(const [id,def] of Object.entries(map)){
+    const rows=data.records.filter(x=>String(x.idGoverna)===id&&String(x.puc)===def.puc&&String(x.rubrica)==='162'+def.code);
+    rows.sort((a,b)=>Number(a.bm)-Number(b.bm));
+    if(rows.length!==14||rows.some((r,i)=>Number(r.bm)!==i+1))return;
+    let cumulative=0;
+    const entries=rows.map(r=>{
+     const base=Number(r.baseCents),reaj=Number(r.reajCents);
+     if(!Number.isSafeInteger(base)||!Number.isSafeInteger(reaj)||base<0||reaj<0)throw Error('Valor inválido no banco');
+     cumulative+=base+reaj;
+     return {bm:'BM'+String(r.bm).padStart(2,'0'),number:Number(r.bm),baseCents:base,reajCents:reaj,totalCents:base+reaj,competencia:'Não identificada nas planilhas'};
+    });
+    byCode[id]={...def,idGoverna:id,baseCents:entries.reduce((a,r)=>a+r.baseCents,0),
+     reajCents:entries.reduce((a,r)=>a+r.reajCents,0),totalCents:cumulative,entries};
+   }
+   remoteCache={ok:true,contract:'026/2025',documents:15,baseSEI:11917032,reajSEI:11961873,
+    rows:byCode,overall:Object.values(byCode).reduce((a,r)=>a+r.totalCents,0),
+    checkedValues:0,bm03Check:'Conferência detalhada disponível no pacote SEI original',
+    source:'Banco gerencial privado, conciliação de valores documentais; homologação pendente.',
+    status:'conciliação documental central sem homologação'};
+   if(!((w.PUCDocLibrary?.list?.()||[]).some(contractDoc)))w.dispatchEvent(new Event('puc-documents-updated'));
+  }catch(e){/* A fonte local continua funcional, mesmo sem credencial gerencial. */}
+ }
+ w.PUCBMReconciliado={compute,resolve,forProject,cell,report,loadPrivate};
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadPrivate);
+ else loadPrivate();
 })(window);
