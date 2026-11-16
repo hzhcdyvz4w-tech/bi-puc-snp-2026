@@ -86,17 +86,25 @@
    ['end_plan','Conclusão prevista'],['end_real','Conclusão efetiva'],
    ['cutoff','Data de referência/corte'],['evidence','Documento de comprovação'],
    ['same_scope','Mesmo objeto/escopo declarado'],['verified','Conferido pelo operador']];
-  const structured=b.ficha?table(['Indicador','Informação registrada'],keys.map(([k,label])=>[
-   val(label),typeof b.ficha[k]==='boolean'?val(b.ficha[k]?'Sim':'Não'):
-     k==='global'?money(b.ficha[k]):val(b.ficha[k])
-  ])):'<p class="r-empty">Balanço não conferido/incorporado à ficha da PUC nesta sessão.</p>';
+  const known=new Set(keys.map(([k])=>k));
+  const extra=b.ficha?Object.entries(b.ficha).filter(([k,v])=>
+   !known.has(k)&&!isBlank(v)&&typeof v!=='object').map(([k,v])=>[k,v]):[];
+  const structured=b.ficha?table(['Indicador','Informação registrada'],
+    [...keys.map(([k,label])=>[
+      val(label),typeof b.ficha[k]==='boolean'?val(b.ficha[k]?'Sim':'Não'):
+      k==='global'?money(b.ficha[k]):val(b.ficha[k])
+    ]),...extra.map(([k,v])=>[val(k.replace(/_/g,' ')),val(v)])]
+   ):'<p class="r-empty">Balanço não conferido/incorporado à ficha da PUC nesta sessão.</p>';
   const docs=table(['Arquivo do Balanço vinculado','Referência','Situação de leitura'],b.linked.map(d=>[
    val(d.name),val(d.ref),val(d.quality)+' · '+val(d.category)
   ]),'Nenhum arquivo do Balanço com vínculo explícito à PUC.');
   const possible= b.possible.length?
    '<h4>Correspondências textuais a confirmar (não são vínculos financeiros comprovados)</h4>'+
-   table(['ID governa','UF','Empreendimento no Balanço','Valor global bruto','Execução física bruta','Fonte'],b.possible.map(r=>[
-    val(r.id),val(r.uf),val(r.empreendimento),val(r.valor_global),val(r.execucao_fisica),val(r.arquivo)
+   table(['Registro candidato','Campos extraídos do Balanço','Fonte'],b.possible.map(r=>[
+    val(r.id)+' · '+val(r.empreendimento)+' · '+val(r.uf),
+    Object.entries(r).filter(([k,v])=>!isBlank(v)&&k!=='documento_id')
+      .map(([k,v])=>'<div><b>'+val(k.replace(/_/g,' '))+':</b> '+val(v)+'</div>').join(''),
+    val(r.arquivo)+' · '+val(r.referencia)
    ])):
    '<p class="muted">Nenhuma correspondência adicional de UF/objeto identificada automaticamente.</p>';
   return {html:'<h4>Dados estruturados vinculados à ficha</h4>'+structured+
@@ -131,7 +139,7 @@
  ['contratos_principais','Contratos principais'],['resultados_entregas','Resultados/entregas'],
  ['restricoes_pendencias','Restrições/pendências'],
  ['providencias_proximos_marcos','Providências/próximos marcos'],
- ['analise','Análise do gestor']
+ ['analise','Análise do gestor'],['responsavel_preenchimento','Responsável pelo preenchimento']
  ];
  function docasHTML(id,p){
   const authorized=!!($('pdc-admin')&&!$('pdc-admin').hidden);
