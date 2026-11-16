@@ -193,6 +193,10 @@
   }).join('');
  }
  function bmCell(row,groups){
+  // Contrato 026/2025: séries extraídas exclusivamente do SEI, por rubrica e objeto.
+  // As 15 planilhas/documentos contêm versões acumuladas, não medições somáveis.
+  const reconciled=w.PUCBMReconciliado?.cell?.(row);
+  if(reconciled)return reconciled;
   const direct=(row.bms||[]).length?cell(row.bms,'bm'):'';
   const candidates=(row.bmCandidates||[]).slice(0,12);
   const prelinked=(row.linkedByPUC||[]).length?
