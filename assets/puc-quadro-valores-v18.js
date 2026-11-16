@@ -99,7 +99,7 @@
     bmManager?.match?.(d,row));
    const linkedByPUC=documentos.filter(d=>d.origin==='SEI'&&bmIsSelected(d)&&project&&
     (String(d.project||'')===String(project.id)||
-     (Array.isArray(d.projects)&&d.projects.map(String).includes(String(project.id))) &&
+     (Array.isArray(d.projects)&&d.projects.map(String).includes(String(project.id)))) &&
     !relatedBM.includes(d));
    // Quando não há vínculo formal, reter apenas CANDIDATOS identificáveis pela
    // obra; não atribuir valores ao empreendimento nem utilizá-los na Curva S.
