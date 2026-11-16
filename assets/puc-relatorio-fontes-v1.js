@@ -245,6 +245,29 @@
    const x=panels.find(p=>p.code===code);
    return section(++n,'Análise documental — '+sourceLabels[code],x.html);
   }).join('');
+  // Matriz de rastreabilidade não transforma contagem de fontes em validação.
+  const traceRows=[
+   ['SEI / BMs','Medições e documentos contratuais','PUC + contrato + BM + competência + referência SEI',
+     panels.find(x=>x.code==='SEI')?.count||0,
+     'Conferência dos BMs é indispensável; extração OCR/textual é apenas candidata.'],
+   ['Balanço','Valor global, prazos e percentual físico do empreendimento',
+     'ID Governa + UF + objeto + data de corte + documento',
+     panels.find(x=>x.code==='BALANCO')?.count||0,
+     'Correspondências por nome/UF devem ser confirmadas antes de atribuir valores.'],
+   ['SIOP','Dotação, empenho, liquidação e pagamento da União',
+     'Ação/PO + exercício + competência + referência da consulta',
+     filteredRows.filter(x=>x.source==='SIOP').length,
+     'Não equivale a medição contratual, aplicação da PUC ou execução física.'],
+   ['DOCAS','Declarações externas e valores informados pelas companhias',
+     'Código da companhia + UF + ID ou objeto + protocolo + validação SNP',
+     panels.find(x=>x.code==='DOCAS')?.count||0,
+     'Declarações recebidas não constituem validação da SNP.']
+  ].filter(x=>selected.includes(x[0].split(' / ')[0])||x[0]==='SEI / BMs'&&selected.includes('SEI'));
+  const trace=section(++n,'Matriz de rastreabilidade — Documentos × Relatório Analítico',
+   '<p>O número de registros é indicativo e não representa prova de equivalência entre fontes. A matriz identifica o requisito de vínculo antes de qualquer comparação.</p>'+
+   table(['Fonte','Natureza do dado','Chaves e provas necessárias','Itens na seleção','Ressalva'],traceRows.map(x=>[
+    val(x[0]),val(x[1]),val(x[2]),val(x[3]),val(x[4])
+   ]),'Nenhuma fonte com registro comprovadamente vinculado neste recorte.'));
   const physical=section(++n,'Execução física e evolução do empreendimento',
    '<p>Percentuais físicos são extraídos dos BMs conferidos, Balanço registrado ou declaração DOCAS, conforme a origem selecionada. Não são derivados de empenho, pagamento ou dotação.</p>'+
    ctx.renderRecords(filteredRows,ctx.REPORT_PHYSICAL)+
@@ -326,7 +349,7 @@
    'nenhuma dessas constatações equivale, isoladamente, a irregularidade.</p>'+
    '<h4>Providências e melhorias sugeridas</h4><ol>'+[...new Set(recommendations)].map(x=>'<li>'+esc(x)+'</li>').join('')+'</ol>'+
    '<p><b>Conferência/homologação SNP:</b> PENDENTE. <b>Uso:</b> assessoramento e revisão documental.</p>');
-  holder.innerHTML=heading+metrics+method+provenance+physical+financial+schedule+findings+legal+conclusion;
+  holder.innerHTML=heading+metrics+method+provenance+trace+physical+financial+schedule+findings+legal+conclusion;
   const title=p.empresa+' · '+id+' · '+sourceTitle+' · '+filteredRows.length+' registros estruturados · '+panels.reduce((sum,x)=>sum+x.count,0)+' documentos/declarações vinculados';
   if(summary)summary.textContent=title;
   latest={id,p,mode,r,ctx,renderedAt:new Date().toISOString()};
