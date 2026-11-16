@@ -52,8 +52,13 @@
    planned:(state.planned||{})[id]||[]
   };
  }
- function bmsHTML(id){
+ function bmsHTML(id,p){
   const docs=linkedDocs(id,'SEI').filter(x=>/^(BM IDENTIFICADO|BM PROVÁVEL)/.test(x.bmStatus||''));
+  const candidates=(window.PUCDocLibrary?.list?.()||[]).filter(d=>{
+    if(d.origin!=='SEI'||!/^BM (?:IDENTIFICADO|PROVÁVEL)/.test(d.bmStatus||'')||docs.some(x=>x.id===d.id))return false;
+    const work=String(d.workName||'').trim();
+    return !!work&&window.PUCQuadroValores?.suggestWorkProjects?.(work,[{id,uf:p.uf,empreendimento:p.empreendimento}])?.length===1;
+  });
   const info=readFicha(id),rows=info.bms;
   const notes=[];
   if(!docs.length)notes.push('Não foram localizados BMs principais vinculados expressamente a esta PUC na biblioteca documental.');
@@ -80,7 +85,12 @@
   const findings=docs.flatMap(d=>(d.findings||[]).map(f=>({doc:d.name,ref:d.ref,indicator:f.indicator||f.type||'Achado registrado',status:f.status||'A conferir',text:f.note||f.description||f.value||''})));
   const findingsTable=findings.length?'<h4>Apontamentos documentais registrados</h4>'+table(
    ['Documento','Achado/indicador','Situação','Descrição'],findings.map(f=>[val(f.doc)+'<div>'+val(f.ref)+'</div>',val(f.indicator),val(f.status),val(f.text)])):'';
-  return {html:overview+bms+'<h4>Documentos principais e evidências capturadas</h4>'+docsTable+findingsTable+
+  const candidatesHTML=candidates.length?'<details class="r-candidates"><summary><b>'+candidates.length+' possível(is) BM(s) relacionado(s) por objeto — a confirmar</b></summary>'+
+   '<p>Esses boletins NÃO estão vinculados formalmente à PUC; seus valores não alimentam a Curva S nem compõem medições validadas.</p>'+
+   table(['BM','Documento','Obra extraída','Competência','Referência SEI'],candidates.map(d=>[
+    val(d.bmNumber||'A identificar'),val(d.name),val(d.workName),val(d.bmPeriod),val(d.ref)
+   ]))+'</details>':'';
+  return {html:overview+bms+'<h4>Documentos principais e evidências capturadas</h4>'+docsTable+candidatesHTML+findingsTable+
    (notes.length?'<p class="r-alert">'+notes.map(esc).join(' ')+'</p>':''),
    count:docs.length,records:rows.length,issues:notes,docs};
  }
@@ -191,7 +201,7 @@
    issues:warning?['Dados DOCAS ainda sem autenticação ou correspondência inequívoca com a PUC.']:[],rows:authorized?rows:[]};
  }
  function sourcePanel(code,id,p){
-  if(code==='SEI')return bmsHTML(id);
+  if(code==='SEI')return bmsHTML(id,p);
   if(code==='BALANCO')return balanceHTML(id,p);
   return docasHTML(id,p);
  }
