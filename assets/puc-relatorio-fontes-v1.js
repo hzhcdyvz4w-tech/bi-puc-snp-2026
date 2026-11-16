@@ -159,7 +159,7 @@
  function docasHTML(id,p){
   // Gestor autenticado via token (fluxo vigente); um elemento antigo pdc-admin
   // não é prova nem requisito de sessão. O carregamento protegido define as declarações.
-  const authorized=!!(window.PUC_DOCAS_GESTAO_AUTORIZADA===true);
+  const authorized=!!($('pdc-admin')&&!$('pdc-admin').hidden && Array.isArray(window.PUC_DOCAS_DECLARACOES_EXTERNAS));
   const all=authorized&&Array.isArray(window.PUC_DOCAS_DECLARACOES_EXTERNAS)?
    window.PUC_DOCAS_DECLARACOES_EXTERNAS:[];
   const rows=authorized?docasMatches(id,p):[];
