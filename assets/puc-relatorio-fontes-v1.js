@@ -6,6 +6,21 @@
 (function(window){
  'use strict';
  const $=id=>document.getElementById(id);
+ // O mesmo formato acompanha a tela e a impressão; sem sobreposição de colunas.
+ const css=document.createElement('style');
+ css.id='puc-relatorio-evidencias-style';
+ css.textContent='#critical-report .wrap-table,#critical-report .puc-candidate-scroll{overflow-x:auto;max-width:100%;margin:12px 0}'+
+ '#critical-report table{border-collapse:collapse;width:100%;min-width:760px;table-layout:auto}'+
+ '#critical-report th,#critical-report td{padding:9px 10px;vertical-align:top;overflow-wrap:anywhere;word-break:normal;border-bottom:1px solid #dce5ed;line-height:1.45}'+
+ '#critical-report th{background:#edf3f8;white-space:normal}'+
+ '#critical-report td small,#critical-report td .pucq-amount small{display:block;font-size:11px;color:#58738b;margin-top:4px;overflow-wrap:anywhere}'+
+ '#critical-report .pucq-amount{min-width:140px;padding:4px 0 8px}'+
+ '#critical-report .pucq-amount strong{white-space:normal;overflow-wrap:anywhere}'+
+ '#critical-report .r-candidates{margin:13px 0;border:1px solid #d9e4ed;border-radius:8px;overflow:hidden}'+
+ '#critical-report .r-candidates>summary{padding:12px;background:#eff5f9;cursor:pointer}'+
+ '#critical-report .r-candidates>p{padding:0 12px}'+
+ '@media print{#critical-report .wrap-table{overflow:visible}#critical-report table{min-width:0;font-size:9px}#critical-report th,#critical-report td{padding:4px}}';
+ if(!document.getElementById(css.id))document.head.appendChild(css);
  const esc=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
  const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
  const plain=v=>v===null||v===undefined||v===''?'Não informado':String(v);
