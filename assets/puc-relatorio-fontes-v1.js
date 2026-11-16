@@ -278,6 +278,9 @@
    table(['Fonte','Natureza do dado','Chaves e provas necessárias','Itens na seleção','Ressalva'],traceRows.map(x=>[
     val(x[0]),val(x[1]),val(x[2]),val(x[3]),val(x[4])
    ]),'Nenhuma fonte com registro comprovadamente vinculado neste recorte.'));
+  const investmentIndicators=window.PUCIndicadores?.dashboard?
+    section(++n,'Indicadores — valor investido, valor pago e execução',window.PUCIndicadores.dashboard(id,p)):
+    section(++n,'Indicadores — valor investido, valor pago e execução','<p>Indicadores indisponíveis neste carregamento.</p>');
   const physical=section(++n,'Execução física e evolução do empreendimento',
    '<p>Percentuais físicos são extraídos dos BMs conferidos, Balanço registrado ou declaração DOCAS, conforme a origem selecionada. Não são derivados de empenho, pagamento ou dotação.</p>'+
    ctx.renderRecords(filteredRows,ctx.REPORT_PHYSICAL)+
@@ -359,7 +362,7 @@
    'nenhuma dessas constatações equivale, isoladamente, a irregularidade.</p>'+
    '<h4>Providências e melhorias sugeridas</h4><ol>'+[...new Set(recommendations)].map(x=>'<li>'+esc(x)+'</li>').join('')+'</ol>'+
    '<p><b>Conferência/homologação SNP:</b> PENDENTE. <b>Uso:</b> assessoramento e revisão documental.</p>');
-  holder.innerHTML=heading+metrics+method+provenance+trace+physical+financial+schedule+findings+legal+conclusion;
+  holder.innerHTML=heading+metrics+method+provenance+trace+investmentIndicators+physical+financial+schedule+findings+legal+conclusion;
   const title=p.empresa+' · '+id+' · '+sourceTitle+' · '+filteredRows.length+' registros estruturados · '+panels.reduce((sum,x)=>sum+x.count,0)+' documentos/declarações vinculados';
   if(summary)summary.textContent=title;
   latest={id,p,mode,r,ctx,renderedAt:new Date().toISOString()};
