@@ -386,12 +386,13 @@
      val(link.ref)+' · '+val(doc.name),
      'Associação conferida pelo operador; valor e enquadramento sujeitos à validação SNP'
    ])):'<p class="muted">Nenhum BM SEI associado a esta obra do Balanço por conferência do operador nesta sessão.</p>';
+  const bmReconciliado=window.PUCBMReconciliado?.report?.(id)||'';
   const evidence=section(2,'Evidências e fontes documentais',
    '<p><b>Fontes consideradas:</b> '+esc(sourceTitle)+'. Os quantitativos são indicativos, não comprovam equivalência ou homologação.</p>'+
    table(['Fonte','Natureza','Itens','Situação'],traceRows.map(x=>[
     val(x[0]),val(x[1]),val(x[3]),val(x[4])
    ]),'Não há documentos relacionados nesta seleção.')+
-   linkedBMReport+
+   (bmReconciliado||linkedBMReport)+
    '<p class="muted">Para examinar e alterar as associações dos BMs, acesse Documentos → Vincular BMs dos processos SEI.</p>');
   const legalBrief=section(4,'Fundamentação normativa',
    '<p><b>Aplicabilidade a conferir:</b> contrato, entidade contratante, data da contratação, objeto e regime jurídico. '+
