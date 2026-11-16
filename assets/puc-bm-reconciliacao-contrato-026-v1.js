@@ -163,10 +163,13 @@
     checkedValues:0,bm03Check:'Conferência detalhada disponível no pacote SEI original',
     source:'Banco gerencial privado, conciliação de valores documentais; homologação pendente.',
     status:'conciliação documental central sem homologação'};
-   if(!((w.PUCDocLibrary?.list?.()||[]).some(contractDoc)))w.dispatchEvent(new Event('puc-documents-updated'));
+   if(!((w.PUCDocLibrary?.list?.()||[]).some(contractDoc))){
+    document.dispatchEvent(new Event('puc-documents-updated'));
+    w.dispatchEvent(new Event('puc-documents-updated'));
+   }
   }catch(e){/* A fonte local continua funcional, mesmo sem credencial gerencial. */}
  }
- function clearPrivate(){remoteCache=null;cacheKey='';cache=null;w.dispatchEvent(new Event('puc-documents-updated'))}
+ function clearPrivate(){remoteCache=null;cacheKey='';cache=null;document.dispatchEvent(new Event('puc-documents-updated'));w.dispatchEvent(new Event('puc-documents-updated'))}
  w.PUCBMReconciliado={compute,resolve,forProject,cell,report,loadPrivate,clearPrivate};
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadPrivate);
  else loadPrivate();
