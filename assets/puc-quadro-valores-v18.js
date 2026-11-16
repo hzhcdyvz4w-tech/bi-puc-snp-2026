@@ -91,13 +91,13 @@
    const mapping=matchProject(row,pucs),project=mapping.project,identity=String(row.id||'').trim(),uf=states(row.uf);
    // Vinculação comprovada via ID interno da carteira ou identificação explícita
    // na referência documental; jamais por mera UF.
-   const relatedBM=documentos.filter(d=>bmIsSelected(d)&&project&&
+   const relatedBM=documentos.filter(d=>d.origin==='SEI'&&bmIsSelected(d)&&project&&
     (String(d.project||'')===String(project.id)||
      (Array.isArray(d.projects)&&d.projects.map(String).includes(String(project.id))) ));
    // Quando não há vínculo formal, reter apenas CANDIDATOS identificáveis pela
    // obra; não atribuir valores ao empreendimento nem utilizá-los na Curva S.
    const candidates=documentos.filter(d=>{
-    if(!bmIsSelected(d)||relatedBM.includes(d))return false;
+    if(d.origin!=='SEI'||!bmIsSelected(d)||relatedBM.includes(d))return false;
     const work=String(d.workName||d.objectName||d.empreendimento||'').trim();
     if(!work)return false;
     const synthetic={id:'BALANCO-'+identity,uf:uf[0]||'',empreendimento:row.empreendimento};
@@ -158,43 +158,44 @@
  let currentUF='',currentSearch='';
 
 
+
  function sharedBMReference(row,groups){
-  const related=groups.filter(g=>{
-   if(row.project)return g.projects.some(p=>p.id===row.project);
-   const synthetic={id:'BALANCO-'+row.id,uf:states(row.uf)[0]||'',empreendimento:row.empreendimento};
-   return suggestWorkProjects(g.work,[synthetic]).length===1;
-  });
+  // A referência por objeto é uma HIPÓTESE; não constitui valor vinculado.
+  const synthetic={id:'BALANCO-'+row.id,uf:states(row.uf)[0]||'',empreendimento:row.empreendimento};
+  const related=groups.filter(g=>g.work!=='Obra não identificada — revisar BM'&&
+   suggestWorkProjects(g.work,[synthetic]).length===1);
   return related.map(g=>{
    const unique=new Map();
    for(const b of g.bms){
-    const key=(b.number||b.document)+'|'+(b.period||'');
-    if(!unique.has(key)||(unique.get(key).amount===null&&b.amount!==null))unique.set(key,b);
+    const key=(b.document||'')+'|'+(b.number||'')+'|'+(b.period||'')+'|'+(g.ref||'');
+    if(!unique.has(key))unique.set(key,b);
    }
-   const values=[...unique.values()].filter(b=>b.amount!==null).map(b=>'BM '+(b.number||'nº a conferir')+': '+reais(b.amount)+(b.pct?' ('+b.pct+')':''));
-   return '<div class="pucq-shared-value"><strong>'+(values.length?'Valor BM da obra (global, sem rateio)':'BM da obra — valor não extraído')+'</strong>'+(values.length?'<small>'+escape(values.join(' · '))+'</small>':'<small>Reanalisar PDFs selecionados ou conferir o documento.</small>')+'<small>Obra: '+escape(g.work)+'</small><small>Processo '+escape(g.ref||'não informado')+' · vínculo por nome/UF pendente de conferência. Não somar por PUC.</small></div>';
+   return '<details class="pucq-bm-candidates"><summary>BM(s) do processo SEI com obra semelhante — vínculo não confirmado ('+unique.size+')</summary>'+
+    [...unique.values()].map(b=>'<div class="pucq-shared-value"><strong>BM '+escape(b.number||'nº a conferir')+
+     ' · '+escape(b.document)+'</strong><small>Medição extraída: '+escape(reais(b.amount))+
+     ' · competência: '+escape(b.period||'a conferir')+'</small><small>Obra: '+escape(g.work)+
+     ' · Processo SEI: '+escape(g.ref||'referência não informada')+'</small>'+
+     '<small>Não atribuir à PUC nem somar valores antes de conferir contrato, objeto e competência.</small></div>').join('')+
+    '</details>';
   }).join('');
  }
  function bmCell(row,groups){
   const direct=(row.bms||[]).length?cell(row.bms,'bm'):'';
-  // As sugestões NÃO são medições formalmente vinculadas.
-  const candidateRows=(row.bmCandidates||[]).slice(0,12);
-  const candidate=candidateRows.length?'<details class="pucq-bm-candidates"><summary><strong>'+
-   candidateRows.length+' BM(s) candidato(s) — vínculo a conferir</strong></summary>'+
-   candidateRows.map(b=>'<div class="pucq-shared-value"><b>BM '+escape(b.number||'nº não identificado')+
-    '</b> · '+escape(b.document)+'<small>Competência: '+escape(b.period||'a conferir')+
-    ' · Valor extraído: '+escape(reais(b.amount))+
-    ' · SEI: '+escape(b.ref||'referência pendente')+'</small><small>'+
-    escape(b.reason)+'</small></div>').join('')+'</details>':'';
-  const missing=!(row.bms||[]).some(b=>b.amount!==null&&b.amount!==undefined);
-  // Prevenir duplicação do mesmo candidato nas seções globais e por obra.
-  const known=new Set(candidateRows.map(b=>b.document+'|'+b.ref));
-  const fallback=missing?sharedBMReference(row,groups.filter(g=>
-    !g.bms.some(b=>known.has(b.document+'|'+(g.ref||''))))):'';
-  if(direct||candidate||fallback)return direct+candidate+fallback;
-  const all=sourceDocs().filter(bmIsSelected);
-  return '<span class="pucq-empty">'+(all.length?
-   'BM não associado a este empreendimento — conferir vínculo no SEI ('+all.length+' BM(s) selecionado(s))':
-   'Nenhum BM selecionado na biblioteca SEI')+'</span>';
+  const candidates=(row.bmCandidates||[]).slice(0,12);
+  const candidateHTML=candidates.length?'<details class="pucq-bm-candidates"><summary><b>'+
+    candidates.length+' BM(s) SEI candidato(s) — confirmar vínculo</b></summary>'+
+    candidates.map(b=>'<div class="pucq-shared-value"><strong>BM '+escape(b.number||'nº a conferir')+
+     ' · '+escape(b.document)+'</strong><small>Valor da medição extraído do BM: '+escape(reais(b.amount))+
+     ' · competência: '+escape(b.period||'a conferir')+'</small><small>SEI: '+escape(b.ref||'referência não informada')+
+     '</small><small>Extração candidata, sem vínculo homologado ao empreendimento.</small></div>').join('')+'</details>':'';
+  const known=new Set(candidates.map(b=>(b.document||'')+'|'+(b.ref||'')));
+  const fallback=sharedBMReference(row,groups.filter(g=>!g.bms.some(b=>
+   known.has((b.document||'')+'|'+(g.ref||'')))));
+  if(direct||candidateHTML||fallback)return direct+candidateHTML+fallback;
+  const available=sourceDocs().filter(bmIsSelected);
+  return '<span class="pucq-empty">'+(available.length?
+   'Sem medição de BM vinculada — '+available.length+' BM(s) no SEI aguardando associação':
+   'Nenhum BM extraído/selecionado do processo SEI')+'</span>';
  }
  function workGroupsHTML(groups){
   if(!groups.length)return '<p class="muted">Nenhum nome de obra recuperado dos BMs selecionados. Reanalisar PDFs ou conferir documentos digitalizados.</p>';
@@ -228,12 +229,12 @@
   const rows=build({balancos:balances(),pucs:projects(),orcamento:siop(),documentos:sourceDocs()}).filter(r=>r.project===projectId);
   const groups=buildWorkGroups({pucs:projects(),documentos:sourceDocs()});
   if(!rows.length)return '<h3>Quadro das quatro fontes por ID_governa e UF</h3><p>Não há vínculo confirmado entre este projeto e uma linha do Balanço. Não atribuir valores de outras obras.</p>';
-  return '<h3>Valores por ID_governa e UF (fontes distintas; sem equivalência automática)</h3><table><thead><tr><th>ID_governa</th><th>UF</th><th>Empreendimento</th><th>Valor BM</th><th>Valor do Balanço</th><th>Valor do SIOP</th><th>Valor Informado pelas DOCAS</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+escape(r.id)+'</td><td>'+escape(r.uf)+'</td><td>'+escape(r.empreendimento)+'</td><td>'+bmCell(r,groups)+(r.workReferences?.length?'<small class="pucq-work-ref">'+r.workReferences.map(g=>escape(g.shared?'Obra conjunta (valor global no quadro consolidado; sem rateio)':'Correspondência textual com BM — vínculo pendente')+' · '+escape(g.work)).join('<br>')+'</small>':'')+'</td><td>'+cell(r.balanco,'balanco')+'</td><td>'+cell(r.siop,'siop')+'</td><td>'+cell(r.docas,'docas')+'</td></tr>').join('')+'</tbody></table>';
+  return '<h3>Valores por ID_governa e UF (fontes distintas; sem equivalência automática)</h3><table><thead><tr><th>ID_governa</th><th>UF</th><th>Empreendimento</th><th>Valor da medição (BM/SEI)</th><th>Valor do Balanço</th><th>Valor do SIOP</th><th>Valor Informado pelas DOCAS</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+escape(r.id)+'</td><td>'+escape(r.uf)+'</td><td>'+escape(r.empreendimento)+'</td><td>'+bmCell(r,groups)+(r.workReferences?.length?'<small class="pucq-work-ref">'+r.workReferences.map(g=>escape(g.shared?'Obra conjunta (valor global no quadro consolidado; sem rateio)':'Correspondência textual com BM — vínculo pendente')+' · '+escape(g.work)).join('<br>')+'</small>':'')+'</td><td>'+cell(r.balanco,'balanco')+'</td><td>'+cell(r.siop,'siop')+'</td><td>'+cell(r.docas,'docas')+'</td></tr>').join('')+'</tbody></table>';
  }
  function init(){
   const main=$('puc3-main');if(!main||$('pucq-panel'))return;
   const panel=document.createElement('section');panel.id='pucq-panel';panel.className='pucq-panel';
-  panel.innerHTML='<h3>Quadro de valores por ID_governa, UF e empreendimento</h3><p class="muted">Fontes independentes. <strong>Valor BM</strong> = medição contratual; <strong>Balanço</strong> = valor global do empreendimento; <strong>SIOP</strong> = empenho da União (vínculo preliminar); <strong>DOCAS</strong> = valor declarado conforme sua natureza. Sem correspondência documental, não há soma nem divergência automática.</p><div class="pucq-controls"><label>UF <select id="pucq-uf"><option value="">Todas as UFs</option></select></label><label>Localizar ID ou empreendimento <input id="pucq-search" type="search" placeholder="ID_governa ou nome"></label></div><p id="pucq-count" class="muted"></p><div class="two-actions"><button id="pucq-refresh" type="button" class="btn secondary">Reanalisar PDFs dos BMs já anexados</button></div><h4>Obras consolidadas, subdivisões e boletins selecionados</h4><div id="pucq-work-groups"></div><div class="scroll pucq-scroll"><table class="data-table pucq-table"><thead><tr><th>ID_governa</th><th>UF</th><th>Nome do empreendimento</th><th>Valor BM</th><th>Valor do Balanço</th><th>Valor do SIOP</th><th>Valor Informado pelas DOCAS</th></tr></thead><tbody id="pucq-table-body"></tbody></table></div>';
+  panel.innerHTML='<h3>Quadro de valores por ID_governa, UF e empreendimento</h3><p class="muted">Fontes independentes. <strong>Valor BM</strong> = exclusivamente valor registrado no Boletim de Medição identificado dentro do processo SEI; <strong>Balanço</strong> = valor global do empreendimento; <strong>SIOP</strong> = empenho da União (vínculo preliminar); <strong>DOCAS</strong> = valor declarado conforme sua natureza. Sem correspondência documental, não há soma nem divergência automática.</p><div class="pucq-controls"><label>UF <select id="pucq-uf"><option value="">Todas as UFs</option></select></label><label>Localizar ID ou empreendimento <input id="pucq-search" type="search" placeholder="ID_governa ou nome"></label></div><p id="pucq-count" class="muted"></p><div class="two-actions"><button id="pucq-refresh" type="button" class="btn secondary">Reanalisar PDFs dos BMs já anexados</button></div><h4>Obras consolidadas, subdivisões e boletins selecionados</h4><div id="pucq-work-groups"></div><div class="scroll pucq-scroll"><table class="data-table pucq-table"><thead><tr><th>ID_governa</th><th>UF</th><th>Nome do empreendimento</th><th>Valor da medição (BM/SEI)</th><th>Valor do Balanço</th><th>Valor do SIOP</th><th>Valor Informado pelas DOCAS</th></tr></thead><tbody id="pucq-table-body"></tbody></table></div>';
   const after=$('puc3-document-list');if(after)after.insertAdjacentElement('afterend',panel);else main.appendChild(panel);
   const css=document.createElement('style');css.textContent='.pucq-work-group{margin:12px 0;border:1px solid #cbdde8;border-radius:10px;overflow:hidden}.pucq-work-group summary{padding:14px 16px;background:#e7f0f7;color:#173b59;cursor:pointer;line-height:1.5}.pucq-work-group summary small{display:block;font-size:12px;color:#526f83}.pucq-work-children{padding:15px}.pucq-work-children li{margin:7px 0}.pucq-work-ref{display:block;color:#245b82;margin-top:6px}.pucq-shared-value{background:#eef5fb;border-left:3px solid #32719a;padding:7px;margin-top:8px}.pucq-shared-value strong{font-size:12px;display:block}.pucq-panel{margin:20px 0;padding:16px 0;border-block:1px solid #dce6ec}.pucq-controls{display:flex;flex-wrap:wrap;gap:15px;margin:14px 0}.pucq-controls label{display:flex;flex-direction:column;gap:5px;font-size:13px}.pucq-controls select,.pucq-controls input{min-width:160px;padding:9px;border:1px solid #cedae4;border-radius:7px}.pucq-table{min-width:1180px!important}.pucq-table th,.pucq-table td{vertical-align:top;min-width:112px}.pucq-table td:nth-child(3){min-width:245px}.pucq-table td small{display:block;color:#607b8c;font-size:11px;margin-top:4px;overflow-wrap:anywhere}.pucq-amount{padding:4px 0 8px;border-bottom:1px dotted #d5e1e8}.pucq-amount strong{white-space:nowrap}.pucq-empty{color:#718493;font-style:italic}.pucq-scroll{overflow-x:auto}';document.head.appendChild(css);
   $('pucq-refresh').onclick=()=>{const action=$('puc-bm-reanalyse');if(action)action.click();else alert('Abra Boletins de medição no Confronto das fontes para reanalisar os PDFs armazenados.');};
