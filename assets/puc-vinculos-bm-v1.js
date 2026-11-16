@@ -54,7 +54,21 @@
   if(files.some(d=>sourceKey(d)===priorFile))select.value=priorFile;
   if(rows.some(r=>rowKey(r)===priorRow))target.value=priorRow;
   const data=read(),confirmed=Object.values(data).filter(v=>files.some(d=>sourceKey(d)===v.docId&&d.name===v.documentName)&&rows.some(r=>rowKey(r)===v.rowKey));
-  const orphan=files.filter(d=>!data[sourceKey(d)]).length;
+  const orphan=files.filter(d=>!confirmed.some(x=>x.docId===sourceKey(d))).length;
+  const suggestions=$('puc-bm-suggestions');
+  if(suggestions){
+   const pending=files.filter(d=>!confirmed.some(x=>x.docId===sourceKey(d)));
+   suggestions.replaceChildren();
+   for(const d of pending){
+    const row=document.createElement('div');row.className='puc-bm-link-item';
+    const desc=document.createElement('span');
+    desc.textContent='BM '+(d.bmNumber||'nº pendente')+' — '+d.name+' · '+(d.workName||'objeto não extraído')+' · SEI '+(d.ref||'não informado');
+    const choose=document.createElement('button');choose.className='btn secondary';choose.type='button';choose.textContent='Examinar e associar';
+    choose.onclick=()=>{select.value=sourceKey(d);selectDoc();$('puc-bm-justification').focus();};
+    row.append(desc,choose);suggestions.append(row);
+   }
+   if(!pending.length)suggestions.textContent='Não há BM pendente entre os documentos atualmente identificados.';
+  }
   const label=$('puc-bm-links-summary');
   if(label)label.textContent=files.length+' BMs identificados · '+confirmed.length+' associações conferidas neste navegador · '+orphan+' sem associação';
   const holder=$('puc-bm-links-list');holder.replaceChildren();
@@ -106,6 +120,17 @@
    write(state);status(count+' associação(ões) importada(s) e vinculada(s) aos documentos presentes.');
   }catch(e){status('Não foi possível importar: '+e.message)}finally{event.target.value=''}
  }
+ function openForRow(key){
+  const section=$('puc-bm-associacoes');
+  if(!section)return false;
+  render();
+  const sel=$('puc-bm-row'),rows=balances();
+  if(rows.some(r=>rowKey(r)===key))sel.value=key;
+  section.scrollIntoView({behavior:'smooth',block:'start'});
+  $('puc-bm-doc')?.focus();
+  status('Empreendimento selecionado. Escolha um BM, confira o original e confirme o vínculo.');
+  return true;
+ }
  const status=t=>{const x=$('puc-bm-link-status');if(x)x.textContent=t};
  function init(){
   const section=$('documentos');if(!section||$('puc-bm-associacoes'))return;
@@ -125,7 +150,8 @@
    '<div class="puc-bm-link-actions"><button class="btn" type="button" id="puc-bm-link-save">Confirmar associação do BM</button>'+
    '<button class="btn secondary" type="button" id="puc-bm-link-export">Exportar associações JSON</button>'+
    '<label class="btn secondary">Importar associações JSON<input type="file" id="puc-bm-link-import" accept=".json,application/json" style="display:none"></label></div>'+
-   '<p role="status" id="puc-bm-link-status"></p><h3>Associações conferidas</h3><div id="puc-bm-links-list"></div>';
+   '<p role="status" id="puc-bm-link-status"></p><h3>Associações conferidas</h3><div id="puc-bm-links-list"></div>'+
+   '<details id="puc-bm-pendentes" open><summary><strong>Boletins do SEI aguardando associação</strong></summary><div id="puc-bm-suggestions"></div></details>';
   const anchor=$('pucq-panel');
   if(anchor)anchor.insertAdjacentElement('beforebegin',panel);else section.append(panel);
   const css=document.createElement('style');
@@ -147,6 +173,6 @@
   w.addEventListener('puc-bm-vinculos-atualizados',render);
   render();
  }
- w.PUCVinculosBM={all,get,match,save,remove,rowKey,docs,balances,render};
+ w.PUCVinculosBM={all,get,match,save,remove,rowKey,docs,balances,render,openForRow};
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })(window);
