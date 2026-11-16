@@ -12,7 +12,7 @@
    else if((c==='\n'||c==='\r')&&!inside){if(c==='\r'&&source[i+1]==='\n')i++;r.push(field);if(r.some(x=>x.trim()))a.push(r);r=[];field=''}else field+=c;
   }r.push(field);if(r.some(x=>x.trim()))a.push(r);return a;
  }
- const normalHeaders={'ID GOVERNA':'id','NOME DO EMPREENDIMENTO':'empreendimento','UF':'uf','MUNICIPIOS':'municipios','EXECUTOR':'executor','VALOR INVESTIMENTO':'valor_global','INICIO EMPREENDIMENTO DD MM AAAA':'inicio','PREVISAO CONCLUSAO DO EMPREENDIMENTO DD MM AAAA':'termino','EXECUCAO FISICA':'execucao_fisica','DATA DE REFERENCIA':'data_referencia'};
+ const normalHeaders={'ID GOVERNA':'id','NOME DO EMPREENDIMENTO':'empreendimento','UF':'uf','MUNICIPIOS':'municipios','EXECUTOR':'executor','VALOR INVESTIMENTO':'valor_global','VALOR GLOBAL':'valor_global','VALOR GLOBAL DO INVESTIMENTO':'valor_global','VALOR INVESTIDO':'valor_investido','VALOR INVERTIDO':'valor_investido','TOTAL INVESTIDO':'valor_investido','VALOR INVESTIDO ACUMULADO':'valor_investido','VALOR PAGO':'valor_pago','TOTAL PAGO':'valor_pago','PAGAMENTO ACUMULADO':'valor_pago','VALOR PAGO ACUMULADO':'valor_pago','INICIO EMPREENDIMENTO DD MM AAAA':'inicio','PREVISAO CONCLUSAO DO EMPREENDIMENTO DD MM AAAA':'termino','EXECUCAO FISICA':'execucao_fisica','EXECUCAO FINANCEIRA':'execucao_financeira','EXECUCAO FINANCEIRA PERCENTUAL':'execucao_financeira','PERCENTUAL DE EXECUCAO FINANCEIRA':'execucao_financeira','DATA DE REFERENCIA':'data_referencia'};
  function balancoRows(){
   const files=window.PUCDocLibrary?.list?.().filter(d=>d.origin==='BALANCO')||[],rows=[];
   for(const f of files){const all=parseDelimited(f.text);if(!all.length)continue;let idx=all.findIndex(row=>row.some(x=>clean(x)==='NOME DO EMPREENDIMENTO')&&row.some(x=>clean(x)==='UF'));if(idx<0)continue;
