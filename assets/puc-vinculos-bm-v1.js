@@ -96,7 +96,8 @@
   $('puc-bm-value-origin').textContent=c!==null?'Valor candidato extraído do BM; confira-o no documento original.':'Valor não extraído automaticamente; transcreva-o somente após examinar o BM.';
   $('puc-bm-justification').value=v?.justification||'';
   $('puc-bm-confirmed').checked=false;
-  $('puc-bm-row').value=v?.rowKey||'';
+  // Preservar empreendimento escolhido no quadro ao selecionar um BM ainda não associado.
+  $('puc-bm-row').value=v?.rowKey||$('puc-bm-row').value||'';
  }
  function download(){
   const obj={schema:'BI_PUC_VINCULOS_BM_SEI_V1',exportedAt:new Date().toISOString(),items:read()};
