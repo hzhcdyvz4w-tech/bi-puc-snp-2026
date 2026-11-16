@@ -82,9 +82,81 @@
    line.append(txt,btn);holder.append(line);
   }
   if(!confirmed.length)holder.textContent='Nenhum BM associado neste navegador. Os documentos SEI continuam disponíveis para seleção.';
+  renderExtractedValues();
   $('puc-bm-link-save').disabled=!files.length||!rows.length;
  }
- function selectDoc(){
+ function renderExtractedValues(){
+  const host=$('puc-bm-extracoes');
+  if(!host)return;
+  const files=docs(),current=read(),list=$('puc-bm-extracoes-list');
+  if(!list)return;
+  list.replaceChildren();
+  let unique=0,ambiguous=0,unavailable=0;
+  for(const d of files){
+   const candidateEntries=(d.candidates||[]).filter(c=>c.type==='Valor da Medição (BM)');
+   const values=candidateEntries.flatMap(c=>Array.isArray(c.values)?c.values:[]).filter(v=>v!==null&&v!==undefined&&String(v).trim()!=='');
+   const amount=values.length===1?money(values[0]):null;
+   if(amount!==null&&values.length===1)unique++;
+   else if(values.length>1)ambiguous++;
+   else unavailable++;
+   const link=current[sourceKey(d)];
+   const row=list.insertRow(),cells=[
+    d.bmNumber||'Não identificado',d.name||'Arquivo não identificado',
+    d.bmPeriod||'Não informada',
+    (values.length===1&&amount!==null)?amount.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}):
+      values.length>1?'Múltiplos candidatos ('+values.length+') — conferir':'Não extraído',
+    d.ref||'Referência SEI não informada',
+    d.workName||'Objeto não extraído',
+    link?.status==='conferido'?'Conferido — '+(link.rowKey||''):'Aguardando associação'
+   ];
+   for(const value of cells){const td=row.insertCell();td.textContent=String(value);td.style.overflowWrap='anywhere';}
+  }
+  const summary=$('puc-bm-extracoes-status');
+  if(summary)summary.textContent=files.length+' BM(s) identificados no navegador: '+unique+
+    ' com valor único candidato extraído; '+ambiguous+
+    ' com valores ambíguos; '+unavailable+' sem valor extraído. Nenhum valor é homologado automaticamente.';
+ }
+ function exportAuditPackage(){
+  const files=docs();
+  if(!files.length){status('Não há BMs identificados para exportar. Importe o processo SEI na aba Documentos.');return false}
+  const rows=balances();
+  let raw={};try{raw=JSON.parse($('embedded-data')?.textContent||'{}')}catch{}
+  // Download LOCAL: nenhum dado é transmitido para GitHub ou Supabase.
+  const maxText=350000;
+  const pacote={
+   schema:'BI_PUC_AUDITORIA_BMS_SEI_V1',generatedAt:new Date().toISOString(),
+   provenance:'Biblioteca IndexedDB local BI_PUC_DOCUMENTOS_LOCAL; não homologado',
+   totalBMs:files.length,
+   instructions:'Documento destinado à análise da associação BM x obra do Balanço. Valores candidatos exigem conferência do PDF original.',
+   bmDocuments:files.map(d=>({
+    id:d.id,name:d.name,hash:d.hash||'',container:d.container||'',
+    origin:d.origin,project:d.project||'',projects:d.projects||[],
+    bmStatus:d.bmStatus,bmNumber:d.bmNumber,bmPeriod:d.bmPeriod,
+    workName:d.workName,ref:d.ref,quality:d.quality,
+    candidates:d.candidates||[],findings:d.findings||[],
+    text:String(d.text||'').slice(0,maxText),
+    textTruncated:String(d.text||'').length>maxText
+   })),
+   balanceRows:rows.map(r=>({
+    id:r.id,uf:r.uf,empreendimento:r.empreendimento,
+    valor_global:r.valor_global,inicio:r.inicio,termino:r.termino,
+    arquivo:r.arquivo,documento_id:r.documento_id,data_referencia:r.data_referencia
+   })),
+   projectRegistry:(raw.projetos||[]).map(p=>({
+    id:p.id,id_governa:p.id_governa,uf:p.uf,empreendimento:p.empreendimento,
+    empresa:p.empresa,acao:p.acao,po:p.po
+   })),
+   confirmedLinks:read()
+  };
+  const blob=new Blob([JSON.stringify(pacote,null,2)],{type:'application/json;charset=utf-8'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='PUC_15_BMS_SEI_PACOTE_CONFERENCIA_'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.append(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+  status('Pacote local com '+files.length+' BMs, valores extraídos e obras do Balanço exportado. Confira o arquivo antes de compartilhá-lo; pode conter dados do processo SEI.');
+  return true;
+ }
+  function selectDoc(){
   const d=docs().find(x=>sourceKey(x)===$('puc-bm-doc').value);if(!d)return;
   const v=get(d);
   $('puc-bm-ref').value=v?.ref||d.ref||'';
@@ -139,6 +211,12 @@
   panel.innerHTML='<h2>Vincular BMs dos processos SEI aos empreendimentos</h2>'+
    '<p class="muted">Selecione o boletim encontrado no SEI, identifique a obra/ID Governa do Balanço e confirme os dados com o documento original. Nenhum vínculo é criado somente por semelhança de nome. As associações ficam neste navegador e podem ser exportadas.</p>'+
    '<p id="puc-bm-links-summary" class="statusline"></p>'+
+   '<section class="puc-bm-extracoes" style="margin:12px 0 22px"><h3>Valores identificados diretamente nos BMs do SEI</h3>'+
+   '<p id="puc-bm-extracoes-status" class="statusline"></p>'+
+   '<p class="muted">A tabela mostra exclusivamente valores candidatos extraídos dos BMs locais, inclusive os ainda sem associação. Não inclui valores do Balanço ou do SIOP.</p>'+
+   '<div style="overflow-x:auto"><table class="data-table" style="min-width:900px;width:100%"><thead><tr><th>BM</th><th>Arquivo</th><th>Competência</th><th>Valor da medição (BM/SEI)</th><th>Processo SEI</th><th>Obra identificada</th><th>Vínculo</th></tr></thead><tbody id="puc-bm-extracoes-list"></tbody></table></div>'+
+   '<button class="btn" type="button" id="puc-bm-export-pacote">Exportar pacote de conferência dos BMs</button>'+
+   '<p class="muted">O download contém os textos extraídos dos BMs, candidatos de valores, os registros do Balanço e os vínculos existentes. Arquivo local: nada é enviado automaticamente a terceiros.</p></section>'+
    '<div class="puc-bm-link-fields"><label>Documento BM / processo SEI<select id="puc-bm-doc"></select></label>'+
    '<label>Empreendimento do Balanço<select id="puc-bm-row"></select></label>'+
    '<label>Número do BM<input id="puc-bm-number" type="text" maxlength="80"></label>'+
@@ -168,12 +246,13 @@
     status('Associação conferida e registrada neste navegador. O valor será exibido no quadro BM/SEI.');render();
    }catch(e){status(e.message)}
   };
+  $('puc-bm-export-pacote').onclick=exportAuditPackage;
   $('puc-bm-link-export').onclick=download;
   $('puc-bm-link-import').onchange=upload;
   document.addEventListener('puc-documents-updated',render);
   w.addEventListener('puc-bm-vinculos-atualizados',render);
   render();
  }
- w.PUCVinculosBM={all,get,match,save,remove,rowKey,docs,balances,render,openForRow};
+ w.PUCVinculosBM={all,get,match,save,remove,rowKey,docs,balances,render,openForRow,exportAuditPackage,renderExtractedValues};
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })(window);
