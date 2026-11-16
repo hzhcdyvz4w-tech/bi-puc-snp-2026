@@ -110,9 +110,10 @@
   const idGov=String(p.id_governa||'').trim();
   // ID governa explícito ou nome exato + Companhia + UF; jamais semelhança vaga.
   return rows.filter(r=>{
-   const co=norm(r.companhia_nome||r.companhia_codigo),company=norm(p.empresa);
-   const companyOk=co===company||co.includes(company)||company.includes(co);
-   const ufOk=norm(r.uf)===norm(p.uf);
+   const co=norm(r.companhia_nome),codigo=norm(r.companhia_codigo),company=norm(p.empresa);
+   // Preferir o código institucional. Nomes completos são admissíveis apenas com equivalência inequívoca.
+   const companyOk=!!company&&(codigo===company||co===company||(codigo&&company===codigo));
+   const ufOk=!!norm(p.uf)&&norm(r.uf)===norm(p.uf);
    const explicit=idGov&&String(r.id_gov_pac||'').trim()===idGov;
    const exact=norm(r.empreendimento)===norm(p.empreendimento);
    return companyOk&&ufOk&&(explicit||exact);
@@ -133,9 +134,10 @@
  ['analise','Análise do gestor']
  ];
  function docasHTML(id,p){
-  const all=Array.isArray(window.PUC_DOCAS_DECLARACOES_EXTERNAS)?
-   window.PUC_DOCAS_DECLARACOES_EXTERNAS:[],rows=docasMatches(id,p);
-  const authorized=$('pdc-admin')&&!$('pdc-admin').hidden;
+  const authorized=!!($('pdc-admin')&&!$('pdc-admin').hidden);
+  const all=authorized&&Array.isArray(window.PUC_DOCAS_DECLARACOES_EXTERNAS)?
+   window.PUC_DOCAS_DECLARACOES_EXTERNAS:[];
+  const rows=authorized?docasMatches(id,p):[];
   const warning=!authorized?
    '<p class="r-alert">A Central DOCAS não está autenticada nesta sessão. Os formulários recebidos no Supabase não podem ser consultados neste relatório. Acesse a Central com seu token gerencial.</p>':
    (!rows.length?'<p class="r-alert">Não foi encontrada declaração com vínculo inequívoco à PUC nesta sessão. Existem '+all.length+' registro(s) acessíveis à Central, mas não serão atribuídos por similaridade textual.</p>':'');
