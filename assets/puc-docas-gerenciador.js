@@ -43,6 +43,7 @@
   window.dispatchEvent(new CustomEvent('puc:docas-externas-atualizadas',{detail:{quantidade:0}}))
  }
  function signOut(note){
+  window.PUCBMReconciliado?.clearPrivate?.();
   token='';clean();$('pdc-admin').hidden=true;$('pdc-token-login').hidden=false;
   $('pdc-token-input').value='';$('pdc-role').textContent='Acesso por código';
   msg(note||'Acesso gerencial encerrado.')
@@ -177,6 +178,8 @@
   tab(window.PUC_DOCAS_TAB_DESEJADA==='records'?'receipts':'invites');
   window.PUC_DOCAS_TAB_DESEJADA=null;
   await load();
+  // O token fica apenas na memória da Central; não é publicado nem salvo.
+  await window.PUCBMReconciliado?.loadPrivate?.(token);
  }
  $('pdc-token-login').addEventListener('submit',async ev=>{
   ev.preventDefault();
@@ -210,6 +213,7 @@
    const data=await request('rotacionar');
    if(!/^[a-f0-9]{64}$/.test(data.codigo||''))throw Error('Código novo não foi recebido.');
    token=data.codigo;
+   await window.PUCBMReconciliado?.loadPrivate?.(token);
    $('pdc-rotate-code').value=token;
    $('pdc-rotate-result').hidden=false;
    msg('Novo código da Central emitido. Copie e guarde; o anterior foi revogado.');
