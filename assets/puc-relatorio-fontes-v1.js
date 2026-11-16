@@ -73,10 +73,21 @@
   const linked=linkedDocs(id,'BALANCO'),ficha=readFicha(id);
   // Correspondências textuais são apenas candidatas, nunca tratadas como vínculos confirmados.
   const raw=window.PUCCorrelacao?.balancoRows?.()||[];
-  const possible=raw.filter(r=>
-   (String(p.id_governa||'')&&String(p.id_governa)===String(r.id||'')&&String(p.uf||'')===String(r.uf||''))||
-   window.PUCCorrelacao?.projectSuggestions?.(r)?.some(x=>x.id===id));
-  return {linked,ficha:ficha.balance,possible};
+  // Não multiplicar a mesma sugestão ao percorrer PDFs/CSV ou versões do mesmo Balanço.
+  // Correspondência textual é candidata, mesmo quando há ID_governa; não gera soma financeira.
+  const exactId=String(p.id_governa||'').trim(), uf=norm(p.uf);
+  const possible=raw.filter(r=>{
+   const sameUF=!!uf&&norm(r.uf)===uf;
+   if(!sameUF)return false;
+   const idMatch=!!exactId&&String(r.id||'').trim()===exactId;
+   const titleMatch=norm(r.empreendimento)===norm(p.empreendimento);
+   return idMatch||titleMatch||window.PUCCorrelacao?.projectSuggestions?.(r)?.some(x=>x.id===id);
+  });
+  const deduped=[...new Map(possible.map(r=>[
+   [String(r.id||''),norm(r.uf),norm(r.empreendimento),String(r.arquivo||'')].join('|'),r
+  ])).values()];
+  deduped.sort((a,b)=>String(a.empreendimento||'').localeCompare(String(b.empreendimento||''),'pt-BR'));
+  return {linked,ficha:ficha.balance,possible:deduped};
  }
  function balanceHTML(id,p){
   const b=balanceData(id,p);
@@ -98,17 +109,21 @@
   const docs=table(['Arquivo do Balanço vinculado','Referência','Situação de leitura'],b.linked.map(d=>[
    val(d.name),val(d.ref),val(d.quality)+' · '+val(d.category)
   ]),'Nenhum arquivo do Balanço com vínculo explícito à PUC.');
-  const possible= b.possible.length?
-   '<h4>Correspondências textuais a confirmar (não são vínculos financeiros comprovados)</h4>'+
-   table(['Registro candidato','Campos extraídos do Balanço','Fonte'],b.possible.map(r=>[
-    val(r.id)+' · '+val(r.empreendimento)+' · '+val(r.uf),
-    Object.entries(r).filter(([k,v])=>!isBlank(v)&&k!=='documento_id')
-      .map(([k,v])=>'<div><b>'+val(k.replace(/_/g,' '))+':</b> '+val(v)+'</div>').join(''),
-    val(r.arquivo)+' · '+val(r.referencia)
-   ])):
-   '<p class="muted">Nenhuma correspondência adicional de UF/objeto identificada automaticamente.</p>';
+  const balMoney=x=>{const n=window.PUCQuadroValores?.parseMoney?.(x);
+    return n===null||!Number.isFinite(n)?'—':n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});};
+  const candidates=b.possible.length?
+   '<details class="r-candidates"><summary><b>Correspondências preliminares do Balanço ('+b.possible.length+')</b> — expandir para conferir, sem atribuição automática de valores</summary>'+
+   '<p class="muted">Os registros abaixo são sugestões de identidade da obra. O Balanço pode conter diversas frentes, etapas e contratos na mesma UF.</p>'+
+   table(['ID Governa','UF','Empreendimento','Valor global','Físico','Início','Término','Documento'],b.possible.map(r=>[
+    val(r.id||'—'),val(r.uf),val(r.empreendimento),balMoney(r.valor_global),
+    !isBlank(r.execucao_fisica)?val(r.execucao_fisica)+'%':'—',
+    val(window.PUCCorrelacao?.dateString?.(r.inicio)||r.inicio),
+    val(window.PUCCorrelacao?.dateString?.(r.termino)||r.termino),
+    val(r.arquivo)+'<small>'+val(r.referencia)+'</small>'
+   ]))+'</details>':
+   '<p class="muted">Nenhuma correspondência preliminar de objeto/UF identificada no Balanço.</p>';
   return {html:'<h4>Dados estruturados vinculados à ficha</h4>'+structured+
-    '<h4>Documentos do Balanço com vínculo explícito</h4>'+docs+possible,
+    '<h4>Documentos do Balanço com vínculo explícito</h4>'+docs+candidates,
     count:b.linked.length,records:b.ficha?keys.filter(([k])=>!isBlank(b.ficha[k])).length:0,
     issues:!b.ficha?['Sem Balanço conferido na ficha do empreendimento.']:[],balance:b.ficha};
  }
@@ -142,7 +157,9 @@
  ['analise','Análise do gestor'],['responsavel_preenchimento','Responsável pelo preenchimento']
  ];
  function docasHTML(id,p){
-  const authorized=!!($('pdc-admin')&&!$('pdc-admin').hidden);
+  // Gestor autenticado via token (fluxo vigente); um elemento antigo pdc-admin
+  // não é prova nem requisito de sessão. O carregamento protegido define as declarações.
+  const authorized=!!(window.PUC_DOCAS_GESTAO_AUTORIZADA===true);
   const all=authorized&&Array.isArray(window.PUC_DOCAS_DECLARACOES_EXTERNAS)?
    window.PUC_DOCAS_DECLARACOES_EXTERNAS:[];
   const rows=authorized?docasMatches(id,p):[];
