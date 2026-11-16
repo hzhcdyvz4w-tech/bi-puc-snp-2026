@@ -91,13 +91,20 @@
    const mapping=matchProject(row,pucs),project=mapping.project,identity=String(row.id||'').trim(),uf=states(row.uf);
    // Vinculação comprovada via ID interno da carteira ou identificação explícita
    // na referência documental; jamais por mera UF.
-   const relatedBM=documentos.filter(d=>d.origin==='SEI'&&bmIsSelected(d)&&project&&
+   const bmManager=w.PUCVinculosBM;
+   // Associação validada pelo gestor ao ID Governa/UF/objeto do Balanço.
+   // Vínculos exclusivamente com o ID da PUC podem aparecer como localizados,
+   // mas não se tornam medição conferida sem a associação ao empreendimento.
+   const relatedBM=documentos.filter(d=>d.origin==='SEI'&&bmIsSelected(d)&&
+    bmManager?.match?.(d,row));
+   const linkedByPUC=documentos.filter(d=>d.origin==='SEI'&&bmIsSelected(d)&&project&&
     (String(d.project||'')===String(project.id)||
-     (Array.isArray(d.projects)&&d.projects.map(String).includes(String(project.id))) ));
+     (Array.isArray(d.projects)&&d.projects.map(String).includes(String(project.id))) &&
+    !relatedBM.includes(d));
    // Quando não há vínculo formal, reter apenas CANDIDATOS identificáveis pela
    // obra; não atribuir valores ao empreendimento nem utilizá-los na Curva S.
    const candidates=documentos.filter(d=>{
-    if(d.origin!=='SEI'||!bmIsSelected(d)||relatedBM.includes(d))return false;
+    if(d.origin!=='SEI'||!bmIsSelected(d)||relatedBM.includes(d)||bmManager?.get?.(d))return false;
     const work=String(d.workName||d.objectName||d.empreendimento||'').trim();
     if(!work)return false;
     const synthetic={id:'BALANCO-'+identity,uf:uf[0]||'',empreendimento:row.empreendimento};
@@ -113,9 +120,15 @@
     let cumulative=getCandidate(d,'Valor Acumulado (BM)');
     let pct=getCandidate(d,'Valor da Medição (%) BM');
     let pctAcc=getCandidate(d,'Valor Acumulado (%) BM');
-    const verified=(d.findings||[]).filter(f=>f.verified&&f.indicator==='medicao_bm'&&f.project===project.id);
-    if(amount===null&&verified.length===1)amount=verified[0].value;
-    return {document:d.name,bm:d.bmNumber||'',amount,acc:cumulative,pct,pctAcc,quality:d.quality||'',ref:d.ref||'',verified:verified.length>0};
+    const link=bmManager?.get?.(d);
+    const verified=project?(d.findings||[]).filter(f=>f.verified&&f.indicator==='medicao_bm'&&f.project===project.id):[];
+    // Valor efetivamente transcrito/conferido do BM prevalece sobre a extração candidata.
+    // Se o campo estiver vazio, exibe a extração candidata, sinalizando necessidade de conferir valor.
+    if(link&&link.value!==null&&link.value!==undefined)amount=link.value;
+    else if(amount===null&&verified.length===1)amount=verified[0].value;
+    return {document:d.name,bm:link?.bmNumber||d.bmNumber||'',amount,acc:cumulative,pct,pctAcc,
+      quality:d.quality||'',ref:link?.ref||d.ref||'',verified:link?.value!==null&&link?.value!==undefined,
+      competence:link?.competence||d.bmPeriod||'',reviewedAt:link?.reviewedAt||'',status:'Conferido pelo operador — vínculo ao Balanço'};
    });
    const ss=project?orcamento.filter(s=>s.id_puc===project.id):[];
    const docas=documentos.filter(d=>{
@@ -137,7 +150,7 @@
    const references=project?buildWorkGroups({pucs,documentos}).filter(g=>g.projects.some(p=>p.id===project.id)).map(g=>({work:g.work,shared:g.projects.length>1})):[];
    return {id:identity,uf:row.uf,empreendimento:row.empreendimento,project:project?.id||'',link:mapping.type,workReferences:references,
     balanco:{value:row.valor_global,nature:'Valor do investimento/empreendimento no Balanço',file:row.arquivo||'',competencia:row.data_referencia||'',hasValue:monetary(row.valor_global)!==null},
-    bms,bmCandidates:candidates,siop:ss.map(s=>({value:s.empenhado,nature:'Empenhado pela União · ação '+(s.acao||'')+'/PO '+(s.po||''),file:s.arquivo_fonte||'',cutoff:s.data_referencia||'',warning:'Associação SIOP temática, não homologada'})),docas};
+    bms,bmCandidates:candidates,linkedByPUC:linkedByPUC.map(d=>({name:d.name,ref:d.ref,number:d.bmNumber||'',id:d.id})),siop:ss.map(s=>({value:s.empenhado,nature:'Empenhado pela União · ação '+(s.acao||'')+'/PO '+(s.po||''),file:s.arquivo_fonte||'',cutoff:s.data_referencia||'',warning:'Associação SIOP temática, não homologada'})),docas};
   });
   all.sort((a,b)=>states(a.uf)[0]?.localeCompare(states(b.uf)[0]||'')||a.empreendimento.localeCompare(b.empreendimento,'pt-BR'));
   return all;
@@ -150,7 +163,7 @@
   if(!items.length)return '<span class="pucq-empty">Sem dado vinculado</span>';
   return items.slice(0,8).map(item=>{
    const value=type==='bm'?item.amount:item.value;
-   let sub=type==='bm'?'BM '+(item.bm||'nº pendente')+' · '+item.document:item.nature;
+   let sub=type==='bm'?'BM '+(item.bm||'nº pendente')+' · '+item.document+' · '+(item.competence||'competência pendente')+' · '+(item.ref||'SEI não informado'):item.nature;
    let extra=type==='bm'?(item.pct?'Medição '+item.pct:'')+(item.acc!==null&&item.acc!==undefined?' · Acumulado '+reais(item.acc):'')+(item.pctAcc?' ('+item.pctAcc+')':''):'';
    return '<div class="pucq-amount"><strong>'+escape(reais(value))+'</strong><small>'+escape(sub)+'</small>'+(extra?'<small>'+escape(extra)+'</small>':'')+(type==='bm'&&!item.verified?'<small>'+(value===null?'Sem valor monetário extraído · reanalisar PDF ou conferir manualmente':'Candidato não conferido')+'</small>':'')+(item.warning?'<small>'+escape(item.warning)+'</small>':'')+(type==='bm'&&/OCR|SEM TEXTO|NÃO EXTRAÍDO/i.test(item.quality)?'<small>PDF possivelmente digitalizado: OCR/conferência necessária</small>':'')+'</div>';
   }).join('')+(items.length>8?'<small>Mais '+(items.length-8)+' registro(s); não somados</small>':'');
@@ -182,6 +195,10 @@
  function bmCell(row,groups){
   const direct=(row.bms||[]).length?cell(row.bms,'bm'):'';
   const candidates=(row.bmCandidates||[]).slice(0,12);
+  const prelinked=(row.linkedByPUC||[]).length?
+    '<details class="pucq-bm-candidates"><summary>'+row.linkedByPUC.length+' BM(s) associados à PUC, aguardando confirmação com a obra do Balanço</summary>'+
+    row.linkedByPUC.map(b=>'<p>BM '+escape(b.number||'não identificado')+' · '+escape(b.name)+' · SEI '+escape(b.ref||'não informado')+'</p>').join('')+
+    '</details>':'';
   const candidateHTML=candidates.length?'<details class="pucq-bm-candidates"><summary><b>'+
     candidates.length+' BM(s) SEI candidato(s) — confirmar vínculo</b></summary>'+
     candidates.map(b=>'<div class="pucq-shared-value"><strong>BM '+escape(b.number||'nº a conferir')+
@@ -191,7 +208,7 @@
   const known=new Set(candidates.map(b=>(b.document||'')+'|'+(b.ref||'')));
   const fallback=sharedBMReference(row,groups.filter(g=>!g.bms.some(b=>
    known.has((b.document||'')+'|'+(g.ref||'')))));
-  if(direct||candidateHTML||fallback)return direct+candidateHTML+fallback;
+  if(direct||prelinked||candidateHTML||fallback)return direct+prelinked+candidateHTML+fallback;
   const available=sourceDocs().filter(bmIsSelected);
   return '<span class="pucq-empty">'+(available.length?
    'Sem medição de BM vinculada — '+available.length+' BM(s) no SEI aguardando associação':
@@ -223,7 +240,7 @@
   }
   const visible=rows.filter(r=>(!currentUF||states(r.uf).includes(currentUF))&&(!currentSearch||(r.id+' '+r.empreendimento+' '+r.uf).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().includes(currentSearch)));
   place.innerHTML=visible.length?visible.map(r=>'<tr><td><strong>'+escape(r.id||'Não informado')+'</strong></td><td>'+escape(r.uf)+'</td><td><strong>'+escape(r.empreendimento)+'</strong><small>'+escape(r.project||'PUC não vinculada')+' · '+escape(r.link)+'</small></td><td>'+bmCell(r,groups)+'</td><td>'+cell(r.balanco,'balanco')+'</td><td>'+cell(r.siop,'siop')+'</td><td>'+cell(r.docas,'docas')+'</td></tr>').join(''):'<tr><td colspan="7">Nenhum empreendimento identificado para os filtros. Importe o Balanço em XLSX/CSV e confira a UF e o ID_governa.</td></tr>';
-  if(counter){const orphan=sourceDocs().filter(d=>bmIsSelected(d)&&!d.project).length;counter.textContent=visible.length+' de '+rows.length+' empreendimento(s) · '+orphan+' BM(s) selecionado(s) sem PUC formalmente vinculada. BMs candidatos permanecem separados e não entram em somas ou Curva S.'}
+  if(counter){const orphan=sourceDocs().filter(d=>bmIsSelected(d)&&!w.PUCVinculosBM?.get?.(d)).length;counter.textContent=visible.length+' de '+rows.length+' empreendimento(s) · '+orphan+' BM(s) selecionado(s) sem PUC formalmente vinculada. BMs candidatos permanecem separados e não entram em somas ou Curva S.'}
  }
  function reportSection(projectId){
   const rows=build({balancos:balances(),pucs:projects(),orcamento:siop(),documentos:sourceDocs()}).filter(r=>r.project===projectId);
@@ -242,6 +259,7 @@
   $('pucq-search').oninput=e=>{currentSearch=e.target.value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();render()};
   document.addEventListener('puc-documents-updated',render);
   document.addEventListener('puc-sei-selection-updated',render);
+  w.addEventListener('puc-bm-vinculos-atualizados',render);
   render();
  }
  w.PUCQuadroValores={build,buildWorkGroups,suggestWorkProjects,parseMoney:monetary,render,reportSection};
