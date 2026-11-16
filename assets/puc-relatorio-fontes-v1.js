@@ -262,7 +262,7 @@
      'Código da companhia + UF + ID ou objeto + protocolo + validação SNP',
      panels.find(x=>x.code==='DOCAS')?.count||0,
      'Declarações recebidas não constituem validação da SNP.']
-  ].filter(x=>selected.includes(x[0].split(' / ')[0])||x[0]==='SEI / BMs'&&selected.includes('SEI'));
+  ].filter(x=>selected.includes(({'SEI / BMs':'SEI','Balanço':'BALANCO','SIOP':'SIOP','DOCAS':'DOCAS'})[x[0]]));
   const trace=section(++n,'Matriz de rastreabilidade — Documentos × Relatório Analítico',
    '<p>O número de registros é indicativo e não representa prova de equivalência entre fontes. A matriz identifica o requisito de vínculo antes de qualquer comparação.</p>'+
    table(['Fonte','Natureza do dado','Chaves e provas necessárias','Itens na seleção','Ressalva'],traceRows.map(x=>[
