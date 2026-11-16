@@ -365,12 +365,34 @@
    '<p><b>Conferência/homologação SNP:</b> PENDENTE. <b>Uso:</b> assessoramento e revisão documental.</p>');
   // Relatório executivo: cinco blocos. A biblioteca Documentos preserva o exame
   // pormenorizado dos BMs, valores, cronogramas e confrontos técnicos.
+  // Exibir associações registradas de BM do SEI no Balanço da PUC selecionada.
+  // A identidade deve ser por ID Governa/UF ou nome exato/UF; sem similaridade livre.
+  const manager=window.PUCVinculosBM;
+  const candidatesBalance=manager?.balances?.()||[];
+  const currentProjectsBalance=candidatesBalance.filter(b=>
+    norm(b.uf)===norm(p.uf)&&
+    ((p.id_governa&&String(b.id||'').trim()===String(p.id_governa).trim())||
+     norm(b.empreendimento)===norm(p.empreendimento)));
+  const matchingBM=(manager?.docs?.()||[]).flatMap(d=>{
+    const link=manager.get(d);
+    if(!link||!currentProjectsBalance.some(b=>manager.match(d,b)))return [];
+    return [{doc:d,link}];
+  });
+  const linkedBMReport=matchingBM.length?
+   '<h4>Boletins de Medição associados pelo operador ao Balanço</h4>'+
+   table(['BM','Competência','Valor medido no período','SEI e documento','Situação'],matchingBM.map(({doc,link})=>[
+     val(link.bmNumber),val(link.competence),
+     link.value===null?'Não extraído / a conferir':money(link.value),
+     val(link.ref)+' · '+val(doc.name),
+     'Associação conferida pelo operador; valor e enquadramento sujeitos à validação SNP'
+   ])):'<p class="muted">Nenhum BM SEI associado a esta obra do Balanço por conferência do operador nesta sessão.</p>';
   const evidence=section(2,'Evidências e fontes documentais',
    '<p><b>Fontes consideradas:</b> '+esc(sourceTitle)+'. Os quantitativos são indicativos, não comprovam equivalência ou homologação.</p>'+
    table(['Fonte','Natureza','Itens','Situação'],traceRows.map(x=>[
     val(x[0]),val(x[1]),val(x[3]),val(x[4])
    ]),'Não há documentos relacionados nesta seleção.')+
-   '<p class="muted">Para examinar cada BM, documento, medição, cronograma ou vínculo preliminar, consulte a aba Documentos.</p>');
+   linkedBMReport+
+   '<p class="muted">Para examinar e alterar as associações dos BMs, acesse Documentos → Vincular BMs dos processos SEI.</p>');
   const legalBrief=section(4,'Fundamentação normativa',
    '<p><b>Aplicabilidade a conferir:</b> contrato, entidade contratante, data da contratação, objeto e regime jurídico. '+
    esc(normRefs.n14133scope)+'.</p>'+
@@ -409,7 +431,7 @@
    window.showCritical();
   }
  }
- for(const name of ['puc-documents-updated','puc-ficha-bms-atualizados','puc:docas-externas-atualizadas']){
+ for(const name of ['puc-documents-updated','puc-ficha-bms-atualizados','puc:docas-externas-atualizadas','puc-bm-vinculos-atualizados']){
   window.addEventListener(name,liveRefresh);
  }
  window.PUCRelatorioFontes={render,build,exportFindings,docasMatches,linkedDocs};
