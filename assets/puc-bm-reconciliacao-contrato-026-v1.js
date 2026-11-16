@@ -127,11 +127,11 @@
    '<p>SEI '+html(d.baseSEI)+' e '+html(d.reajSEI)+
    '; '+html(d.bm03Check)+'. Associação técnica por contrato, rubrica e objeto; comprovação administrativa pendente.</p>'+breakdown(x)+'</div>';
  }
- async function loadPrivate(){
+ async function loadPrivate(override){
   const cfg=w.PUC_DOCAS_CONFIG||{},url=String(cfg.supabaseUrl||'').replace(/\/$/,'');
   const api=cfg.publishableKey||'';
-  let token='';
-  try{token=sessionStorage.getItem('puc_docas_token_gestao_v1')||''}catch{}
+  let token=typeof override==='string'?override:'';
+  if(!token)try{token=sessionStorage.getItem('puc_docas_token_gestao_v1')||''}catch{}
   if(!token){try{token=new URLSearchParams(location.hash.slice(1)).get('gestor')||''}catch{}}
   if(!url||!api||!/^[a-f0-9]{64}$/.test(token))return;
   try{
@@ -166,7 +166,8 @@
    if(!((w.PUCDocLibrary?.list?.()||[]).some(contractDoc)))w.dispatchEvent(new Event('puc-documents-updated'));
   }catch(e){/* A fonte local continua funcional, mesmo sem credencial gerencial. */}
  }
- w.PUCBMReconciliado={compute,resolve,forProject,cell,report,loadPrivate};
+ function clearPrivate(){remoteCache=null;cacheKey='';cache=null;w.dispatchEvent(new Event('puc-documents-updated'))}
+ w.PUCBMReconciliado={compute,resolve,forProject,cell,report,loadPrivate,clearPrivate};
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadPrivate);
  else loadPrivate();
 })(window);
