@@ -109,6 +109,8 @@
     if(num(b.execucao_financeira)!==null)push('BALANCO','Execução financeira',pct(num(b.execucao_financeira)),ref,'Balanço informado');
     if(iso(b.termino))push('BALANCO','Conclusão prevista',fmtDate(iso(b.termino)),ref,'Cronograma informado; validar aditivos');
     if(iso(b.data_referencia))push('BALANCO','Data de referência',fmtDate(iso(b.data_referencia)),ref,'Data extraída');
+    if(num(b.execucao_fisica)===null)out.dataWarnings.push('Percentual físico não veio preenchido ou reconhecível nesta linha do Balanço; exigir fonte documental ou declaração conferida.');
+    if(num(b.execucao_financeira)===null)out.dataWarnings.push('Percentual financeiro não veio preenchido nesta linha do Balanço; não calculado a partir de BM ou SIOP.');
     if(!iso(b.data_referencia))out.dataWarnings.push('Balanço sem dia exato de referência; valores podem ser mostrados, mas não concluem atraso por si só.');
    }else if(options.length>1){
     out.dataWarnings.push('Há '+options.length+' versões ou registros incompatíveis do Balanço sem data segura para escolher. Conferir a edição correta para atribuir indicadores.');
@@ -144,7 +146,8 @@
    .sort((a,b)=>String(a.asOf).localeCompare(String(b.asOf))).at(-1);
   const physicalOrigin=String(out.sourceOf.physical||'').split(' · ')[0];
   const cutoffOrigin=String(out.sourceOf.asOf||'').split(' · ')[0];
-  if(preferred&&(!out.asOf||physicalOrigin!==cutoffOrigin||out.physical===null)){
+  const endOrigin=String(out.sourceOf.end||'').split(' · ')[0];
+  if(preferred&&(!out.asOf||physicalOrigin!==cutoffOrigin||endOrigin!==cutoffOrigin||out.physical===null)){
    out.physical=preferred.physical;out.end=preferred.end;out.asOf=preferred.asOf;
    out.sourceOf.physical=preferred.fonte+' · '+preferred.ref;
    out.sourceOf.end=preferred.fonte+' · '+preferred.ref;
