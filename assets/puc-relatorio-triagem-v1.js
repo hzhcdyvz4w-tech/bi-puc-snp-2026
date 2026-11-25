@@ -30,12 +30,12 @@
  const monthIndex=v=>{
   const names=['JANEIRO','FEVEREIRO','MARCO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
   const t=norm(v).replace(/\s/g,''); const mm=names.findIndex(n=>t.includes(n)); const year=t.match(/20\d\d/);
-  return year&&mm>=0?Number(year[0])*12+mm:null;
+  return year&&mm>=0?Math.floor(Date.UTC(Number(year[0]),mm,1)/86400000):null;
  };
  const priority=b=>{
   const precise=iso(b.data_referencia||b.data_atualizacao);
   return precise?Math.floor(Date.parse(precise+'T00:00:00Z')/86400000):
-   (monthIndex(b.mes_referencia||b.arquivo)||0)*28;
+   (monthIndex(b.mes_referencia||b.arquivo)||0);
  };
  const fingerprint=b=>[
   b.id,norm(b.uf),norm(b.empreendimento),b.valor_global,b.valor_investido,b.valor_pago,
@@ -238,8 +238,11 @@
    ['Valor investido',brl(x.invested),x.sourceOf.invested],
    ['Valor pago',brl(x.paid),x.sourceOf.paid]
   ];
+  const sourceSummary='<div class="puc-triagem-origins"><b>Cobertura das fontes selecionadas</b>'+
+   '<div class="puc-triagem-origin-grid">'+x.sourceChecks.map(c=>'<div><strong>'+esc(c.fonte)+'</strong><span>'+esc(c.situacao)+'</span><small>'+esc(c.detail||c.qtd+' evidência(s) extraída(s)')+'</small></div>').join('')+'</div></div>';
+  const restricted=mode!=='TODAS'?'<p class="puc-triagem-filter"><b>Filtro atual: '+esc(mode)+'.</b> Neste modo, as demais fontes não são consultadas. Para reunir as informações do relatório, use o botão abaixo.</p><button class="btn" type="button" id="puc-triagem-consolidar">Reunir SEI + Balanço + DOCAS</button>':'';
   root.innerHTML='<div class="puc-triagem-head"><h3>Ficha de extração e conferência</h3><span class="puc-triagem-state">'+esc(choices[ass.kind])+'</span></div>'+
-   '<p class="muted">Extração por vínculo documental. Valores ausentes não são preenchidos artificialmente. As informações são preliminares até a conferência pela SNP.</p>'+
+   '<p class="muted">Extração por vínculo documental. Valores ausentes não são preenchidos artificialmente. As informações são preliminares até a conferência pela SNP.</p>'+restricted+sourceSummary+
    '<div class="puc-triagem-cards">'+items.map(([name,value,ref])=>'<div><small>'+esc(name)+'</small><strong>'+esc(value)+'</strong><small>'+esc(ref||'Fonte não confirmada')+'</small></div>').join('')+'</div>'+
    '<p class="puc-triagem-diagnostico"><b>Situação sugerida:</b> '+esc(ass.detail)+'</p>'+
    '<form id="puc-triagem-form" data-context="'+esc(id+'|'+mode)+'"><div class="puc-triagem-formgrid">'+
@@ -256,6 +259,9 @@
    (x.refs.length?'<div class="puc-triagem-scroll"><table><thead><tr><th>Fonte</th><th>Indicador</th><th>Valor informado</th><th>Referência</th><th>Conferência</th></tr></thead><tbody>'+
     x.refs.map(r=>'<tr><td>'+esc(r.fonte)+'</td><td>'+esc(r.field)+'</td><td>'+esc(r.valor)+'</td><td>'+esc(r.ref)+'</td><td>'+esc(r.status)+'</td></tr>').join('')+'</tbody></table></div>':
     '<p>Sem evidências vinculadas nesta seleção.</p>')+'</details>';
+  if(mode!=='TODAS'&&$('puc-triagem-consolidar'))$('puc-triagem-consolidar').onclick=()=>{
+   const source=$('report-source');if(source)source.value='TODAS';renderForm();w.showCritical?.();
+  };
   const form=$('puc-triagem-form');
   form.onsubmit=e=>{e.preventDefault();collectReview(id,mode);w.showCritical?.();};
   $('puc-triagem-reextrair').onclick=()=>{collectReview(id,mode);renderForm();};
@@ -314,7 +320,7 @@
   const el=document.createElement('section');el.id='puc-triagem-panel';el.className='puc-triagem-panel';
   const anchor=$('report-summary');if(anchor)anchor.parentNode.insertBefore(el,anchor);else page.querySelector('.panel')?.appendChild(el);
   const css=document.createElement('style');css.id='puc-triagem-css';
-  css.textContent='.puc-triagem-panel{margin:15px 0;padding:17px;border:1px solid #cddde9;border-radius:12px;background:#f9fbfd}.puc-triagem-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.puc-triagem-state{background:#edf2f6;border-radius:12px;padding:6px 12px;font-size:12px;font-weight:600}.puc-triagem-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:13px 0}.puc-triagem-cards>div{border:1px solid #dde5eb;background:white;border-radius:8px;padding:12px;min-width:0}.puc-triagem-cards small{display:block;color:#62788b;font-size:11px;overflow-wrap:anywhere}.puc-triagem-cards strong{display:block;font-size:18px;overflow-wrap:anywhere;margin:5px 0}.puc-triagem-diagnostico{padding:12px;background:#edf3f7;border-radius:7px}.puc-triagem-formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.puc-triagem-formgrid label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600}.puc-triagem-formgrid input,.puc-triagem-formgrid textarea,.puc-triagem-formgrid select{max-width:100%;width:100%;padding:9px;border:1px solid #c8d8e5;border-radius:7px;background:#fff}.puc-triagem-wide{grid-column:1/-1}.puc-triagem-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.puc-triagem-scroll{overflow-x:auto}.puc-triagem-scroll table{min-width:780px;width:100%;border-collapse:collapse}.puc-triagem-scroll td,.puc-triagem-scroll th{padding:7px 9px;border-bottom:1px solid #dce6eb;text-align:left;vertical-align:top;overflow-wrap:anywhere}.puc-triagem-panel details{margin-top:9px}.puc-triagem-panel summary{cursor:pointer;font-weight:600}@media(max-width:760px){.puc-triagem-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.puc-triagem-formgrid{grid-template-columns:1fr}}@media print{.puc-triagem-panel{display:none!important}#critical-report .puc-triagem-cards{grid-template-columns:repeat(4,minmax(0,1fr))}#critical-report .puc-triagem-cards>div{break-inside:avoid}#critical-report .puc-triagem-scroll{overflow:visible}#critical-report .puc-triagem-scroll table{min-width:0;font-size:9px}}';
+  css.textContent='.puc-triagem-panel{margin:15px 0;padding:17px;border:1px solid #cddde9;border-radius:12px;background:#f9fbfd}.puc-triagem-filter{padding:12px;background:#fff2df;border-left:3px solid #d18c23;border-radius:6px}.puc-triagem-origins{margin:12px 0}.puc-triagem-origin-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:8px 0}.puc-triagem-origin-grid>div{background:white;border:1px solid #d4e2ea;border-radius:7px;padding:9px;min-width:0}.puc-triagem-origin-grid strong,.puc-triagem-origin-grid span,.puc-triagem-origin-grid small{display:block;overflow-wrap:anywhere}.puc-triagem-origin-grid span{font-size:12px;font-weight:600}.puc-triagem-origin-grid small{font-size:11px;color:#58738b}.puc-triagem-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.puc-triagem-state{background:#edf2f6;border-radius:12px;padding:6px 12px;font-size:12px;font-weight:600}.puc-triagem-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:13px 0}.puc-triagem-cards>div{border:1px solid #dde5eb;background:white;border-radius:8px;padding:12px;min-width:0}.puc-triagem-cards small{display:block;color:#62788b;font-size:11px;overflow-wrap:anywhere}.puc-triagem-cards strong{display:block;font-size:18px;overflow-wrap:anywhere;margin:5px 0}.puc-triagem-diagnostico{padding:12px;background:#edf3f7;border-radius:7px}.puc-triagem-formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.puc-triagem-formgrid label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600}.puc-triagem-formgrid input,.puc-triagem-formgrid textarea,.puc-triagem-formgrid select{max-width:100%;width:100%;padding:9px;border:1px solid #c8d8e5;border-radius:7px;background:#fff}.puc-triagem-wide{grid-column:1/-1}.puc-triagem-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.puc-triagem-scroll{overflow-x:auto}.puc-triagem-scroll table{min-width:780px;width:100%;border-collapse:collapse}.puc-triagem-scroll td,.puc-triagem-scroll th{padding:7px 9px;border-bottom:1px solid #dce6eb;text-align:left;vertical-align:top;overflow-wrap:anywhere}.puc-triagem-panel details{margin-top:9px}.puc-triagem-panel summary{cursor:pointer;font-weight:600}@media(max-width:760px){.puc-triagem-origin-grid{grid-template-columns:1fr}.puc-triagem-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.puc-triagem-formgrid{grid-template-columns:1fr}}@media print{.puc-triagem-panel{display:none!important}#critical-report .puc-triagem-cards{grid-template-columns:repeat(4,minmax(0,1fr))}#critical-report .puc-triagem-cards>div{break-inside:avoid}#critical-report .puc-triagem-scroll{overflow:visible}#critical-report .puc-triagem-scroll table{min-width:0;font-size:9px}}';
   document.head.appendChild(css);
   document.addEventListener('change',e=>{if(e.target?.id==='report-project'||e.target?.id==='report-source')renderForm()});
   for(const event of ['puc-documents-updated','puc-ficha-bms-atualizados','puc:docas-externas-atualizadas','puc-bm-vinculos-atualizados']){
