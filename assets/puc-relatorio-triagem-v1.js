@@ -303,6 +303,145 @@
    a.href=u;a.download='PUC_FICHA_TRIAGEM_'+id+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);
   };
  }
+
+ function detailedConclusion(x,a,review,p,id,mode){
+  const bm=mode==='SEI'||mode==='TODAS'?w.PUCBMReconciliado?.forProject?.(id):null;
+  const bmInfo=bm?w.PUCBMReconciliado?.financialForProject?.(id):null;
+  const status=choices[a.kind]||'Classificação não conclusiva';
+  const row=(label,value)=>'<tr><th scope="row">'+esc(label)+'</th><td>'+value+'</td></tr>';
+  const actions=[];
+  const addAction=(responsible,what,reason,proof)=>actions.push({responsible,what,reason,proof});
+  const evidence=[];
+  const addEvidence=(origin,document,fact,qualification)=>evidence.push({origin,document,fact,qualification});
+  const baseSEI=bmInfo?.sourceBaseSEI||null,reajSEI=bmInfo?.sourceReajSEI||null;
+  if(bm){
+   const count=Array.isArray(bm.entries)?bm.entries.length:0;
+   addEvidence('SEI / BM',baseSEI?'SEI nº '+baseSEI:'Planilha de medição contratual — referência SEI a conferir',
+    'Contrato '+(bmInfo?.contract||'026/2025')+' · rubrica '+bm.rubrica+
+    ' · '+count+' posições de BM conciliadas · valor base medido: '+brl(bm.baseCents/100)+
+    (bmInfo?.basePercent!==null&&bmInfo?.basePercent!==undefined?
+     ' · '+pct(bmInfo.basePercent)+' da base contratual da rubrica após aditivo':''),
+    'Conciliação documental de medições. Não atesta execução física nem pagamento.');
+   if(bmInfo?.medidoReajusteCents){
+    addEvidence('SEI / reajuste',reajSEI?'SEI nº '+reajSEI:'Planilha de reajuste — referência a conferir',
+     'Reajuste medido: '+brl(bmInfo.medidoReajusteCents/100)+
+     ' · medição total incluindo reajuste: '+brl(bmInfo.medidoTotalCents/100),
+     'Reajuste separado da base contratual; evitar dupla contagem de planilhas acumuladas.');
+   }
+  }else if(x.medido!==null){
+   addEvidence('SEI / BM','Referência extraída na ficha',
+    'Medição identificada: '+brl(x.medido),'Vínculo com documento e contrato exige conferência.');
+  }
+  if(x.osDate||x.vigenciaContract){
+   addEvidence('SEI / contrato',baseSEI?'SEI nº '+baseSEI:'Planilha contratual a conferir',
+    'OS emitida em '+fmtDate(x.osDate)+'; vigência após aditivo informada até '+fmtDate(x.vigenciaContract),
+    'Data de emissão da OS não comprova início físico; vigência não equivale a prazo de conclusão da obra.');
+  }
+  const bal=x.refs.filter(r=>r.fonte==='BALANCO');
+  if(bal.length){
+   const b=bal[0];
+   addEvidence('Balanço',b.ref,
+    'Execução física informada: '+pct(x.timelineSnapshots.find(t=>t.fonte==='BALANÇO')?.physical??null)+
+    '; conclusão indicada: '+fmtDate(x.timelineSnapshots.find(t=>t.fonte==='BALANÇO')?.end??null)+
+    '; referência: '+fmtDate(x.timelineSnapshots.find(t=>t.fonte==='BALANÇO')?.asOf??null),
+    'Dado do Balanço; verificar versão, data de corte e cronograma vigente.');
+  }
+  const docas=x.refs.filter(r=>r.fonte==='DOCAS');
+  if(docas.length){
+   const d=docas[0];
+   addEvidence('DOCAS',d.ref,
+    'Declaração com situação '+(x.phase||'não identificada')+
+    '; execução física informada: '+pct(x.timelineSnapshots.find(t=>t.fonte==='DOCAS')?.physical??null),
+    'Declaração externa '+x.docasStatus+'; depende de conferência da SNP.');
+  }
+  if(review.evidence) addEvidence('Gestor / conferência',review.evidence,
+   review.notes||'Complemento documental indicado pelo gestor','Referência informada manualmente; conferir a peça original.');
+  if(!evidence.length)addEvidence('Documentação','Nenhuma referência documental identificada',
+   'Os indicadores necessários não foram localizados na seleção.',
+   'Não há elementos para atestar situação, atraso ou regularidade.');
+  const onlySEI=mode==='SEI',hasPhysical=x.physical!==null;
+  const material='<p><b>Síntese técnica:</b> '+esc(status)+'. '+esc(a.detail)+'</p>'+
+   '<div class="puc-conclusion-summary"><p><b>Execução física:</b> '+esc(pct(x.physical))+
+    (x.sourceOf.physical?' · fonte: '+esc(x.sourceOf.physical):' · sem comprovação específica nos documentos selecionados')+'</p>'+
+   '<p><b>Execução financeira:</b> '+esc(pct(x.financial))+
+    (x.financialBM!==null?' · medição da base contratual BM/SEI: '+esc(pct(x.financialBM)):'')+
+    ' · <b>Medição acumulada BM/SEI:</b> '+esc(brl(x.medido))+'</p>'+
+   '<p><b>Pagamento à contratada:</b> '+esc(brl(x.paid))+
+    ' · <b>Prazo de conclusão registrado:</b> '+esc(fmtDate(a.end))+
+    ' · <b>Data de referência:</b> '+esc(fmtDate(a.asOf))+'</p></div>';
+  if(!hasPhysical) addAction('Companhia / fiscalização contratual',
+   'Apresentar relatório de fiscalização atualizado, cronograma físico executado e evidência do percentual físico global da obra.',
+   'A medição financeira não comprova execução física global.',
+   'Relatório assinado, cronograma físico-financeiro e documentos de campo.');
+  if(!a.end) addAction('Companhia / gestor do contrato',
+   'Informar data vigente de conclusão física, ordem de serviço e aditivos/reprogramações aprovados.',
+   'A data de vigência do contrato não substitui prazo de conclusão do empreendimento.',
+   'Contrato, aditivos e cronograma vigente, com referências SEI.');
+  if(a.kind==='atraso'||a.kind==='paralisada'){
+   addAction('Companhia / fiscalização contratual',
+    'Justificar as causas do atraso/paralisação e encaminhar plano de recuperação, com marcos e responsáveis.',
+    'Há indício temporal ou paralisação declarada, sujeito à confirmação pela SNP.',
+    'Cronograma reprogramado, registros de campo, despacho e justificativas.');
+  }
+  if(x.medido!==null){
+   addAction('Companhia / área técnica e financeira',
+    'Conciliar cada BM e reajuste com contrato, rubrica, competência, atesto e documentos de pagamento, sem somar versões acumuladas.',
+    'Foram identificadas medições; não existe equivalência automática com pagamento ou aplicação dos recursos.',
+    'BMs originais, memória de cálculo, notas fiscais, atestos e comprovantes de pagamento.');
+  }
+  if(x.paid===null){
+   addAction('Companhia / área financeira',
+    'Apresentar pagamentos efetivamente realizados à contratada, por competência e documento.',
+    'Não há valor pago documentalmente associado no recorte selecionado.',
+    'Relação de liquidações/pagamentos e documentos comprobatórios.');
+  }
+  if(x.restrictions){
+   addAction('Companhia / gestor do empreendimento',
+    'Esclarecer a pendência ou restrição declarada e informar prazo e providência de saneamento.',
+    'Pendência relatada na fonte DOCAS: '+x.restrictions,
+    'Manifestação formal, documentos e registro de solução.');
+  }
+  if(onlySEI){
+   addAction('SNP / equipe de monitoramento',
+    'Confrontar as medições SEI com o Balanço e a declaração DOCAS, após habilitar o recorte consolidado.',
+    'A seleção atual contém somente SEI; outras bases estão fora do filtro, não necessariamente ausentes.',
+    'Extrato Balanço com ID Governa, data de referência e protocolo DOCAS conferido.');
+  }else{
+   const absent=x.sourceChecks.filter(v=>v.situacao==='Sem registro vinculado');
+   if(absent.length)addAction('SNP / equipe de monitoramento',
+    'Localizar, importar ou validar registros das fontes ainda sem correspondência ('+absent.map(v=>v.fonte).join(', ')+').',
+    'Não foi demonstrada equivalência de identidade do empreendimento em todas as fontes selecionadas.',
+    'Vínculos por ID Governa, UF, contrato, objeto, competência e protocolo.');
+  }
+  addAction('SNP / autoridade competente',
+   'Analisar a resposta à diligência e registrar decisão motivada sobre continuidade do monitoramento, nova diligência ou vistoria in loco.',
+   'A escolha da medida depende do conjunto documental, risco, proporcionalidade e competência administrativa.',
+   'Despacho ou nota técnica conclusiva, com referências e responsável.');
+  const uniqueActions=actions.filter((v,i,self)=>self.findIndex(q=>q.responsible===v.responsible&&q.what===v.what)===i);
+  const actionsTable='<div class="puc-triagem-scroll"><table class="puc-conclusion-table"><thead><tr><th>Responsável sugerido</th><th>Providência</th><th>Justificativa</th><th>Documento de retorno</th></tr></thead><tbody>'+
+   uniqueActions.map(v=>'<tr><td>'+esc(v.responsible)+'</td><td>'+esc(v.what)+'</td><td>'+esc(v.reason)+'</td><td>'+esc(v.proof)+'</td></tr>').join('')+'</tbody></table></div>';
+  const evidenceTable='<div class="puc-triagem-scroll"><table class="puc-conclusion-table"><thead><tr><th>Origem</th><th>Documento / referência</th><th>Informação registrada</th><th>Limite probatório</th></tr></thead><tbody>'+
+   evidence.map(v=>'<tr><td>'+esc(v.origin)+'</td><td>'+esc(v.document)+'</td><td>'+esc(v.fact)+'</td><td>'+esc(v.qualification)+'</td></tr>').join('')+'</tbody></table></div>';
+  const audit=a.visit==='vistoria'?'Submeter à autoridade competente proposta de avaliação de vistoria presencial.':
+   a.visit==='sem_indicacao'?'Não há prioridade técnica para vistoria com base no recorte atual.':
+   'Primeiro requisitar documentação e esclarecimentos; reavaliar eventual vistoria após a resposta.';
+  const alert=x.dataWarnings.slice(0,3);
+  return material+
+   '<h4>5.1. Documentos e fatos que fundamentam a conclusão</h4>'+evidenceTable+
+   '<h4>5.2. Pendências para formação de juízo técnico</h4>'+
+   '<p>'+esc(a.alerts.length?'Foram identificadas pendências que exigem diligência antes da homologação.':'A ausência de alertas automatizados não comprova regularidade integral.')+'</p>'+
+   (a.alerts.length?'<ul>'+[...new Set(a.alerts)].slice(0,6).map(m=>'<li>'+esc(m)+'</li>').join('')+'</ul>':'')+
+   '<h4>5.3. Encaminhamentos e documentos a solicitar</h4>'+actionsTable+
+   '<h4>5.4. Avaliação de vistoria/auditoria presencial</h4>'+
+   '<p><b>Proposta:</b> '+esc(audit)+'</p>'+
+   '<p><b>Fundamentação técnica:</b> '+esc(a.visitWhy)+'</p>'+
+   '<p><b>Critério de decisão:</b> confrontar execução física e medição financeira, cronograma vigente, justificativas, relatórios de fiscalização e gravidade dos riscos. A Portaria MINFRA nº 118/2021, em especial as disposições pertinentes ao monitoramento e ao acompanhamento in loco (arts. 15 a 17), constitui referência sujeita à verificação de vigência e aplicabilidade. A vistoria não é automaticamente determinada pelo algoritmo.</p>'+
+   '<h4>5.5. Conclusão e responsabilidade pela validação</h4>'+
+   '<p>Recomenda-se registrar as respostas no processo administrativo correspondente e elaborar manifestação técnica da SNP, indicando quais constatações foram confirmadas, saneadas ou permanecem pendentes. A eventual análise jurídica depende do regime contratual da estatal e dos dispositivos efetivamente incidentes.</p>'+
+   (review.evidence?'<p><b>Referência complementar do gestor:</b> '+esc(review.evidence)+'</p>':'')+
+   (review.notes?'<p><b>Observação técnica do gestor:</b> '+esc(review.notes)+'</p>':'')+
+   '<p class="muted"><b>Limites e natureza do documento:</b> análise automatizada de apoio, baseada nas fontes selecionadas na sessão. Uma fonte fora do filtro não constitui documento ausente; falta de evidência no BI não comprova descumprimento. Não substitui fiscalização contratual, homologação, parecer jurídico ou decisão da autoridade competente.</p>';
+ }
  function report(id,p,mode){
   const x=raw(id,p,mode),review=collectReview(id,mode),a=assess(x,review);
   const z=(title,body,n)=>'<section class="r-section"><h3>'+n+'. '+esc(title)+'</h3>'+body+'</section>';
@@ -342,20 +481,14 @@
     '<p>Referências condicionadas à natureza de PUC, vigência da norma, instrumento e regime jurídico da contratação. O BI não qualifica automaticamente infração legal.</p>'+
     '<ul>'+normative.map(([ref,use])=>'<li><b>'+esc(ref)+'</b> — '+esc(use)+'</li>').join('')+'</ul>'+
     '<p>Decreto nº 11.979/2024: competências institucionais de acompanhamento da aplicação dos aportes, ressalvadas alterações posteriores e ato de organização vigente.</p>',4)+
-   z('Conclusão técnica e encaminhamento',
-    '<p><b>Avaliação da necessidade de auditoria/vistoria presencial:</b> '+esc(audit)+'</p>'+
-    '<p><b>Motivação:</b> '+esc(a.visitWhy)+'</p>'+
-    '<p><b>Providência recomendada:</b> conferir cronograma físico-financeiro vigente, alterações contratuais, último BM e relatório de fiscalização, com manifestação da empresa e registro da decisão da SNP.</p>'+
-    (review.evidence?'<p><b>Referência acrescida pelo gestor:</b> '+esc(review.evidence)+'</p>':'')+
-    (review.notes?'<p><b>Observação do gestor:</b> '+esc(review.notes)+'</p>':'')+
-    '<p><b>Limitação:</b> triagem técnica assistida, não substitui a fiscalização contratual da estatal nem parecer jurídico ou decisão administrativa.</p>',5);
+   z('Conclusão técnica e encaminhamento',detailedConclusion(x,a,review,p,id,mode),5);
  }
  function init(){
   const page=$('relatorio');if(!page||$('puc-triagem-panel'))return;
   const el=document.createElement('section');el.id='puc-triagem-panel';el.className='puc-triagem-panel';
   const anchor=$('report-summary');if(anchor)anchor.parentNode.insertBefore(el,anchor);else page.querySelector('.panel')?.appendChild(el);
   const css=document.createElement('style');css.id='puc-triagem-css';
-  css.textContent='.puc-triagem-panel{margin:15px 0;padding:17px;border:1px solid #cddde9;border-radius:12px;background:#f9fbfd}.puc-triagem-filter{padding:12px;background:#fff2df;border-left:3px solid #d18c23;border-radius:6px}.puc-triagem-origins{margin:12px 0}.puc-triagem-origin-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:8px 0}.puc-triagem-origin-grid>div{background:white;border:1px solid #d4e2ea;border-radius:7px;padding:9px;min-width:0}.puc-triagem-origin-grid strong,.puc-triagem-origin-grid span,.puc-triagem-origin-grid small{display:block;overflow-wrap:anywhere}.puc-triagem-origin-grid span{font-size:12px;font-weight:600}.puc-triagem-origin-grid small{font-size:11px;color:#58738b}.puc-triagem-bm-dates{margin:12px 0;padding:10px;background:#edf3f8;border-left:3px solid #749bb1;border-radius:5px}.puc-triagem-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.puc-triagem-state{background:#edf2f6;border-radius:12px;padding:6px 12px;font-size:12px;font-weight:600}.puc-triagem-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:13px 0}.puc-triagem-cards>div{border:1px solid #dde5eb;background:white;border-radius:8px;padding:12px;min-width:0}.puc-triagem-cards small{display:block;color:#62788b;font-size:11px;overflow-wrap:anywhere}.puc-triagem-cards strong{display:block;font-size:18px;overflow-wrap:anywhere;margin:5px 0}.puc-triagem-diagnostico{padding:12px;background:#edf3f7;border-radius:7px}.puc-triagem-formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.puc-triagem-formgrid label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600}.puc-triagem-formgrid input,.puc-triagem-formgrid textarea,.puc-triagem-formgrid select{max-width:100%;width:100%;padding:9px;border:1px solid #c8d8e5;border-radius:7px;background:#fff}.puc-triagem-wide{grid-column:1/-1}.puc-triagem-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.puc-triagem-scroll{overflow-x:auto}.puc-triagem-scroll table{min-width:780px;width:100%;border-collapse:collapse}.puc-triagem-scroll td,.puc-triagem-scroll th{padding:7px 9px;border-bottom:1px solid #dce6eb;text-align:left;vertical-align:top;overflow-wrap:anywhere}.puc-triagem-panel details{margin-top:9px}.puc-triagem-panel summary{cursor:pointer;font-weight:600}@media(max-width:760px){.puc-triagem-origin-grid{grid-template-columns:1fr}.puc-triagem-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.puc-triagem-formgrid{grid-template-columns:1fr}}@media print{.puc-triagem-panel{display:none!important}#critical-report .puc-triagem-cards{grid-template-columns:repeat(4,minmax(0,1fr))}#critical-report .puc-triagem-cards>div{break-inside:avoid}#critical-report .puc-triagem-scroll{overflow:visible}#critical-report .puc-triagem-scroll table{min-width:0;font-size:9px}}';
+  css.textContent='.puc-triagem-panel{margin:15px 0;padding:17px;border:1px solid #cddde9;border-radius:12px;background:#f9fbfd}.puc-triagem-filter{padding:12px;background:#fff2df;border-left:3px solid #d18c23;border-radius:6px}.puc-triagem-origins{margin:12px 0}.puc-triagem-origin-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:8px 0}.puc-triagem-origin-grid>div{background:white;border:1px solid #d4e2ea;border-radius:7px;padding:9px;min-width:0}.puc-triagem-origin-grid strong,.puc-triagem-origin-grid span,.puc-triagem-origin-grid small{display:block;overflow-wrap:anywhere}.puc-triagem-origin-grid span{font-size:12px;font-weight:600}.puc-triagem-origin-grid small{font-size:11px;color:#58738b}.puc-triagem-bm-dates{margin:12px 0;padding:10px;background:#edf3f8;border-left:3px solid #749bb1;border-radius:5px}.puc-conclusion-summary{background:#f1f6fa;border:1px solid #dbe7f0;border-radius:8px;padding:11px 14px;margin:10px 0}.puc-conclusion-summary p{margin:6px 0}.puc-conclusion-table{min-width:850px}.puc-conclusion-table th{background:#edf3f7}.puc-conclusion-table td{vertical-align:top;overflow-wrap:anywhere}#critical-report h4{margin-top:18px;margin-bottom:8px}.puc-triagem-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.puc-triagem-state{background:#edf2f6;border-radius:12px;padding:6px 12px;font-size:12px;font-weight:600}.puc-triagem-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:13px 0}.puc-triagem-cards>div{border:1px solid #dde5eb;background:white;border-radius:8px;padding:12px;min-width:0}.puc-triagem-cards small{display:block;color:#62788b;font-size:11px;overflow-wrap:anywhere}.puc-triagem-cards strong{display:block;font-size:18px;overflow-wrap:anywhere;margin:5px 0}.puc-triagem-diagnostico{padding:12px;background:#edf3f7;border-radius:7px}.puc-triagem-formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.puc-triagem-formgrid label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600}.puc-triagem-formgrid input,.puc-triagem-formgrid textarea,.puc-triagem-formgrid select{max-width:100%;width:100%;padding:9px;border:1px solid #c8d8e5;border-radius:7px;background:#fff}.puc-triagem-wide{grid-column:1/-1}.puc-triagem-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.puc-triagem-scroll{overflow-x:auto}.puc-triagem-scroll table{min-width:780px;width:100%;border-collapse:collapse}.puc-triagem-scroll td,.puc-triagem-scroll th{padding:7px 9px;border-bottom:1px solid #dce6eb;text-align:left;vertical-align:top;overflow-wrap:anywhere}.puc-triagem-panel details{margin-top:9px}.puc-triagem-panel summary{cursor:pointer;font-weight:600}@media(max-width:760px){.puc-triagem-origin-grid{grid-template-columns:1fr}.puc-triagem-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.puc-triagem-formgrid{grid-template-columns:1fr}}@media print{.puc-triagem-panel{display:none!important}#critical-report .puc-triagem-cards{grid-template-columns:repeat(4,minmax(0,1fr))}#critical-report .puc-triagem-cards>div{break-inside:avoid}#critical-report .puc-triagem-scroll{overflow:visible}#critical-report .puc-triagem-scroll table{min-width:0;font-size:9px}}';
   document.head.appendChild(css);
   document.addEventListener('change',e=>{if(e.target?.id==='report-project'||e.target?.id==='report-source')renderForm()});
   for(const event of ['puc-documents-updated','puc-ficha-bms-atualizados','puc:docas-externas-atualizadas','puc-bm-vinculos-atualizados']){
