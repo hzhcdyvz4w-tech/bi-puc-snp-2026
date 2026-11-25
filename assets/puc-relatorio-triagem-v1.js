@@ -108,7 +108,7 @@
   return out;
  }
  const choices={
-  automatico:'Manter diagnóstico automático',em_andamento:'Em andamento — confirmado pelo gestor',
+  automatico:'Manter diagnóstico automático',a_iniciar:'A iniciar — planejamento informado',em_andamento:'Em andamento — confirmado pelo gestor',
   atraso:'Indício de atraso — confirmar',concluida:'Conclusão informada — confirmar recebimento',
   paralisada:'Paralisação informada — confirmar',insuficiente:'Informação insuficiente'
  };
@@ -122,6 +122,7 @@
   else if(end&&asOf&&physical!==null){
    duration=days(asOf,end);
    if(duration>0&&physical<100){kind='atraso';detail='A data prevista informada foi ultrapassada em '+duration+' dia(s) na data de corte da fonte e a execução física registrada era '+pct(physical)+'. Confirmar aditivos/prorrogações e atualização.'}
+   else if(physical===0){kind='a_iniciar';detail='Execução física informada em 0% e prazo final ainda não ultrapassado na data de corte; confirmar ordem de serviço e início contratual.'}
    else{kind='em_andamento';detail='Execução física de '+pct(physical)+' informada, sem prazo final ultrapassado na data de corte disponível.'}
   }else if(physical!==null&&end&&!asOf){
    detail='Há execução física e prazo final informados, mas a fonte não registra data de corte verificável: atraso não classificável automaticamente.';
@@ -139,10 +140,14 @@
   if(kind==='atraso'&&(duration>=30||!!x.restrictions)){
    visit='vistoria';visitWhy='Há indício temporal de atraso associado a prazo transcorrido ou restrições declaradas. Propor avaliação de vistoria presencial após examinar justificativas, custo-benefício e competência do órgão.';
   }else if(kind==='em_andamento'&&!alerts.length){visit='sem_indicacao';visitWhy='Os dados atualmente disponíveis não justificam, isoladamente, priorização de vistoria.'}
-  if(review.situation&&review.situation!=='automatico'){kind=review.situation;detail+=' Classificação técnica ajustada pelo gestor: '+(choices[kind]||kind)+'.'}
+  const hasReason=!!String(review.notes||review.evidence||'').trim();
+  if(review.situation&&review.situation!=='automatico'){
+   if(hasReason){kind=review.situation;detail+=' Classificação técnica ajustada pelo gestor: '+(choices[kind]||kind)+'.'}
+   else alerts.push('Classificação manual não aplicada: é necessária justificativa ou referência documental.');
+  }
   if(review.visit&&review.visit!=='automatico'){
-   visit=review.visit;
-   visitWhy='Proposta de encaminhamento ajustada pelo gestor; requer motivação e decisão da unidade competente.';
+   if(hasReason){visit=review.visit;visitWhy='Proposta de encaminhamento ajustada pelo gestor, conforme fundamentação registrada; exige decisão competente.';}
+   else alerts.push('Encaminhamento manual de vistoria não aplicado sem justificativa ou referência documental.');
   }
   return {kind,detail,alerts,visit,visitWhy,end,asOf,duration};
  }
@@ -183,7 +188,7 @@
     ['automatico','Usar recomendação técnica automática'],['diligencia','Diligenciar antes de decidir'],['vistoria','Propor avaliação de vistoria presencial'],['sem_indicacao','Não priorizar vistoria agora']
    ],review.visit||'automatico')+'</select></label>'+
    '<label class="puc-triagem-wide">Referência documental adicional (SEI / relatório / aditivo)<input id="puc-triagem-evidencia" maxlength="250" value="'+esc(review.evidence||'')+'" placeholder="Ex.: Despacho SEI ... / Termo Aditivo ..."></label>'+
-   '<label class="puc-triagem-wide">Observação técnica da SNP<textarea id="puc-triagem-notas" maxlength="1200" rows="2" placeholder="Registre justificativa, providências e ressalvas">'+esc(review.notes||'')+'</textarea></label></div>'+
+   '<label class="puc-triagem-wide">Justificativa obrigatória para alterar situação ou vistoria<textarea id="puc-triagem-notas" maxlength="1200" rows="2" placeholder="Registre justificativa, providências e ressalvas">'+esc(review.notes||'')+'</textarea></label></div>'+
    '<div class="puc-triagem-actions"><button type="submit" class="btn">Salvar conferência e gerar relatório</button><button id="puc-triagem-reextrair" type="button" class="btn secondary">Atualizar dados extraídos</button><button id="puc-triagem-export" type="button" class="btn secondary">Exportar ficha JSON</button></div></form>'+
    '<details><summary>Rastreabilidade das fontes ('+x.refs.length+')</summary>'+
    (x.refs.length?'<div class="puc-triagem-scroll"><table><thead><tr><th>Fonte</th><th>Indicador</th><th>Valor informado</th><th>Referência</th><th>Conferência</th></tr></thead><tbody>'+
