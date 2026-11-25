@@ -105,6 +105,12 @@
     if(ordered.length>1)out.dataWarnings.push('Há '+ordered.length+' declarações DOCAS; foi utilizada a mais recente por data declarada, sem homologação automática.');
    }
   }
+  // Um percentual de uma fonte não pode receber data de corte de outra por preenchimento cruzado.
+  const physicalOrigin=String(out.sourceOf.physical||'').split(' · ')[0];
+  const cutoffOrigin=String(out.sourceOf.asOf||'').split(' · ')[0];
+  if(physicalOrigin&&cutoffOrigin&&physicalOrigin!==cutoffOrigin){
+   out.asOf=null;out.dataWarnings.push('Execução física e data de corte vêm de fontes diferentes; verificar equivalência antes de classificar atraso.');
+  }
   return out;
  }
  const choices={
@@ -113,7 +119,10 @@
   paralisada:'Paralisação informada — confirmar',insuficiente:'Informação insuficiente'
  };
  function assess(x,review={}){
-  const end=iso(review.end)||x.end,asOf=iso(review.cutoff)||x.asOf;
+  const hasCutoffEvidence=!!String(review.evidence||review.notes||'').trim();
+  const manualEnd=iso(review.end),manualCutoff=iso(review.cutoff);
+  const end=(manualEnd&&(!x.end||manualEnd!==x.end)&&!hasCutoffEvidence?null:manualEnd)||x.end;
+  const asOf=(manualCutoff&&(!x.asOf||manualCutoff!==x.asOf)&&!hasCutoffEvidence?null:manualCutoff)||x.asOf;
   const physical=x.physical;
   let kind='insuficiente',detail='Não foi possível concluir a situação física por falta de informações com data de referência verificável.';
   let duration=null;
@@ -130,6 +139,7 @@
   const now=today();
   if(x.asOf&&days(now,x.asOf)>90)detail+=' A fonte principal está defasada há mais de 90 dias (limiar técnico de triagem, não prazo legal).';
   const alerts=[];
+  if((manualEnd&&manualEnd!==x.end||manualCutoff&&manualCutoff!==x.asOf)&&!hasCutoffEvidence)alerts.push('Data ou prazo alterado manualmente sem referência/justificativa; alteração ignorada no diagnóstico.');
   if(kind==='atraso')alerts.push('Prazo final superado na data de referência informada; verificar termo aditivo e reprogramação.');
   if(x.restrictions)alerts.push('Pendências ou restrições declaradas pelas DOCAS: '+x.restrictions);
   if(!x.fiscalReport&&x.medido!==null)alerts.push('Não foi identificado relatório de fiscalização vinculado à PUC nesta seleção; não significa inexistência no SEI.');
