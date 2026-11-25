@@ -14,6 +14,7 @@
  const brl=v=>v===null?'Não informado':Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
  const pct=v=>v===null?'Não informado':v.toLocaleString('pt-BR',{maximumFractionDigits:2})+'%';
  const iso=v=>{if(!isValue(v))return null;const s=String(v).trim();let y,m,d;
+  if(/^\d{5}$/.test(s)&&Number(s)>30000&&Number(s)<100000)return sliceDate(new Date(Date.UTC(1899,11,30)+Number(s)*86400000));
   if(/^\d{4}-\d{2}-\d{2}/.test(s)){[y,m,d]=s.slice(0,10).split('-').map(Number)}
   else if(/^\d{2}\/\d{2}\/\d{4}$/.test(s)){[d,m,y]=s.split('/').map(Number)}
   else return null;
@@ -26,11 +27,26 @@
  const registry=()=>{try{return JSON.parse($('embedded-data')?.textContent||'{}').projetos||[]}catch{return []}};
  const selected=(mode,source)=>mode==='TODAS'||mode===source;
  const docasLogged=()=>!!($('pdc-admin')&&!$('pdc-admin').hidden&&Array.isArray(w.PUC_DOCAS_DECLARACOES_EXTERNAS));
+ const monthIndex=v=>{
+  const names=['JANEIRO','FEVEREIRO','MARCO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
+  const t=norm(v).replace(/\s/g,''); const mm=names.findIndex(n=>t.includes(n)); const year=t.match(/20\d\d/);
+  return year&&mm>=0?Number(year[0])*12+mm:null;
+ };
+ const priority=b=>{
+  const precise=iso(b.data_referencia||b.data_atualizacao);
+  return precise?Math.floor(Date.parse(precise+'T00:00:00Z')/86400000):
+   (monthIndex(b.mes_referencia||b.arquivo)||0)*28;
+ };
+ const fingerprint=b=>[
+  b.id,norm(b.uf),norm(b.empreendimento),b.valor_global,b.valor_investido,b.valor_pago,
+  b.execucao_fisica,b.execucao_financeira,b.inicio,b.termino,b.data_referencia
+ ].map(v=>String(v??'')).join('|');
+
  function raw(id,p,mode){
   const out={id,company:p.empresa||'',uf:p.uf||'',name:p.empreendimento||'',po:p.po||'',acao:p.acao||'',mode,
    refs:[],physical:null,financial:null,global:null,invested:null,paid:null,medido:null,
    start:null,end:null,asOf:null,sourceOf:{},restrictions:'',phase:'',fiscalReport:false,
-   docasStatus:'Indisponível / não autenticada',dataWarnings:[]};
+   docasStatus:'Indisponível / não autenticada',dataWarnings:[],sourceChecks:[],timelineSnapshots:[]};
   const push=(fonte,field,value,ref,status='Extração preliminar')=>{
    if(!selected(mode,fonte))return;
    out.refs.push({fonte,field,valor:String(value??''),ref:String(ref||'Sem referência'),status});
@@ -67,10 +83,18 @@
    const matched=all.filter(b=>(numericGov&&String(b.id)===numericGov)||
      (bm?.idGoverna&&String(b.id)===String(bm.idGoverna))||
      (norm(b.empreendimento)===norm(p.empreendimento)&&!!norm(p.empreendimento)));
-   const byKey=new Map(matched.map(b=>[[String(b.id),norm(b.empreendimento),String(b.arquivo||'')].join('|'),b]));
-   const options=[...byKey.values()].sort((a,b)=>String(b.data_referencia||'').localeCompare(String(a.data_referencia||'')));
-   if(options.length===1){
-    const b=options[0],ref=(b.arquivo||'Balanço')+' · ID '+(b.id||'não informado');
+   const byContent=new Map(matched.map(b=>[fingerprint(b),b]));
+   const options=[...byContent.values()].sort((a,b)=>priority(b)-priority(a));
+   // Várias importações do mesmo Balanço não representam registros independentes.
+   // Selecionar edição mais recente apenas se houver ordenação documental segura.
+   const mostRecent=options.at(-1);
+   const top=mostRecent?priority(mostRecent):0;
+   const equalTop=options.filter(b=>priority(b)===top);
+   const contradictory=equalTop.length>1&&new Set(equalTop.map(fingerprint)).size>1;
+   const comparable=options.length===1||(top>0&&!contradictory&&equalTop.length===1);
+   if(options.length&&comparable){
+    const b=mostRecent,ref=(b.arquivo||'Balanço')+' · ID '+(b.id||'não informado');
+    if(options.length>1)out.dataWarnings.push('Foram localizadas '+options.length+' versões do Balanço; selecionada a mais recente identificável ('+ref+'). A versão deve ser conferida pela SNP.');
     set('global',b.valor_global,'BALANÇO',ref);
     set('invested',b.valor_investido,'BALANÇO',ref);
     set('paid',b.valor_pago,'BALANÇO',ref);
@@ -80,9 +104,14 @@
     set('end',iso(b.termino),'BALANÇO',ref);
     set('asOf',iso(b.data_referencia),'BALANÇO',ref);
     push('BALANCO','Empreendimento identificado','ID '+b.id+' · '+(b.execucao_fisica??'—')+'% físico',ref,'Identificação por ID/objeto e UF; situação declarada no Balanço');
-    if(!out.asOf)out.dataWarnings.push('Balanço sem data de corte verificável; não afirmar atraso com base apenas em sua porcentagem.');
+    out.timelineSnapshots.push({fonte:'BALANÇO',ref,physical:num(b.execucao_fisica),financial:num(b.execucao_financeira),end:iso(b.termino),asOf:iso(b.data_referencia)});
+    push('BALANCO','Execução física',pct(num(b.execucao_fisica)),ref,'Balanço informado, sem homologação');
+    if(num(b.execucao_financeira)!==null)push('BALANCO','Execução financeira',pct(num(b.execucao_financeira)),ref,'Balanço informado');
+    if(iso(b.termino))push('BALANCO','Conclusão prevista',fmtDate(iso(b.termino)),ref,'Cronograma informado; validar aditivos');
+    if(iso(b.data_referencia))push('BALANCO','Data de referência',fmtDate(iso(b.data_referencia)),ref,'Data extraída');
+    if(!iso(b.data_referencia))out.dataWarnings.push('Balanço sem dia exato de referência; valores podem ser mostrados, mas não concluem atraso por si só.');
    }else if(options.length>1){
-    out.dataWarnings.push('Existem '+options.length+' linhas candidatas do Balanço; valores não atribuídos até resolver duplicidade de versões/objetos.');
+    out.dataWarnings.push('Há '+options.length+' versões ou registros incompatíveis do Balanço sem data segura para escolher. Conferir a edição correta para atribuir indicadores.');
    }else out.dataWarnings.push('Nenhuma linha inequívoca do Balanço associada a esta PUC nesta sessão.');
   }
   if(selected(mode,'DOCAS')){
@@ -101,16 +130,39 @@
     set('asOf',iso(d.data_atualizacao)||iso(d.enviado_em),'DOCAS',ref);
     out.restrictions=d.restricoes_pendencias||'';
     out.phase=[d.situacao,d.fase].filter(Boolean).join(' · ');
+    out.timelineSnapshots.push({fonte:'DOCAS',ref,physical:num(d.execucao_fisica),financial:num(d.execucao_financeira),end:iso(d.conclusao_prevista),asOf:iso(d.data_atualizacao)||iso(d.enviado_em)});
+    push('DOCAS','Execução física declarada',pct(num(d.execucao_fisica)),ref,'Declaração externa — '+out.docasStatus);
+    if(num(d.execucao_financeira)!==null)push('DOCAS','Execução financeira declarada',pct(num(d.execucao_financeira)),ref,'Declaração externa — '+out.docasStatus);
+    if(iso(d.conclusao_prevista))push('DOCAS','Conclusão prevista declarada',fmtDate(iso(d.conclusao_prevista)),ref,'Conferir cronograma vigente');
     push('DOCAS','Declaração mais recente',out.phase||'sem fase informada',ref,'Declaração externa — '+out.docasStatus);
     if(ordered.length>1)out.dataWarnings.push('Há '+ordered.length+' declarações DOCAS; foi utilizada a mais recente por data declarada, sem homologação automática.');
    }
   }
-  // Um percentual de uma fonte não pode receber data de corte de outra por preenchimento cruzado.
+  // Usar apenas um conjunto coerente (físico/prazo/corte) para concluir sobre atraso.
+  // O valor individual continua atribuído à fonte original na trilha documental.
+  const preferred=out.timelineSnapshots.filter(t=>t.physical!==null&&t.asOf&&t.end)
+   .sort((a,b)=>String(a.asOf).localeCompare(String(b.asOf))).at(-1);
   const physicalOrigin=String(out.sourceOf.physical||'').split(' · ')[0];
   const cutoffOrigin=String(out.sourceOf.asOf||'').split(' · ')[0];
-  if(physicalOrigin&&cutoffOrigin&&physicalOrigin!==cutoffOrigin){
-   out.asOf=null;out.dataWarnings.push('Execução física e data de corte vêm de fontes diferentes; verificar equivalência antes de classificar atraso.');
+  if(preferred&&(!out.asOf||physicalOrigin!==cutoffOrigin||out.physical===null)){
+   out.physical=preferred.physical;out.end=preferred.end;out.asOf=preferred.asOf;
+   out.sourceOf.physical=preferred.fonte+' · '+preferred.ref;
+   out.sourceOf.end=preferred.fonte+' · '+preferred.ref;
+   out.sourceOf.asOf=preferred.fonte+' · '+preferred.ref;
+   out.dataWarnings.push('Diagnóstico de prazo calculado com físico, conclusão e data de corte da mesma fonte: '+preferred.fonte+'.');
+  }else if(physicalOrigin&&cutoffOrigin&&physicalOrigin!==cutoffOrigin){
+   out.asOf=null;out.dataWarnings.push('Execução física e data de corte vêm de fontes distintas: não classificar atraso automaticamente.');
   }
+  const selectedNames=['SEI','BALANCO','DOCAS'];
+  out.sourceChecks=selectedNames.map(fonte=>{
+   if(!selected(mode,fonte))return {fonte,situacao:'Fora do filtro selecionado',qtd:0};
+   const found=out.refs.filter(r=>r.fonte===fonte);
+   let detail=fonte==='BALANCO'? 'Importe e identifique o Balanço na aba Documentos':
+     fonte==='DOCAS'?'Autentique a Central DOCAS e confirme o vínculo por empreendimento':
+     'Importe e vincule documentos/BMs no módulo Documentos';
+   if(fonte==='DOCAS'&&!docasLogged())detail='Central DOCAS sem acesso gerencial autorizado';
+   return {fonte,situacao:found.length?'Dados extraídos':'Sem registro vinculado',qtd:found.length,detail};
+  });
   return out;
  }
  const choices={
