@@ -147,12 +147,12 @@
   const physicalOrigin=String(out.sourceOf.physical||'').split(' · ')[0];
   const cutoffOrigin=String(out.sourceOf.asOf||'').split(' · ')[0];
   const endOrigin=String(out.sourceOf.end||'').split(' · ')[0];
-  if(preferred&&(!out.asOf||physicalOrigin!==cutoffOrigin||endOrigin!==cutoffOrigin||out.physical===null)){
+  if(preferred&&(!out.asOf||physicalOrigin!==cutoffOrigin||endOrigin!==cutoffOrigin||out.physical===null||preferred.asOf>out.asOf)){
    out.physical=preferred.physical;out.end=preferred.end;out.asOf=preferred.asOf;
    out.sourceOf.physical=preferred.fonte+' · '+preferred.ref;
    out.sourceOf.end=preferred.fonte+' · '+preferred.ref;
    out.sourceOf.asOf=preferred.fonte+' · '+preferred.ref;
-   out.dataWarnings.push('Diagnóstico de prazo calculado com físico, conclusão e data de corte da mesma fonte: '+preferred.fonte+'.');
+   out.dataWarnings.push('Diagnóstico de prazo calculado com físico, conclusão e data de corte da mesma fonte: '+preferred.fonte+'.'+(preferred.fonte==='DOCAS'?' Declaração externa, sujeita à conferência pela SNP.':''));
   }else if(physicalOrigin&&cutoffOrigin&&physicalOrigin!==cutoffOrigin){
    out.asOf=null;out.dataWarnings.push('Execução física e data de corte vêm de fontes distintas: não classificar atraso automaticamente.');
   }
