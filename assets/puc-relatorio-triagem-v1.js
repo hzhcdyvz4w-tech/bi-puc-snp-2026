@@ -67,14 +67,14 @@
    if(fin){
     out.osDate=fin.osDate;out.vigenciaContract=fin.vigenciaDate;
     out.rubricaContractValue=Number.isSafeInteger(fin.baseContractCents)?fin.baseContractCents/100:null;
-    if(fin.basePercent!==null){
+    if(Number.isFinite(fin.basePercent)){
      out.financialBM=fin.basePercent;
      out.financialBMRef='SEI '+fin.sourceBaseSEI+' · medido acumulado da rubrica '+fin.rubrica+' / total contratual após aditivo';
      push('SEI','Execução financeira contratual medida (BM/base)',fin.basePercent.toLocaleString('pt-BR',{maximumFractionDigits:2})+'%',out.financialBMRef,'Indicador de medição contratual, não execução física nem pagamento');
      if(mode==='SEI')set('financial',fin.basePercent,'SEI / BM','Percentual de medição da rubrica, não desembolso');
     }
     if(out.rubricaContractValue!==null)push('SEI','Valor contratado da rubrica após aditivo',brl(out.rubricaContractValue),'SEI '+fin.sourceBaseSEI+' · contrato 026/2025','Denominador do percentual de medição');
-    if(fin.reajustePercent!==null)push('SEI','Reajuste medido / previsto',fin.reajustePercent.toLocaleString('pt-BR',{maximumFractionDigits:2})+'%', 'SEI '+fin.sourceReajSEI+' · '+fin.rubrica,'Percentual separado da base contratual');
+    if(Number.isFinite(fin.reajustePercent))push('SEI','Reajuste medido / previsto',fin.reajustePercent.toLocaleString('pt-BR',{maximumFractionDigits:2})+'%', 'SEI '+fin.sourceReajSEI+' · '+fin.rubrica,'Percentual separado da base contratual');
     if(fin.osDate)push('SEI','Data de emissão da Ordem de Serviço',fmtDate(fin.osDate),'SEI '+fin.sourceBaseSEI,'Não prova início físico efetivo');
     if(fin.vigenciaDate)push('SEI','Vigência após Aditivo 02',fmtDate(fin.vigenciaDate),'SEI '+fin.sourceBaseSEI,'Não equivale à conclusão física prevista');
    }
