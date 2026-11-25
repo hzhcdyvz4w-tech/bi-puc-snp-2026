@@ -6,16 +6,31 @@
  const keys=value=>clean(value).split(' ').filter(w=>w.length>=4&&!['PORTO','OBRAS','OBRA','PARA','COMO','NOVA','NOVO','SOBRE','DADOS','INVESTIMENTO','EXECUCAO','ESTRUTURA','TERMINAL','RECUPERACAO','MELHORIA'].includes(w));
  const readProjects=()=>{try{return JSON.parse(byId('embedded-data')?.textContent||'{}').projetos||[]}catch(e){return []}};
  function parseDelimited(text){
-  const a=[];let r=[],field='',inside=false;const source=String(text||'').replace(/^\uFEFF/,'');
-  for(let i=0;i<source.length;i++){const c=source[i];if(c==='"'){if(inside&&source[i+1]==='"'){field+='"';i++}else inside=!inside}
-   else if(c===';'&&!inside){r.push(field);field=''}
-   else if((c==='\n'||c==='\r')&&!inside){if(c==='\r'&&source[i+1]==='\n')i++;r.push(field);if(r.some(x=>x.trim()))a.push(r);r=[];field=''}else field+=c;
-  }r.push(field);if(r.some(x=>x.trim()))a.push(r);return a;
+  const lines=String(text||'').replace(/^\uFEFF/,'').split(/\r?\n/).filter(Boolean);
+  // CSV do Balanço normalmente é separado por ;, mas planilhas exportadas
+  // podem vir em CSV com vírgulas. Detectar o separador pelo cabeçalho.
+  const candidate=lines.find(line=>/NOME.{0,15}EMPREENDIMENTO|ID.{0,5}GOVERNA/i.test(line))||lines[0]||'';
+  const count=(t,separator)=>{let quoted=false,n=0;for(let i=0;i<t.length;i++){if(t[i]==='"'){if(quoted&&t[i+1]==='"')i++;else quoted=!quoted;}else if(t[i]===separator&&!quoted)n++}return n;};
+  const sep=count(candidate,';')>=count(candidate,',')?';':',';
+  const out=[];let row=[],field='',quoted=false;
+  const source=String(text||'').replace(/^\uFEFF/,'');
+  for(let i=0;i<source.length;i++){
+   const c=source[i];
+   if(c==='"'){if(quoted&&source[i+1]==='"'){field+='"';i++}else quoted=!quoted}
+   else if(c===sep&&!quoted){row.push(field);field='';}
+   else if((c==='\n'||c==='\r')&&!quoted){
+    if(c==='\r'&&source[i+1]==='\n')i++;
+    row.push(field);if(row.some(v=>v.trim()))out.push(row);
+    row=[];field='';
+   }else field+=c;
+  }
+  row.push(field);if(row.some(v=>v.trim()))out.push(row);
+  return out;
  }
- const normalHeaders={'ID GOVERNA':'id','NOME DO EMPREENDIMENTO':'empreendimento','UF':'uf','MUNICIPIOS':'municipios','EXECUTOR':'executor','VALOR INVESTIMENTO':'valor_global','VALOR GLOBAL':'valor_global','VALOR GLOBAL DO INVESTIMENTO':'valor_global','VALOR INVESTIDO':'valor_investido','VALOR INVERTIDO':'valor_investido','TOTAL INVESTIDO':'valor_investido','VALOR INVESTIDO ACUMULADO':'valor_investido','VALOR PAGO':'valor_pago','TOTAL PAGO':'valor_pago','PAGAMENTO ACUMULADO':'valor_pago','VALOR PAGO ACUMULADO':'valor_pago','INICIO EMPREENDIMENTO DD MM AAAA':'inicio','PREVISAO CONCLUSAO DO EMPREENDIMENTO DD MM AAAA':'termino','EXECUCAO FISICA':'execucao_fisica','EXECUCAO FINANCEIRA':'execucao_financeira','EXECUCAO FINANCEIRA PERCENTUAL':'execucao_financeira','PERCENTUAL DE EXECUCAO FINANCEIRA':'execucao_financeira','DATA DE REFERENCIA':'data_referencia'};
+ const normalHeaders={'ID GOVERNA':'id','ID GOVERN A':'id','ID DO EMPREENDIMENTO':'id','NOME DO EMPREENDIMENTO':'empreendimento','EMPREENDIMENTO':'empreendimento','UF':'uf','MUNICIPIOS':'municipios','EXECUTOR':'executor','VALOR INVESTIMENTO':'valor_global','VALOR GLOBAL':'valor_global','VALOR GLOBAL DO INVESTIMENTO':'valor_global','VALOR INVESTIDO':'valor_investido','VALOR INVERTIDO':'valor_investido','TOTAL INVESTIDO':'valor_investido','VALOR INVESTIDO ACUMULADO':'valor_investido','VALOR PAGO':'valor_pago','TOTAL PAGO':'valor_pago','PAGAMENTO ACUMULADO':'valor_pago','VALOR PAGO ACUMULADO':'valor_pago','INICIO EMPREENDIMENTO DD MM AAAA':'inicio','PREVISAO CONCLUSAO DO EMPREENDIMENTO DD MM AAAA':'termino','EXECUCAO FISICA':'execucao_fisica','EXECUCAO FINANCEIRA':'execucao_financeira','EXECUCAO FINANCEIRA PERCENTUAL':'execucao_financeira','PERCENTUAL DE EXECUCAO FINANCEIRA':'execucao_financeira','DATA DE REFERENCIA':'data_referencia','DATA REFERENCIA':'data_referencia','MES DE REFERENCIA':'mes_referencia','DATA DA ATUALIZACAO':'data_referencia','DATA DE ATUALIZACAO':'data_referencia','PREVISAO DE CONCLUSAO':'termino','CONCLUSAO PREVISTA':'termino','PERCENTUAL EXECUCAO FISICA':'execucao_fisica'};
  function balancoRows(){
   const files=window.PUCDocLibrary?.list?.().filter(d=>d.origin==='BALANCO')||[],rows=[];
-  for(const f of files){const all=parseDelimited(f.text);if(!all.length)continue;let idx=all.findIndex(row=>row.some(x=>clean(x)==='NOME DO EMPREENDIMENTO')&&row.some(x=>clean(x)==='UF'));if(idx<0)continue;
+  for(const f of files){const all=parseDelimited(f.text);if(!all.length)continue;let idx=all.findIndex(row=>row.some(x=>['NOME DO EMPREENDIMENTO','EMPREENDIMENTO'].includes(clean(x)))&&row.some(x=>clean(x)==='UF'));if(idx<0)continue;
    let headers=all[idx].map(x=>normalHeaders[clean(x)]||'');
    for(const line of all.slice(idx+1)){
     let o={};for(let n=0;n<headers.length;n++)if(headers[n])o[headers[n]]=String(line[n]||'').trim();
@@ -69,6 +84,6 @@
    rows.map(r=>'<tr><td>'+safe(r.id||'—')+'</td><td>'+safe(r.uf)+'</td><td>'+safe(r.empreendimento)+'</td><td>'+formatMoney(r.valor_global)+'</td><td>'+safe(dateString(r.inicio))+' / '+safe(dateString(r.termino))+'</td><td>'+safe(r.execucao_fisica||'—')+'%</td><td>'+safe(r.arquivo||'Balanço')+'</td></tr>').join('')+'</tbody></table></div></details></div>';
  }
  function init(){const panel=byId('puc3-main');if(!panel)return;let block=document.createElement('details');block.className='panel';block.id='puc3-vinculos';block.innerHTML='<summary style="cursor:pointer;font-weight:700">Identificação de obras · UF × Empreendimento × SEI/BMs</summary><p class="muted">O Balanço fornece a localização e identificação da obra; o SEI fornece o histórico de documentos e boletins. Os percentuais só são comparados após comprovação de mesmo objeto, contrato, período e data de corte.</p><p class="statusline" id="puc3-vinculos-status"></p><div id="puc3-vinculos-empreendimentos"></div><h3>BMs localizados no SEI (não vinculados automaticamente)</h3><div id="puc3-vinculos-sei"></div>';panel.appendChild(block);const style=document.createElement('style');style.textContent='.puc-candidate-scroll{overflow-x:auto;max-width:100%}.puc-candidate-scroll .data-table{min-width:950px}.puc-candidate-scroll td{min-width:90px;max-width:310px;overflow-wrap:anywhere;vertical-align:top}.puc-candidate-block{margin:16px 0}.puc-candidate-block summary{cursor:pointer;padding:12px;background:#edf3f7}.puc-correlacao-table{overflow:auto}.puc-correlacao-table .data-table{min-width:950px}.puc-correlacao-table small{display:block;color:#697f91;margin-top:4px}.puc-correlacao-docs{max-height:240px;overflow:auto;font-size:12px}.puc-correlacao-docs>div{padding:7px;border-bottom:1px solid #dce6ee}';document.head.appendChild(style);render()}
- window.PUCCorrelacao={refresh:render,balancoRows,projectSuggestions,seiSummary,reportSection,dateString};
+ window.PUCCorrelacao={refresh:render,balancoRows,projectSuggestions,seiSummary,reportSection,dateString,parseDelimited};
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
