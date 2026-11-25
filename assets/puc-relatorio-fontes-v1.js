@@ -415,7 +415,12 @@
   // A versão anterior permanece apenas como contingência se o novo módulo falhar.
   const generated=window.PUCRelatorioTriagem?.report?.(id,p,mode);
   holder.innerHTML=generated||heading+investmentIndicators+evidence+findings+legalBrief+conclusion;
-  const title=p.empresa+' · '+id+' · '+sourceTitle+' · '+filteredRows.length+' registros estruturados · '+panels.reduce((sum,x)=>sum+x.count,0)+' documentos/declarações vinculados';
+  const extracted=window.PUCRelatorioTriagem?.raw?.(id,p,mode);
+  const bmEntries=selected.includes('SEI')?(window.PUCBMReconciliado?.forProject?.(id)?.entries?.length||0):0;
+  const sourceCount=extracted?.refs?.length||0;
+  const title=p.empresa+' · '+id+' · '+sourceTitle+' · '+sourceCount+' evidência(s) extraída(s)'+
+   (bmEntries?' · '+bmEntries+' BMs por rubrica conciliados no SEI':'')+
+   ' · '+panels.reduce((sum,x)=>sum+x.count,0)+' documento(s)/declaração(ões) localmente vinculados';
   if(summary)summary.textContent=title;
   latest={id,p,mode,r,ctx,renderedAt:new Date().toISOString()};
   return latest;
