@@ -144,7 +144,7 @@ body .grid2{gap:18px}
 </section>
 <section class="page hidden" id="relatorio">
 <div class="panel"><div class="section-header"><div><h2>Relatório Analítico · Extração, conferência e diagnóstico PUC</h2><p class="muted">Comparação técnica entre SIOP, BMs/processos SEI, Balanço e declarações das Docas, por empreendimento e competência, com evidências rastreáveis e conclusões condicionadas à validação SNP.</p></div><button class="btn secondary" id="report-print" type="button">Imprimir / salvar PDF</button></div>
-<div class="filters"><select aria-label="Companhia do relatório" id="report-company"><option value="">Selecione a companhia</option></select><select aria-label="Empreendimento do relatório" id="report-project"><option value="">Selecione o empreendimento</option></select><label class="report-source-label" for="report-source">Fonte para análise<select id="report-source" aria-label="Selecionar origem documental do Relatório Analítico"><option value="TODAS">Todas as fontes — relatório consolidado</option><option value="SEI">Processos SEI — Boletins de Medição</option><option value="BALANCO">Balanço — execução do empreendimento</option><option value="DOCAS">DOCAS — formulários recebidos</option></select></label><button class="btn" id="report-refresh" type="button">Gerar relatório</button><button class="btn secondary" id="report-export" type="button">Exportar achados CSV</button></div>
+<div class="filters"><select aria-label="Companhia do relatório" id="report-company"><option value="">Selecione a companhia</option></select><select aria-label="Empreendimento do relatório" id="report-project"><option value="">Selecione o empreendimento</option></select><label class="report-source-label" for="report-source">Fontes do relatório (selecione Todas para cruzar as bases)<select id="report-source" aria-label="Selecionar origem documental do Relatório Analítico"><option value="TODAS">SEI + Balanço + DOCAS — consolidado (recomendado)</option><option value="SEI">Processos SEI — Boletins de Medição</option><option value="BALANCO">Balanço — execução do empreendimento</option><option value="DOCAS">DOCAS — formulários recebidos</option></select></label><button class="btn" id="report-refresh" type="button">Gerar relatório</button><button class="btn secondary" id="report-export" type="button">Exportar achados CSV</button></div>
 <div class="notice subtle">Escolha uma fonte para produzir o relatório documental específico ou selecione <b>Todas as fontes</b> para reunir SEI, Balanço e DOCAS com referência orçamentária SIOP. O BI identifica dados comprovados, extrações candidatas, informações ainda não conferidas e lacunas documentais. A ficha enxuta extrai os registros identificáveis e permite sua conferência antes do Relatório Analítico. O diagnóstico de atraso e a avaliação de vistoria seguem critérios técnicos de triagem e as referências normativas aplicáveis à PUC; não constituem constatação automática de infração ou decisão de auditoria.</div>
 <div class="statusline" id="report-summary" role="status"></div><div class="critical-report" id="critical-report"><div class="empty">Selecione uma companhia e empreendimento para emitir o relatório.</div></div>
 </div>
@@ -500,7 +500,7 @@ init();initV7();
 <script src="assets/confronto-documental-v13.js?v=38-sei-sem-anexos-bm-20261112"></script>
 <script src="assets/centralizar-documentos-v16.js?v=18"></script>
 <script src="assets/puc-diagnostico.js?v=17"></script>
-<script src="assets/puc-correlacao-v17.js?v=5-csv-cabecalhos-20261125"></script>
+<script src="assets/puc-correlacao-v17.js?v=6-balanco-parser-20261125"></script>
 <script src="assets/puc-vinculos-bm-v1.js?v=3-pacote-valores-sei-20261116"></script>
 <script src="assets/puc-bm-reconciliacao-contrato-026-v1.js?v=3-atualizacao-central-20261116"></script>
 <script src="assets/puc-quadro-valores-v18.js?v=9-contrato-026-medicoes-sei-20261116"></script>
@@ -508,6 +508,6 @@ init();initV7();
 <script src="assets/puc-docas-gerenciador.js?v=20261116-bms-central-privado-v7"></script>
 <script src="assets/puc-docas-automatico.js?v=20261111"></script>
 <script src="assets/puc-indicadores-investimentos-v1.js?v=1-20261116"></script>
-<script src="assets/puc-relatorio-triagem-v1.js?v=3-diagnostico-fontes-20261125"></script>
+<script src="assets/puc-relatorio-triagem-v1.js?v=4-busca-correlacao-20261125"></script>
 <script src="assets/puc-relatorio-fontes-v1.js?v=11-codern-alias-20261125"></script>
 </body></html>
