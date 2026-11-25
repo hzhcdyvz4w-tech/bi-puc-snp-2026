@@ -192,7 +192,12 @@
    detail='Há execução física e prazo final informados, mas a fonte não registra data de corte verificável: atraso não classificável automaticamente.';
   }else if(physical!==null){kind='em_andamento';detail='Execução física informada em '+pct(physical)+'; cronograma e data de corte insuficientes para concluir sobre atraso.'}
   const now=today();
-  if(x.asOf&&days(now,x.asOf)>90)detail+=' A fonte principal está defasada há mais de 90 dias (limiar técnico de triagem, não prazo legal).';
+  if(asOf&&days(now,asOf)>90){
+   detail+=' A fonte de execução está defasada há mais de 90 dias (limiar técnico de triagem, não prazo legal).';
+   if(['em_andamento','a_iniciar'].includes(kind)&&end&&days(now,end)>0){
+    kind='insuficiente';detail+=' Como a conclusão prevista já venceu após a última data de referência, o estado ATUAL da obra não pode ser afirmado sem atualização de BM, cronograma ou declaração conferida.';
+   }
+  }
   const alerts=[];
   if((manualEnd&&manualEnd!==x.end||manualCutoff&&manualCutoff!==x.asOf)&&!hasCutoffEvidence)alerts.push('Data ou prazo alterado manualmente sem referência/justificativa; alteração ignorada no diagnóstico.');
   if(kind==='atraso')alerts.push('Prazo final superado na data de referência informada; verificar termo aditivo e reprogramação.');
