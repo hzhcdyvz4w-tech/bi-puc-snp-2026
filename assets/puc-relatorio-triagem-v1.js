@@ -273,6 +273,8 @@
   root.innerHTML='<div class="puc-triagem-head"><h3>Ficha de extração e conferência</h3><span class="puc-triagem-state">'+esc(choices[ass.kind])+'</span></div>'+
    '<p class="muted">Extração por vínculo documental. Valores ausentes não são preenchidos artificialmente. As informações são preliminares até a conferência pela SNP.</p>'+restricted+sourceSummary+
    (x.osDate||x.vigenciaContract?'<p class="puc-triagem-bm-dates"><b>Contrato 026/2025 (SEI):</b> OS emitida em '+esc(fmtDate(x.osDate))+' · Vigência após Aditivo 02: '+esc(fmtDate(x.vigenciaContract))+'. <b>Vigência não é conclusão física prevista.</b></p>':'')+
+   (x.medido!==null&&x.physical===null?'<p class="puc-triagem-bm-dates"><b>Execução física global:</b> não demonstrada nas planilhas de medição SEI disponíveis. Solicitar cronograma físico atualizado ou relatório de fiscalização que identifique o percentual executado. <b>Valor medido não é percentual físico.</b></p>':'')+
+   (x.medido!==null&&x.paid===null?'<p class="muted">Pagamento à contratada não comprovado pelos BMs/SEI; verificar documentos de liquidação e pagamento, quando pertinentes.</p>':'')+
    '<div class="puc-triagem-cards">'+items.map(([name,value,ref])=>'<div><small>'+esc(name)+'</small><strong>'+esc(value)+'</strong><small>'+esc(ref||'Fonte não confirmada')+'</small></div>').join('')+'</div>'+
    '<p class="puc-triagem-diagnostico"><b>Situação sugerida:</b> '+esc(ass.detail)+'</p>'+
    '<form id="puc-triagem-form" data-context="'+esc(id+'|'+mode)+'"><div class="puc-triagem-formgrid">'+
