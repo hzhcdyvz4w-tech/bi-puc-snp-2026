@@ -80,7 +80,7 @@
   const sheets=docs.filter(d=>/Planilha\.pdf$/i.test(d.name||''));
   const regular=sheets.filter(d=>!/(VALORES MEDIDOS PARA O REAJUSTE|CONTRATO Nº 026\/2025\s*-\s*REAJUSTE)/i.test(String(d.text||'').slice(0,900))).sort((a,b)=>docNumber(b)-docNumber(a));
   const adjusted=sheets.filter(d=>/(VALORES MEDIDOS PARA O REAJUSTE|CONTRATO Nº 026\/2025\s*-\s*REAJUSTE)/i.test(String(d.text||'').slice(0,900))).sort((a,b)=>docNumber(b)-docNumber(a));
-  if(!regular.length||!adjusted.length){cache={ok:false,reason:'Planilha base e/ou de reajuste do contrato 026/2025 indisponível',documents:docs.length};return cache;}
+  if(!regular.length||!adjusted.length){cache={ok:false,reason:'Planilha base e/ou de reajuste do contrato 026/2025 indisponível',documents:docs.length};return remoteCache?.ok?remoteCache:cache;}
   const base=regular[0],reaj=adjusted[0],byCode={};
   for(const [id,def] of Object.entries(map)){
    const b=parseRow(base,def.code),r=parseRow(reaj,def.code);
