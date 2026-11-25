@@ -160,7 +160,15 @@
   return rows.filter(r=>{
    const co=norm(r.companhia_nome),codigo=norm(r.companhia_codigo),company=norm(p.empresa);
    // Preferir o código institucional. Nomes completos são admissíveis apenas com equivalência inequívoca.
-   const companyOk=!!company&&(codigo===company||co===company||(codigo&&company===codigo));
+   // A declaração institucional pode trazer o nome completo, enquanto a
+   // carteira utiliza a sigla CODERN. Só aceitar a equivalência institucional
+   // explícita, sempre combinada com UF e ID/objeto da obra.
+   const aliases={
+    CODERN:['COMPANHIA DOCAS DO RIO GRANDE DO NORTE','COMPANHIA DOCAS DO RIO GRANDE DO NORTE CODERN']
+   };
+   const normalized=company.replace(/ /g,'');
+   const companyOk=!!company&&(codigo===company||co===company||
+      (aliases[normalized]||[]).includes(co));
    const ufOk=!!norm(p.uf)&&norm(r.uf)===norm(p.uf);
    const explicit=idGov&&String(r.id_gov_pac||'').trim()===idGov;
    const exact=norm(r.empreendimento)===norm(p.empreendimento);
