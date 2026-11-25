@@ -44,7 +44,8 @@
 
  function raw(id,p,mode){
   const out={id,company:p.empresa||'',uf:p.uf||'',name:p.empreendimento||'',po:p.po||'',acao:p.acao||'',mode,
-   refs:[],physical:null,financial:null,global:null,invested:null,paid:null,medido:null,
+   refs:[],physical:null,financial:null,financialBM:null,global:null,invested:null,paid:null,medido:null,
+   rubricaContractValue:null,osDate:null,vigenciaContract:null,financialBMRef:'',
    start:null,end:null,asOf:null,sourceOf:{},restrictions:'',phase:'',fiscalReport:false,
    docasStatus:'Indisponível / não autenticada',dataWarnings:[],sourceChecks:[],timelineSnapshots:[]};
   const push=(fonte,field,value,ref,status='Extração preliminar')=>{
@@ -62,6 +63,22 @@
    out.medido=bm.totalCents/100;
    const x=w.PUCBMReconciliado?.compute?.();
    push('SEI','Medição contratual acumulada',brl(out.medido),'Contrato 026/2025 · '+bm.rubrica+' · SEI '+(x?.baseSEI||'base a conferir')+' / '+(x?.reajSEI||'reajuste a conferir'),'Conciliação documental não homologada');
+   const fin=w.PUCBMReconciliado?.financialForProject?.(id);
+   if(fin){
+    out.osDate=fin.osDate;out.vigenciaContract=fin.vigenciaDate;
+    out.rubricaContractValue=Number.isSafeInteger(fin.baseContractCents)?fin.baseContractCents/100:null;
+    if(fin.basePercent!==null){
+     out.financialBM=fin.basePercent;
+     out.financialBMRef='SEI '+fin.sourceBaseSEI+' · medido acumulado da rubrica '+fin.rubrica+' / total contratual após aditivo';
+     push('SEI','Execução financeira contratual medida (BM/base)',fin.basePercent.toLocaleString('pt-BR',{maximumFractionDigits:2})+'%',out.financialBMRef,'Indicador de medição contratual, não execução física nem pagamento');
+     if(mode==='SEI')set('financial',fin.basePercent,'SEI / BM','Percentual de medição da rubrica, não desembolso');
+    }
+    if(out.rubricaContractValue!==null)push('SEI','Valor contratado da rubrica após aditivo',brl(out.rubricaContractValue),'SEI '+fin.sourceBaseSEI+' · contrato 026/2025','Denominador do percentual de medição');
+    if(fin.reajustePercent!==null)push('SEI','Reajuste medido / previsto',fin.reajustePercent.toLocaleString('pt-BR',{maximumFractionDigits:2})+'%', 'SEI '+fin.sourceReajSEI+' · '+fin.rubrica,'Percentual separado da base contratual');
+    if(fin.osDate)push('SEI','Data de emissão da Ordem de Serviço',fmtDate(fin.osDate),'SEI '+fin.sourceBaseSEI,'Não prova início físico efetivo');
+    if(fin.vigenciaDate)push('SEI','Vigência após Aditivo 02',fmtDate(fin.vigenciaDate),'SEI '+fin.sourceBaseSEI,'Não equivale à conclusão física prevista');
+   }
+   out.dataWarnings.push('Planilhas BM/SEI do Contrato 026/2025 contêm valores de medição, mas não demonstram percentual físico global nem pagamento realizado.');
   }
   const lib=selected(mode,'SEI')?(w.PUCDocLibrary?.list?.()||[]):[];
   const linked=lib.filter(d=>d.origin==='SEI'&&(String(d.project||'')===String(id)||(d.projects||[]).includes(id)));
@@ -241,8 +258,10 @@
   const items=[
    ['Execução física',pct(x.physical),x.sourceOf.physical],
    ['Execução financeira',pct(x.financial),x.sourceOf.financial],
+   ['Execução financeira medida (BM/SEI)',pct(x.financialBM),x.financialBMRef],
    ['Valor global',brl(x.global),x.sourceOf.global],
    ['Valor medido (BM/SEI)',brl(x.medido),'SEI · não equivale a pagamento'],
+   ['Valor contratual da rubrica (SEI)',brl(x.rubricaContractValue),'SEI · após aditivo, não investimento global'],
    ['Valor investido',brl(x.invested),x.sourceOf.invested],
    ['Valor pago',brl(x.paid),x.sourceOf.paid]
   ];
@@ -251,6 +270,7 @@
   const restricted=mode!=='TODAS'?'<p class="puc-triagem-filter"><b>Filtro atual: '+esc(mode)+'.</b> Neste modo, as demais fontes não são consultadas. Para reunir as informações do relatório, use o botão abaixo.</p><button class="btn" type="button" id="puc-triagem-consolidar">Reunir SEI + Balanço + DOCAS</button>':'';
   root.innerHTML='<div class="puc-triagem-head"><h3>Ficha de extração e conferência</h3><span class="puc-triagem-state">'+esc(choices[ass.kind])+'</span></div>'+
    '<p class="muted">Extração por vínculo documental. Valores ausentes não são preenchidos artificialmente. As informações são preliminares até a conferência pela SNP.</p>'+restricted+sourceSummary+
+   (x.osDate||x.vigenciaContract?'<p class="puc-triagem-bm-dates"><b>Contrato 026/2025 (SEI):</b> OS emitida em '+esc(fmtDate(x.osDate))+' · Vigência após Aditivo 02: '+esc(fmtDate(x.vigenciaContract))+'. <b>Vigência não é conclusão física prevista.</b></p>':'')+
    '<div class="puc-triagem-cards">'+items.map(([name,value,ref])=>'<div><small>'+esc(name)+'</small><strong>'+esc(value)+'</strong><small>'+esc(ref||'Fonte não confirmada')+'</small></div>').join('')+'</div>'+
    '<p class="puc-triagem-diagnostico"><b>Situação sugerida:</b> '+esc(ass.detail)+'</p>'+
    '<form id="puc-triagem-form" data-context="'+esc(id+'|'+mode)+'"><div class="puc-triagem-formgrid">'+
@@ -303,10 +323,13 @@
    z('Situação da obra e indicadores',
     '<p><b>Diagnóstico:</b> '+esc(choices[a.kind])+'</p><p>'+esc(a.detail)+'</p>'+
     '<div class="puc-triagem-cards">'+[
-     ['Execução física',pct(x.physical)],['Execução financeira',pct(x.financial)],
-     ['Medição acumulada BM/SEI',brl(x.medido)],['Valor pago à contratada',brl(x.paid)]
+     ['Execução física global',pct(x.physical)],['Execução financeira informada',pct(x.financial)],
+     ['Execução financeira medida (BM/SEI)',pct(x.financialBM)],['Medição acumulada BM/SEI',brl(x.medido)],
+     ['Valor contratado da rubrica',brl(x.rubricaContractValue)],['Valor pago à contratada',brl(x.paid)]
     ].map(([k,v])=>'<div><small>'+esc(k)+'</small><strong>'+esc(v)+'</strong></div>').join('')+'</div>'+
-    '<p><b>Conclusão prevista:</b> '+fmtDate(a.end)+' · <b>Data da informação:</b> '+fmtDate(a.asOf)+'</p>',1)+
+    '<p><b>Conclusão prevista:</b> '+fmtDate(a.end)+' · <b>Data da informação:</b> '+fmtDate(a.asOf)+'</p>'+ 
+    (x.osDate||x.vigenciaContract?'<p><b>OS (SEI):</b> '+fmtDate(x.osDate)+' · <b>Vigência contratual:</b> '+fmtDate(x.vigenciaContract)+' (não equivale ao prazo de conclusão física da obra).</p>':'')+
+    '<p class="muted">A execução financeira BM/SEI compara medição acumulada de base à rubrica contratual após o aditivo. Reajustes são apurados separadamente. Não demonstra pagamento, investimento realizado ou percentual físico global.</p>',1)+
    z('Evidências SEI, Balanço e DOCAS',table+
     '<p class="muted">Medição não significa pagamento; registros de declaração não equivalem a atesto. Ausência no BI não comprova inexistência no SEI.</p>',2)+
    z('Constatações e pendências',bullets.length?'<ul>'+bullets.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul>':
@@ -328,7 +351,7 @@
   const el=document.createElement('section');el.id='puc-triagem-panel';el.className='puc-triagem-panel';
   const anchor=$('report-summary');if(anchor)anchor.parentNode.insertBefore(el,anchor);else page.querySelector('.panel')?.appendChild(el);
   const css=document.createElement('style');css.id='puc-triagem-css';
-  css.textContent='.puc-triagem-panel{margin:15px 0;padding:17px;border:1px solid #cddde9;border-radius:12px;background:#f9fbfd}.puc-triagem-filter{padding:12px;background:#fff2df;border-left:3px solid #d18c23;border-radius:6px}.puc-triagem-origins{margin:12px 0}.puc-triagem-origin-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:8px 0}.puc-triagem-origin-grid>div{background:white;border:1px solid #d4e2ea;border-radius:7px;padding:9px;min-width:0}.puc-triagem-origin-grid strong,.puc-triagem-origin-grid span,.puc-triagem-origin-grid small{display:block;overflow-wrap:anywhere}.puc-triagem-origin-grid span{font-size:12px;font-weight:600}.puc-triagem-origin-grid small{font-size:11px;color:#58738b}.puc-triagem-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.puc-triagem-state{background:#edf2f6;border-radius:12px;padding:6px 12px;font-size:12px;font-weight:600}.puc-triagem-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:13px 0}.puc-triagem-cards>div{border:1px solid #dde5eb;background:white;border-radius:8px;padding:12px;min-width:0}.puc-triagem-cards small{display:block;color:#62788b;font-size:11px;overflow-wrap:anywhere}.puc-triagem-cards strong{display:block;font-size:18px;overflow-wrap:anywhere;margin:5px 0}.puc-triagem-diagnostico{padding:12px;background:#edf3f7;border-radius:7px}.puc-triagem-formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.puc-triagem-formgrid label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600}.puc-triagem-formgrid input,.puc-triagem-formgrid textarea,.puc-triagem-formgrid select{max-width:100%;width:100%;padding:9px;border:1px solid #c8d8e5;border-radius:7px;background:#fff}.puc-triagem-wide{grid-column:1/-1}.puc-triagem-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.puc-triagem-scroll{overflow-x:auto}.puc-triagem-scroll table{min-width:780px;width:100%;border-collapse:collapse}.puc-triagem-scroll td,.puc-triagem-scroll th{padding:7px 9px;border-bottom:1px solid #dce6eb;text-align:left;vertical-align:top;overflow-wrap:anywhere}.puc-triagem-panel details{margin-top:9px}.puc-triagem-panel summary{cursor:pointer;font-weight:600}@media(max-width:760px){.puc-triagem-origin-grid{grid-template-columns:1fr}.puc-triagem-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.puc-triagem-formgrid{grid-template-columns:1fr}}@media print{.puc-triagem-panel{display:none!important}#critical-report .puc-triagem-cards{grid-template-columns:repeat(4,minmax(0,1fr))}#critical-report .puc-triagem-cards>div{break-inside:avoid}#critical-report .puc-triagem-scroll{overflow:visible}#critical-report .puc-triagem-scroll table{min-width:0;font-size:9px}}';
+  css.textContent='.puc-triagem-panel{margin:15px 0;padding:17px;border:1px solid #cddde9;border-radius:12px;background:#f9fbfd}.puc-triagem-filter{padding:12px;background:#fff2df;border-left:3px solid #d18c23;border-radius:6px}.puc-triagem-origins{margin:12px 0}.puc-triagem-origin-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:8px 0}.puc-triagem-origin-grid>div{background:white;border:1px solid #d4e2ea;border-radius:7px;padding:9px;min-width:0}.puc-triagem-origin-grid strong,.puc-triagem-origin-grid span,.puc-triagem-origin-grid small{display:block;overflow-wrap:anywhere}.puc-triagem-origin-grid span{font-size:12px;font-weight:600}.puc-triagem-origin-grid small{font-size:11px;color:#58738b}.puc-triagem-bm-dates{margin:12px 0;padding:10px;background:#edf3f8;border-left:3px solid #749bb1;border-radius:5px}.puc-triagem-head{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.puc-triagem-state{background:#edf2f6;border-radius:12px;padding:6px 12px;font-size:12px;font-weight:600}.puc-triagem-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:13px 0}.puc-triagem-cards>div{border:1px solid #dde5eb;background:white;border-radius:8px;padding:12px;min-width:0}.puc-triagem-cards small{display:block;color:#62788b;font-size:11px;overflow-wrap:anywhere}.puc-triagem-cards strong{display:block;font-size:18px;overflow-wrap:anywhere;margin:5px 0}.puc-triagem-diagnostico{padding:12px;background:#edf3f7;border-radius:7px}.puc-triagem-formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.puc-triagem-formgrid label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600}.puc-triagem-formgrid input,.puc-triagem-formgrid textarea,.puc-triagem-formgrid select{max-width:100%;width:100%;padding:9px;border:1px solid #c8d8e5;border-radius:7px;background:#fff}.puc-triagem-wide{grid-column:1/-1}.puc-triagem-actions{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}.puc-triagem-scroll{overflow-x:auto}.puc-triagem-scroll table{min-width:780px;width:100%;border-collapse:collapse}.puc-triagem-scroll td,.puc-triagem-scroll th{padding:7px 9px;border-bottom:1px solid #dce6eb;text-align:left;vertical-align:top;overflow-wrap:anywhere}.puc-triagem-panel details{margin-top:9px}.puc-triagem-panel summary{cursor:pointer;font-weight:600}@media(max-width:760px){.puc-triagem-origin-grid{grid-template-columns:1fr}.puc-triagem-cards{grid-template-columns:repeat(2,minmax(0,1fr))}.puc-triagem-formgrid{grid-template-columns:1fr}}@media print{.puc-triagem-panel{display:none!important}#critical-report .puc-triagem-cards{grid-template-columns:repeat(4,minmax(0,1fr))}#critical-report .puc-triagem-cards>div{break-inside:avoid}#critical-report .puc-triagem-scroll{overflow:visible}#critical-report .puc-triagem-scroll table{min-width:0;font-size:9px}}';
   document.head.appendChild(css);
   document.addEventListener('change',e=>{if(e.target?.id==='report-project'||e.target?.id==='report-source')renderForm()});
   for(const event of ['puc-documents-updated','puc-ficha-bms-atualizados','puc:docas-externas-atualizadas','puc-bm-vinculos-atualizados']){
