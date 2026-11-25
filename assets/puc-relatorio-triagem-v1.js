@@ -177,9 +177,11 @@
   out.sourceChecks=selectedNames.map(fonte=>{
    if(!selected(mode,fonte))return {fonte,situacao:'Fora do filtro selecionado',qtd:0};
    const found=out.refs.filter(r=>r.fonte===fonte);
-   let detail=fonte==='BALANCO'? 'Importe e identifique o Balanço na aba Documentos':
+   let detail=fonte==='BALANCO'?'Importe e identifique o Balanço na aba Documentos':
      fonte==='DOCAS'?'Autentique a Central DOCAS e confirme o vínculo por empreendimento':
-     'Importe e vincule documentos/BMs no módulo Documentos';
+     'Importe e vincule os BMs originais na biblioteca documental';
+   if(found.length)detail=found.length+' registro(s) extraído(s) para conferência'+
+      (fonte==='SEI'&&out.financialBM!==null?' · percentual de medição contratual identificado':'');
    if(fonte==='DOCAS'&&!docasLogged())detail='Central DOCAS sem acesso gerencial autorizado';
    return {fonte,situacao:found.length?'Dados extraídos':'Sem registro vinculado',qtd:found.length,detail};
   });
@@ -258,7 +260,7 @@
   const items=[
    ['Execução física',pct(x.physical),x.sourceOf.physical],
    ['Execução financeira',pct(x.financial),x.sourceOf.financial],
-   ['Execução financeira medida (BM/SEI)',pct(x.financialBM),x.financialBMRef],
+   ...(mode==='SEI'?[]:[['Execução financeira medida (BM/SEI)',pct(x.financialBM),x.financialBMRef]]),
    ['Valor global',brl(x.global),x.sourceOf.global],
    ['Valor medido (BM/SEI)',brl(x.medido),'SEI · não equivale a pagamento'],
    ['Valor contratual da rubrica (SEI)',brl(x.rubricaContractValue),'SEI · após aditivo, não investimento global'],
@@ -324,7 +326,7 @@
     '<p><b>Diagnóstico:</b> '+esc(choices[a.kind])+'</p><p>'+esc(a.detail)+'</p>'+
     '<div class="puc-triagem-cards">'+[
      ['Execução física global',pct(x.physical)],['Execução financeira informada',pct(x.financial)],
-     ['Execução financeira medida (BM/SEI)',pct(x.financialBM)],['Medição acumulada BM/SEI',brl(x.medido)],
+     ...(mode==='SEI'?[]:[['Execução financeira medida (BM/SEI)',pct(x.financialBM)]]),['Medição acumulada BM/SEI',brl(x.medido)],
      ['Valor contratado da rubrica',brl(x.rubricaContractValue)],['Valor pago à contratada',brl(x.paid)]
     ].map(([k,v])=>'<div><small>'+esc(k)+'</small><strong>'+esc(v)+'</strong></div>').join('')+'</div>'+
     '<p><b>Conclusão prevista:</b> '+fmtDate(a.end)+' · <b>Data da informação:</b> '+fmtDate(a.asOf)+'</p>'+ 
