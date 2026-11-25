@@ -37,6 +37,39 @@
   if(nums.some(x=>x===null)||nums.length<4)return null;
   return {monthly:nums.slice(0,-2),acc:nums.at(-2),balance:nums.at(-1)};
  }
+
+ function contractAmount(d,letter){
+  const lines=String(d.text||'').split('\n'),prefix='30.68212.26.784.3105.162'+letter;
+  const ix=lines.findIndex(x=>x.trim().startsWith(prefix));
+  if(ix<0)return null;
+  let line=lines[ix];
+  if(!line.includes('R$')&&lines[ix+1])line+=' '+lines[ix+1];
+  const pct=line.lastIndexOf('%');
+  if(pct<0)return null;
+  const amounts=line.slice(0,pct).match(moneyTokens)||[];
+  return amounts.length?toCents(amounts.at(-1)):null;
+ }
+ function sourceDates(d){
+  const s=String(d.text||''),os=s.match(/Data de Emiss[aã]o da OS:\s*(\d{2}\/\d{2}\/\d{4})/i);
+  const vig=s.match(/Vig[eê]ncia ap[oó]s Aditivo 02:\s*(\d{2}\/\d{2}\/\d{4})/i);
+  const toISO=v=>v?v.split('/').reverse().join('-'):null;
+  return {osDate:toISO(os?.[1]),vigenciaDate:toISO(vig?.[1])};
+ }
+ const financialPct=(num,den)=>Number.isSafeInteger(num)&&Number.isSafeInteger(den)&&den>0?Math.round(num/den*10000)/100:null;
+ function financialForProject(id){
+  const x=forProject(id),d=compute();if(!x||!d?.ok)return null;
+  const base=x.baseContractCents,reaj=x.reajusteContractCents;
+  return {
+   sourceBaseSEI:d.baseSEI,sourceReajSEI:d.reajSEI,contract:'026/2025',
+   rubrica:x.rubrica,osDate:d.osDate||null,vigenciaDate:d.vigenciaDate||null,
+   medidoBaseCents:x.baseCents,medidoReajusteCents:x.reajCents,medidoTotalCents:x.totalCents,
+   baseContractCents:base??null,reajusteContractCents:reaj??null,
+   basePercent:financialPct(x.baseCents,base),reajustePercent:financialPct(x.reajCents,reaj),
+   totalPercent:financialPct(x.totalCents,Number.isSafeInteger(base)&&Number.isSafeInteger(reaj)?base+reaj:null),
+   scope:'Medição financeira contratual. Não é execução física nem pagamento.',
+   status:'Conciliação documental sujeita à homologação pela SNP'
+  };
+ }
  let cacheKey='',cache=null,remoteCache=null;
  function compute(){
   const docs=(w.PUCDocLibrary?.list?.()||[]).filter(contractDoc);
@@ -62,7 +95,7 @@
     const vBase=b.monthly[j]||0, vReaj=j>=10?(r.monthly[j-10]||0):0;
     return {bm:'BM'+String(j+1).padStart(2,'0'),number:j+1,baseCents:vBase,reajCents:vReaj,totalCents:vBase+vReaj,competencia:'Não identificada nas planilhas'};
    });
-   byCode[id]={...def,idGoverna:id,baseCents:b.acc,reajCents:r.acc,totalCents:b.acc+r.acc,entries};
+   byCode[id]={...def,idGoverna:id,baseCents:b.acc,reajCents:r.acc,totalCents:b.acc+r.acc,baseContractCents:contractAmount(base,def.code),reajusteContractCents:contractAmount(reaj,def.code),entries};
   }
   // Versiones históricas servem somente para conferir, não são somadas.
   let checkedValues=0,conflicts=[];
@@ -86,7 +119,7 @@
    bm03Check=totals.includes(expected)?'Coincidente com o boletim individual da 3ª medição':'Sem comprovação adicional pelo BM individual';
   }
   const overall=Object.values(byCode).reduce((a,x)=>a+x.totalCents,0);
-  cache={ok:true,contract:'026/2025',documents:docs.length,baseDocument:base.name,reajDocument:reaj.name,
+  cache={ok:true,contract:'026/2025',...sourceDates(base),documents:docs.length,baseDocument:base.name,reajDocument:reaj.name,
    baseSEI:docNumber(base),reajSEI:docNumber(reaj),rows:byCode,checkedValues,
    bm03Check,overall,source:'Texto extraído de planilhas SEI locais. Associação por contrato, objeto e rubrica. Necessita homologação pela SNP.',
    status:'conciliação técnica documental, não homologada'};
@@ -155,10 +188,14 @@
      cumulative+=base+reaj;
      return {bm:'BM'+String(r.bm).padStart(2,'0'),number:Number(r.bm),baseCents:base,reajCents:reaj,totalCents:base+reaj,competencia:'Não identificada nas planilhas'};
     });
+    const meta=data.contractMetadata?.records?.[id],matches=meta?.puc===def.puc&&meta?.rubrica===def.rubrica;
     byCode[id]={...def,idGoverna:id,baseCents:entries.reduce((a,r)=>a+r.baseCents,0),
-     reajCents:entries.reduce((a,r)=>a+r.reajCents,0),totalCents:cumulative,entries};
+     reajCents:entries.reduce((a,r)=>a+r.reajCents,0),totalCents:cumulative,
+     baseContractCents:matches?Number(meta.baseContractCents):null,
+     reajusteContractCents:matches?Number(meta.reajusteContractCents):null,entries};
    }
    remoteCache={ok:true,contract:'026/2025',documents:15,baseSEI:11917032,reajSEI:11961873,
+    osDate:data.contractMetadata?.osDate||null,vigenciaDate:data.contractMetadata?.vigenciaDate||null,
     rows:byCode,overall:Object.values(byCode).reduce((a,r)=>a+r.totalCents,0),
     checkedValues:0,bm03Check:'Conferência detalhada disponível no pacote SEI original',
     source:'Banco gerencial privado, conciliação de valores documentais; homologação pendente.',
@@ -170,7 +207,7 @@
   }catch(e){/* A fonte local continua funcional, mesmo sem credencial gerencial. */}
  }
  function clearPrivate(){remoteCache=null;cacheKey='';cache=null;document.dispatchEvent(new Event('puc-documents-updated'));w.dispatchEvent(new Event('puc-documents-updated'))}
- w.PUCBMReconciliado={compute,resolve,forProject,cell,report,loadPrivate,clearPrivate};
+ w.PUCBMReconciliado={compute,resolve,forProject,financialForProject,cell,report,loadPrivate,clearPrivate};
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',loadPrivate);
  else loadPrivate();
 })(window);
