@@ -403,7 +403,10 @@
      table(['Constatação / pendência','Referência candidata','Situação jurídica'],
        entries.map(e=>[val(e.fato),val(e.fundamento),val(e.conclusao)]))+'</details>':
      '<p>Sem constatações individualizadas para enquadramento jurídico.</p>'));
-  holder.innerHTML=heading+investmentIndicators+evidence+findings+legalBrief+conclusion;
+  // Fluxo 2026: a ficha enxuta, alimentada pelo SEI/Balanço/DOCAS, origina o relatório.
+  // A versão anterior permanece apenas como contingência se o novo módulo falhar.
+  const generated=window.PUCRelatorioTriagem?.report?.(id,p,mode);
+  holder.innerHTML=generated||heading+investmentIndicators+evidence+findings+legalBrief+conclusion;
   const title=p.empresa+' · '+id+' · '+sourceTitle+' · '+filteredRows.length+' registros estruturados · '+panels.reduce((sum,x)=>sum+x.count,0)+' documentos/declarações vinculados';
   if(summary)summary.textContent=title;
   latest={id,p,mode,r,ctx,renderedAt:new Date().toISOString()};
